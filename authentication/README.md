@@ -1,6 +1,6 @@
-# Who Goes There!? Proving Identity After Quantum
+# A Hands-On Post-Quantum Authentication Lab
 
-### A Hands-On Post-Quantum Authentication Lab
+### Who Goes There!? Proving Identity After Quantum
 
 So in the [companion lab](../key-exchange/README.md) we tackled *key exchange* — we made sure a future quantum computer can't decrypt the traffic we send today. Great. But that leaves a juicy question hanging in the air: when two machines set up a secure channel, how do they know they're *actually talking to who they think they're talking to*? That's **authentication**, and it's the other half of the post-quantum story… the half almost everyone forgets.
 

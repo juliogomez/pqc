@@ -1,6 +1,6 @@
-# Can Your VPN Survive a Quantum Computer!?
+# A Hands-On ML-KEM vs Diffie-Hellman Lab
 
-### A Hands-On ML-KEM vs Diffie-Hellman Lab
+### Can Your VPN Survive a Quantum Computer!?
 
 So… you've heard that quantum computers are going to break all our encryption someday, and you're wondering what on earth we can actually do about it *today*. Great news: you're in the right place, and we're going to get our hands dirty.
 
