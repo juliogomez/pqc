@@ -1,4 +1,4 @@
-# Post-Quantum IKEv2 Labs
+# Hands-on with PQC for IKE
 
 A pair of hands-on labs that take a real IKEv2/IPsec VPN all the way to **post-quantum**, one half of the handshake at a time. You'll spin up containers, run real strongSwan and OpenSSL, capture packets, and measure the trade-offs with your own eyes — no hand-waving.
 
