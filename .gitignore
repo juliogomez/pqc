@@ -1,0 +1,19 @@
+# Superseded original key-exchange writeup, kept locally but not published
+README.legacy.md
+
+# Packet captures generated during lab exercises
+*.pcap
+*.pcapng
+
+# Generated lab credentials (CA + leaf keys/certs) for the IKEv2 mutual-auth lab.
+# Never commit private keys; these are produced at runtime by gen-certs.sh.
+authentication/config/*/private/
+authentication/config/*/x509/
+authentication/config/*/x509ca/
+
+# Editor / OS cruft
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

@@ -1,0 +1,35 @@
+services:
+  responder:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile
+    container_name: ike-responder
+    # Least privilege: IPsec/XFRM policy install needs NET_ADMIN; tcpdump needs NET_RAW.
+    # (Avoid privileged: true — it grants far more than this lab requires.)
+    cap_add: [NET_ADMIN, NET_RAW]
+    volumes:
+      - ./config/responder:/usr/local/etc/swanctl
+    networks:
+      pqc_net:
+        ipv4_address: 172.20.0.3
+
+  initiator:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile
+    container_name: ike-initiator
+    cap_add: [NET_ADMIN, NET_RAW]
+    volumes:
+      - ./config/initiator:/usr/local/etc/swanctl
+    networks:
+      pqc_net:
+        ipv4_address: 172.20.0.2
+    depends_on:
+      - responder
+
+networks:
+  pqc_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

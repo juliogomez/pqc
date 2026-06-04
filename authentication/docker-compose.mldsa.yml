@@ -1,0 +1,22 @@
+# Stage 2 override: rebuild the auth-lab services from the experimental ml-dsa
+# branch (Dockerfile.mldsa) so authentication can use ML-DSA certificates.
+#
+# Layer it on top of the base auth compose file:
+#   docker compose -f docker-compose.yml -f docker-compose.mldsa.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.mldsa.yml \
+#       run --rm certgen ml-dsa-44
+services:
+  auth-responder:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.mldsa
+
+  auth-initiator:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.mldsa
+
+  certgen:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.mldsa

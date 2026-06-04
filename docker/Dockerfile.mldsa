@@ -1,0 +1,44 @@
+# Stage 2 image for the IKEv2 mutual-authentication lab: strongSwan built from
+# the EXPERIMENTAL `ml-dsa` branch, which adds ML-DSA (FIPS 204) signature
+# authentication on top of the ML-KEM key exchange already in the stable line.
+#
+# This is bleeding edge: the branch evolves, the IKEv2 wire format for PQC auth
+# is still an IETF draft, and known rough edges exist (seed-only ML-DSA key
+# format, IKE_AUTH fragment reassembly bugs). Use only for the Stage 2 exercise.
+FROM ubuntu:24.04@sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54
+
+RUN apt-get update && apt-get install -y \
+    build-essential git cmake ninja-build libssl-dev pkg-config \
+    libsystemd-dev iproute2 iputils-ping kmod tcpdump vim \
+    autoconf automake libtool gettext gperf bison flex \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build strongSwan from the ml-dsa branch with the native ML-DSA + ML-KEM `ml`
+# plugin. The branch has no release tag; for full reproducibility pin
+# ML_DSA_REF to a specific commit hash instead of the branch name.
+ARG ML_DSA_REF=ml-dsa
+RUN git clone --branch "${ML_DSA_REF}" --depth 1 https://github.com/strongswan/strongswan.git /tmp/strongswan \
+    && cd /tmp/strongswan \
+    && ./autogen.sh \
+    && ./configure \
+        --enable-openssl \
+        --enable-kernel-netlink \
+        --enable-ml \
+        --enable-swanctl \
+        --enable-vici \
+    && make -j$(nproc) \
+    && make install \
+    && ldconfig \
+    && rm -rf /tmp/strongswan
+
+# Disable modular plugin loading so all compiled-in plugins load by default
+# (the generated per-plugin .conf files are empty).
+RUN sed -i 's/load_modular = yes/load_modular = no/' /usr/local/etc/strongswan.conf
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
+    CMD swanctl --stats >/dev/null 2>&1 || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

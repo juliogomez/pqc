@@ -1,0 +1,55 @@
+# Stack for the IKEv2 mutual-authentication lab (see this directory's README.md).
+# Lives in its own directory, separate from the key-exchange lab.
+#
+# Stage 1 (classical ECDSA cert auth) runs as-is from this file.
+# Stage 2 (post-quantum ML-DSA cert auth) layers the override on top:
+#   docker compose -f docker-compose.yml -f docker-compose.mldsa.yml ...
+services:
+  auth-responder:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile
+    container_name: ike-auth-responder
+    # Least privilege: IPsec/XFRM policy install needs NET_ADMIN; tcpdump needs NET_RAW.
+    cap_add: [NET_ADMIN, NET_RAW]
+    volumes:
+      - ./config/responder:/usr/local/etc/swanctl
+    networks:
+      auth_net:
+        ipv4_address: 172.21.0.3
+
+  auth-initiator:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile
+    container_name: ike-auth-initiator
+    cap_add: [NET_ADMIN, NET_RAW]
+    volumes:
+      - ./config/initiator:/usr/local/etc/swanctl
+    networks:
+      auth_net:
+        ipv4_address: 172.21.0.2
+    depends_on:
+      - auth-responder
+
+  # One-shot helper that mints the CA + both leaf certs and drops them into each
+  # peer's config dir. Not started by `up` (setup profile); invoke it explicitly:
+  #   docker compose run --rm certgen ecdsa
+  certgen:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile
+    container_name: ike-auth-certgen
+    profiles: ["setup"]
+    entrypoint: ["/bin/sh", "/gen-certs.sh"]
+    volumes:
+      - ./gen-certs.sh:/gen-certs.sh:ro
+      - ./config/initiator:/work/initiator
+      - ./config/responder:/work/responder
+
+networks:
+  auth_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
