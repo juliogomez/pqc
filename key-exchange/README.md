@@ -159,15 +159,15 @@ Initiator                                        Responder
     |--- IKE_SA_INIT (KE[x25519], Ni) -------------> |
     |<-- IKE_SA_INIT (KE[x25519], Nr) -------------- |
     |                                                |
-    |    X25519 shared secret derived               |
+    |    X25519 shared secret derived                |
     |                                                |
     |--- IKE_INTERMEDIATE (mlkem768 pub key) ------> |   (~1250 B, fragmented)
     |<-- IKE_INTERMEDIATE (mlkem768 ciphertext) ---- |   (~1155 B)
     |                                                |
-    |    ML-KEM shared secret combined with         |
-    |    X25519 secret → final IKE SA keys          |
+    |    ML-KEM shared secret combined with          |
+    |    X25519 secret → final IKE SA keys           |
     |                                                |
-    |    IKE SA ESTABLISHED                         |
+    |    IKE SA ESTABLISHED                          |
 ```
 
 Those big packets in the intermediate exchange are the ML-KEM public key (~1184 B) and ciphertext (~1088 B) — exactly the size difference we saw in the head-to-head — which is precisely why `fragmentation = yes` is required.
