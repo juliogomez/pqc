@@ -629,11 +629,11 @@ So unlike the key-exchange story — where ML-KEM ships in stable strongSwan 6.0
 
 | Standard | Title | Relevance |
 |----------|-------|-----------|
-| [FIPS 204](https://csrc.nist.gov/pubs/fips/204/final) | Module-Lattice-Based Digital Signature Standard | Defines ML-DSA |
-| [FIPS 205](https://csrc.nist.gov/pubs/fips/205/final) | Stateless Hash-Based Digital Signature Standard | Defines SLH-DSA |
-| [FIPS 206](https://csrc.nist.gov/projects/post-quantum-cryptography) | FN-DSA (FALCON) | Draft; small-signature lattice scheme |
-| [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032) | EdDSA (Ed25519/Ed448) | The classical signature we compare against |
-| [RFC 7383](https://www.rfc-editor.org/rfc/rfc7383) | IKEv2 Fragmentation | Why big PQC certs/signatures still fit in IKE_AUTH |
+| [FIPS&nbsp;204](https://csrc.nist.gov/pubs/fips/204/final) | Module-Lattice-Based Digital Signature Standard | Defines ML-DSA |
+| [FIPS&nbsp;205](https://csrc.nist.gov/pubs/fips/205/final) | Stateless Hash-Based Digital Signature Standard | Defines SLH-DSA |
+| [FIPS&nbsp;206](https://csrc.nist.gov/projects/post-quantum-cryptography) | FN-DSA (FALCON) | Draft; small-signature lattice scheme |
+| [RFC&nbsp;8032](https://www.rfc-editor.org/rfc/rfc8032) | EdDSA (Ed25519/Ed448) | The classical signature we compare against |
+| [RFC&nbsp;7383](https://www.rfc-editor.org/rfc/rfc7383) | IKEv2 Fragmentation | Why big PQC certs/signatures still fit in IKE_AUTH |
 | [draft-ietf-ipsecme-ikev2-pqc-auth](https://datatracker.ietf.org/doc/draft-ietf-ipsecme-ikev2-pqc-auth/) | PQC Signature Auth in IKEv2 | IPSECME WG draft for ML-DSA/SLH-DSA authentication in IKEv2 |
 | [draft-sfluhrer-ipsecme-ikev2-mldsa](https://datatracker.ietf.org/doc/html/draft-sfluhrer-ipsecme-ikev2-mldsa-00) | ML-DSA in IKEv2 | Earlier individual draft for PQC authentication in IKEv2 |
 
