@@ -11,10 +11,10 @@ Each lab tackles one pillar, end to end.
 
 ## The labs
 
-| # | Lab | What you'll do | Tools |
-|---|-----|----------------|-------|
-| 1 | [Key Exchange](key-exchange/README.md) | Negotiate a hybrid **X25519 + ML-KEM-768** key exchange over a real IKEv2 handshake (RFC 9370), capture it, and compare classical vs hybrid packet for packet. | strongSwan (stable `ml` plugin) |
-| 2 | [Authentication](authentication/README.md) | Generate **ML-DSA / SLH-DSA** keys and certificates, weigh the size explosion, then mutually authenticate an IKEv2 tunnel — classical ECDSA first, then post-quantum ML-DSA. | OpenSSL 3.5+, strongSwan (`ml-dsa` branch) |
+| # | Lab | What you'll do |
+|---|-----|----------------|
+| 1 | [Key Exchange](key-exchange/README.md) | Negotiate a hybrid **X25519 + ML-KEM-768** key exchange over a real IKEv2 handshake (RFC 9370), capture it, and compare classical vs hybrid packet for packet. |
+| 2 | [Authentication](authentication/README.md) | Generate **ML-DSA / SLH-DSA** keys and certificates, weigh the size explosion, then mutually authenticate an IKEv2 tunnel — classical ECDSA first, then post-quantum ML-DSA. |
 
 Start with **Lab 1** — it introduces the containers, strongSwan, and the hybrid handshake that Lab 2 builds on. Each lab's README is self-contained and run from its own directory.
 
