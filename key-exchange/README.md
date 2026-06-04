@@ -468,6 +468,8 @@ In each container shell, revert the config: uncomment the hybrid proposal, comme
 vi /usr/local/etc/swanctl/swanctl.conf
 ```
 
+The relevant lines should end up looking like this:
+
 ```
 proposals = aes256gcm16-prfsha256-x25519-ke1_mlkem768
 # proposals = aes256gcm16-prfsha256-x25519
