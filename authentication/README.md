@@ -176,7 +176,7 @@ The plan: first use OpenSSL to generate and dissect the certificates (the most c
 
 ## Let's get our hands dirty: the lab
 
-Alright, enough theory — let's make some quantum-safe certificates and weigh them! These labs are self-contained and run inside a tiny throwaway container, so the only thing you need installed is **Docker**.
+Alright, enough theory — let's make some quantum-safe certificates and weigh them! These labs are self-contained and run entirely on **your own local workstation** (your laptop or desktop — no cloud, no remote servers) inside tiny throwaway Docker containers, so the only thing you need installed is **Docker**.
 
 ### Setup: get an OpenSSL 3.5+ shell
 

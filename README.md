@@ -20,7 +20,9 @@ Start with **Lab 1** — it introduces the containers, strongSwan, and the hybri
 
 ## Prerequisites
 
-- **Docker** with Compose v2 (`docker compose ...`). That's it — everything else compiles or runs inside throwaway containers.
+These labs run entirely on **your own local workstation** (laptop or desktop) — no cloud, no remote servers, no dedicated hardware. Everything happens inside throwaway Docker containers on your machine, so you can run, break, and rerun them as many times as you like.
+
+- **Docker** with Compose v2 (`docker compose ...`). That's it — everything else compiles or runs inside throwaway containers on your local workstation.
 
 ## Repository layout
 
