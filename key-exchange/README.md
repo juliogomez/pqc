@@ -19,8 +19,6 @@ Ready? Let's get this party started!
 5. [Why not both? The hybrid solution](#why-not-both-the-hybrid-solution)
 6. [Our tool of choice: strongSwan](#our-tool-of-choice-strongswan)
 7. [Let's get our hands dirty: the lab](#lets-get-our-hands-dirty-the-lab)
-8. [Configuration reference](#configuration-reference)
-9. [Appendix](#appendix)
 
 ---
 
@@ -65,13 +63,15 @@ It's a true **key exchange**: both parties contribute. Each side whips up an eph
 
 ML-KEM (Module-Lattice-Based Key Encapsulation Mechanism, [**FIPS 203**](https://csrc.nist.gov/pubs/fips/203/final)) is a post-quantum key encapsulation algorithm standardised by NIST in 2024. The new kid on the block comes in three flavors:
 
-| Name | Security level | Public key | Ciphertext | |
-|------|---------------|-----------|-----------|---|
-| ML-KEM-512 | ~128-bit classical | 800 B | 768 B | |
-| **ML-KEM-768** | **~192-bit classical** | **1184 B** | **1088 B** | **← recommended default** |
-| ML-KEM-1024 | ~256-bit classical | 1568 B | 1568 B | |
+| Name | Security level | Public key | Ciphertext |
+|------|---------------|-----------|-----------|
+| ML-KEM-512 | ~128-bit classical | 800 B | 768 B |
+| **ML-KEM-768** | **~192-bit classical** | **1184 B** | **1088 B** |
+| ML-KEM-1024 | ~256-bit classical | 1568 B | 1568 B |
 
 ML-KEM-768 is the sweet spot for most deployments: a comfortable security margin against quantum attacks without the extra bandwidth of ML-KEM-1024. ML-KEM-512 is generally avoided, as its security level is considered a bit marginal for long-term protection. **So this lab uses ML-KEM-768.**
+
+> **Curious *why* ML-KEM resists quantum attack?** That "Module-Lattice-Based" in the name is doing real work. The companion [module-lattices lab](../module-lattices/README.md) builds the underlying math from scratch — Learning With Errors, the `R_q = Z_q[x]/(x^n+1)` ring, a baby ML-KEM you implement yourself — and runs a real lattice attack into the exponential wall that protects it. Highly recommended if you want the foundation beneath this lab.
 
 Now here's the twist that trips a lot of people up: ML-KEM is a **Key Encapsulation Mechanism**, not a symmetric key exchange. One party generates, the other encapsulates. The initiator sends a public key, the responder runs the encapsulation algorithm on it — which spits out *both* a ciphertext and a shared secret — and sends back the ciphertext. Only the initiator, holding the private key, can run decapsulation on that ciphertext to recover the same shared secret. Neat, huh?
 
@@ -90,7 +90,7 @@ This is the heart of the lab. The differences below explain every design decisio
 | Shared secret | 32 B | 32 B | 32 B | 32 B |
 | Fits in one IKE message (≤1280 B)? | ✅ yes | ✅ yes | ❌ no — needs fragmentation | ❌ no |
 
-X25519's 32-byte keys are adorably tiny. ML-KEM's are 25–50× larger — big enough that ML-KEM-768 forces IKE fragmentation. This single fact drives the `fragmentation = yes` requirement and those chunky packets you'll spot in the capture later.
+X25519's 32-byte keys are adorably tiny. ML-KEM's are 25–50× larger — big enough that ML-KEM-768 forces IKE fragmentation. This single fact drives the `fragmentation = yes` requirement and those chunky packets you'll spot in the captures in the lab exercises below.
 
 ### Latency: round trips in IKEv2
 
@@ -105,7 +105,7 @@ The hybrid mode adds one full round trip — measurable, but small in practice (
 
 A common misconception is that "post-quantum" means "painfully slow". For ML-KEM, the opposite is closer to the truth: its lattice operations are seriously fast — in the same ballpark as, and often faster than, an elliptic-curve scalar multiplication.
 
-Approximate per-operation cost on modern x86 (AVX2), as published reference figures (ML-KEM / X25519 benchmarks on comparable hardware — not measured here):
+Approximate per-operation cost on modern x86 (AVX2), drawn from published benchmarks (eBACS / SUPERCOP, measuring AVX2-optimised implementations on comparable Intel/AMD hardware — not measured here):
 
 | Operation | X25519 | ML-KEM-768 |
 |-----------|--------|-----------|
@@ -113,7 +113,9 @@ Approximate per-operation cost on modern x86 (AVX2), as published reference figu
 | Encapsulate / derive shared secret | ~50–65k cycles (one scalar mult) | ~45k cycles |
 | Decapsulate | — (DH has no separate decap) | ~35k cycles |
 
-The two algorithms don't map one-to-one: a DH exchange is two scalar multiplications (make a keypair, then derive), while a KEM splits the work across the peers (the initiator does keygen + decapsulate, the responder does encapsulate). Either way the totals are comparable, and ML-KEM-768 is **not** the bottleneck.
+*Cycles* here means CPU clock cycles as counted by the hardware performance counter — the machine-level unit benchmarking tools use to compare algorithms independently of clock frequency. At 3 GHz, 60 000 cycles is about 20 µs; at 1 GHz, the same 60 000 cycles is 60 µs. The benchmark isolates pure algorithmic cost from network latency or OS overhead.
+
+The two algorithms don't map one-to-one: a complete X25519 exchange costs two scalar multiplications (one for keygen, one to derive the shared secret), whereas a KEM splits the work — the initiator does keygen (~30k cycles) plus decapsulate (~35k cycles) and the responder does only encapsulate (~45k cycles). Adding those up: initiator side ≈ 65k cycles total, responder ≈ 45k cycles — squarely in the same range as X25519's ~100–130k total for both operations combined. Either way the totals are comparable, and ML-KEM-768 is **not** the bottleneck.
 
 You can measure X25519 yourself inside the container with `openssl speed ecdhx25519`. The containers in this lab are based on Ubuntu 24.04 (the Dockerfile base image), which ships OpenSSL 3.0 — and OpenSSL 3.0 cannot benchmark ML-KEM from the CLI, hence the cited reference figures above.
 
@@ -129,6 +131,8 @@ The decisive evidence for this lab is the end-to-end handshake time you'll measu
 | Deployment maturity | Very high | Emerging |
 
 ¹ *Classical security* is the estimated work required to break the algorithm on a conventional (non-quantum) computer, expressed as equivalent bits of symmetric key strength. ~128-bit means an attacker would need roughly 2¹²⁸ operations — currently infeasible. This says nothing about quantum resistance.
+
+² ML-KEM-768's ~192-bit classical security level comes from NIST's analysis in FIPS 203: the underlying Module-LWE problem with the chosen parameter set (module rank k=3, polynomial degree n=256, modulus q=3329) requires an estimated 2¹⁹² classical operations to break with the best known lattice-reduction attacks (BKZ algorithm and variants). The "768" in the name reflects the total public key size in bytes (k×n×⌈log₂q⌉/8 = 3×256×12/8 = 1152 B, rounded up with rounding/compression to 1184 B), not the security level directly.
 
 ### The verdict: why not both?
 
@@ -170,7 +174,7 @@ Initiator                                        Responder
     |    IKE SA ESTABLISHED                          |
 ```
 
-Those big packets in the intermediate exchange are the ML-KEM public key (~1184 B) and ciphertext (~1088 B) — exactly the size difference we saw in the head-to-head — which is precisely why `fragmentation = yes` is required.
+Those big packets in the intermediate exchange are the ML-KEM public key (~1184 B) and ciphertext (~1088 B) — exactly the size difference we saw in the head-to-head — which is precisely why `fragmentation = yes` is required in the lab exercises below.
 
 ---
 
@@ -178,25 +182,13 @@ Those big packets in the intermediate exchange are the ML-KEM public key (~1184 
 
 Time to talk tooling. **strongSwan** is an open-source IKEv2/IPsec implementation widely used in Linux-based VPN gateways, routers, and security appliances. It implements the full IKEv2 protocol ([RFC 7296](https://www.rfc-editor.org/rfc/rfc7296)) and manages the keying lifecycle for IPsec tunnels: negotiating IKE SAs, installing ESP/AH child SAs into the kernel, handling rekeying, and responding to dead peer detection. Quite the workhorse.
 
-Here are the pieces we'll be using:
-
-| Component | Role |
-|-----------|------|
-| `charon` | The IKE daemon — runs in the background, handles all IKEv2 message exchange |
-| `swanctl` | The CLI control tool — connects to `charon` to load config, initiate/terminate SAs, and query state |
-| `ml` plugin | strongSwan's native ML-KEM implementation (FIPS 203), enabled with `--enable-ml` at build time |
-| `openssl` plugin | Provides AES-GCM, SHA-2, X25519, and SHAKE/SHA-3 (required by the `ml` plugin for its internal hashing) |
-| `kernel-netlink` | Linux kernel interface — installs IPsec policies and SAs via Netlink |
-
-strongSwan uses a plugin architecture: each algorithm or kernel interface is a separate shared library loaded at startup. We build strongSwan from source (pinned to the **6.0.6** release tag) to enable the `ml` plugin, which is opt-in at build time via `--enable-ml`.
-
 > **Why strongSwan and not OpenSSL here?** Simple: OpenSSL isn't an IKEv2 implementation. It's a crypto library, and while OpenSSL 3.5 does ship ML-KEM, that support is wired into **TLS** — there's no OpenSSL "IKEv2 mode" you could point at a VPN peer. So for a post-quantum *IKEv2* key exchange there's genuinely no OpenSSL alternative; strongSwan is the tool that speaks the protocol, and ML-KEM is production-ready inside it today (6.0.x), so we get to watch it run in a real handshake. Its companion lab, [Who goes there? Post-quantum authentication](../authentication/README.md), reaches for OpenSSL instead — not by preference, but because post-quantum *authentication* (ML-DSA certificates and signatures) hasn't landed in strongSwan/IKEv2 yet, and OpenSSL is where you can generate and inspect those certs today. Two labs, two tools: that split isn't us being fussy, it's an honest snapshot of where each piece of the post-quantum puzzle is mature right now.
 
 ---
 
 ## Let's get our hands dirty: the lab
 
-Alright, enough theory — let's actually run this thing! We'll build and start the containers, work through three exercises, and finally tidy everything up. Here's the game plan:
+Alright, enough theory — let's actually run this thing! Here's the game plan:
 
 - **[Exercise 1](#exercise-1-observe-a-hybrid-handshake)** — observe a single hybrid handshake from initiation to teardown, inspecting the SA and the packet capture along the way.
 - **[Exercise 2](#exercise-2-compare-classical-only-vs-hybrid-handshake)** — toggle the config between classical-only and hybrid proposals, and compare round trips, packet sizes, and timing side by side. (This is the payoff — don't skip it!)
@@ -204,7 +196,7 @@ Alright, enough theory — let's actually run this thing! We'll build and start 
 
 ### Build and start
 
-Everything in this lab runs **locally on your own workstation** — your laptop or desktop. The two VPN peers are just Docker containers on your machine talking to each other over a private Docker bridge network; there's no cloud, no remote server, and no special hardware involved. If you have Docker installed, you have everything you need. Clone the repo, and run all commands in this lab from the `key-exchange/` directory, so hop in first:
+Everything in this lab runs **locally on your own workstation**. The two VPN peers are just Docker containers on your machine talking to each other over a private Docker bridge network; there's no cloud, no remote server, and no special hardware involved. If you have Docker installed, you have everything you need. Clone the repo, and run all commands in this lab from the `key-exchange/` directory, so hop in first:
 
 ```bash
 cd key-exchange
@@ -231,6 +223,8 @@ ike-responder   key-exchange-responder   Up (healthy)
 ---
 
 ### Exercise 1: Observe a hybrid handshake
+
+In this exercise we'll run a single hybrid IKEv2 handshake end-to-end and observe what actually happens on the wire. Concretely: the initiator container will first exchange a classical X25519 key with the responder in `IKE_SA_INIT`, then — in an extra `IKE_INTERMEDIATE` round trip added by RFC 9370 — send its ML-KEM-768 encapsulation key to the responder, receive back the ML-KEM ciphertext, and derive the final session key from *both* shared secrets combined. We'll capture all of that with tcpdump, verify the negotiated algorithm suite, and read the packet stream packet by packet to see every step in concrete bytes.
 
 **Step 1 — Shell into the initiator**
 
@@ -277,6 +271,8 @@ TCPDUMP_PID=$!
 ---
 
 **Step 4 — Initiate the connection**
+
+This is the moment the hybrid handshake runs. `swanctl --initiate` tells the local strongSwan daemon (`charon`) to start an IKEv2 negotiation with the responder. Under the hood, charon will send `IKE_SA_INIT` carrying the X25519 key exchange, wait for the responder's reply, then send `IKE_INTERMEDIATE` carrying the ML-KEM-768 encapsulation key, receive the ML-KEM ciphertext back, derive the combined session key, and finally complete `IKE_AUTH` to authenticate both sides and install the child SA. All three round trips happen before the command returns.
 
 ```bash
 swanctl --initiate --child pqc-child
@@ -413,11 +409,13 @@ In  172.20.0.3.4500 > 172.20.0.2.4500  length 1185
   child_sa #43[R]: (v2e: len=1121)                     # v2e = single encrypted payload (SK), no fragmentation
   #  → ML-KEM shared secret combined with X25519 → final IKE SA keys
 
-# IKE_AUTH — PSK authentication, now fully encrypted (you can't see the auth data)
+# IKE_AUTH — the payload is encrypted; tcpdump shows only the outer IKE header (exchange type,
+# message ID, flags) and the SK payload wrapper (type=46 / v2e) — not the auth data inside.
+# The length (321 / 177) is the encrypted blob's byte count, not its contents.
 Out 172.20.0.2.4500 > 172.20.0.3.4500  length 385
-  child_sa ikev2_auth[I]: (v2e: len=321)               # request: encrypted auth + child SA proposal
+  child_sa ikev2_auth[I]: (v2e: len=321)               # request: outer wrapper only — auth data + child SA proposal are ciphertext
 In  172.20.0.3.4500 > 172.20.0.2.4500  length 241
-  child_sa ikev2_auth[R]: (v2e: len=177)               # response: encrypted confirmation
+  child_sa ikev2_auth[R]: (v2e: len=177)               # response: outer wrapper only — confirmation is ciphertext
   #  → IKE SA + CHILD SA ESTABLISHED.  Whole handshake here: ~18.6 ms across 3 round trips
 ```
 
@@ -432,11 +430,13 @@ A few things worth pausing on:
 > - `(#53)` — payload type 53, an **encrypted *fragment*** (SKF, [RFC 7383](https://www.rfc-editor.org/rfc/rfc7383)). Seeing `#53` is the dead giveaway that a message was IKE-fragmented — which is why it shows up *only* on the big `IKE_INTERMEDIATE` request carrying the ML-KEM key.
 > - `v2e` — payload type 46, a single **encrypted** payload (SK, not fragmented). The ML-KEM ciphertext and both `IKE_AUTH` messages each fit in one `v2e`.
 >
+> **Why can tcpdump "see" the `IKE_AUTH` messages if they're encrypted?** It can't — not really. What you see in the capture is only the *outer* IKE header (20 bytes, cleartext: initiator/responder cookies, exchange type, flags, message ID, total length) and the *SK payload header* (4 bytes, cleartext: payload type 46, reserved, and the payload length). The actual content — the PSK auth token, identities, child SA proposal, traffic selectors — is ciphertext inside the SK payload and appears as opaque bytes. `tcpdump -vv` will show `(v2e: len=N)` for the encrypted blob's length, which is all the dissector can extract. You'd need the IKE session keys to decrypt it.
+>
 > So the request side (ML-KEM *public key*, ~1184 B) splits into two `#53` fragments, while the response side (ML-KEM *ciphertext*, ~1088 B) rides in a single `v2e` — the same public-key-bigger-than-ciphertext asymmetry you saw in the head-to-head table.
 
 > **Heads up — `bad udp cksum` warnings are normal here.** tcpdump captures each outbound packet *before* the virtual NIC fills in its UDP checksum (checksum offloading), so it flags the not-yet-computed value. It's a capture artifact on the Docker bridge, not a real corrupted packet.
 
-To copy the capture to your workstation for Wireshark, run this **from your own workstation — not from inside the container**. The `docker cp` command talks to Docker on your host, so it won't work inside the container shell. Open a **new terminal window** on your workstation for it (keep the container shell open — there are more in-container commands coming up in Step 7):
+**Optional — copy the capture to your workstation for Wireshark.** If you want to inspect the packets in a GUI, run the following **from your own workstation — not from inside the container**. The `docker cp` command talks to Docker on your host, so it won't work inside the container shell. Open a **new terminal window** on your workstation for it (keep the container shell open — there are more in-container commands coming up in Step 7):
 
 ```bash
 # Run this in a NEW terminal window on your workstation, NOT inside the container
@@ -463,9 +463,24 @@ exit
 
 ---
 
+#### What we've seen in Exercise 1
+
+In this exercise we watched a complete hybrid IKEv2 handshake from start to finish. Here is what the evidence showed:
+
+- **Three round trips instead of two.** The capture confirms the RFC 9370 structure: `IKE_SA_INIT` → `IKE_INTERMEDIATE` → `IKE_AUTH`. The extra exchange is entirely due to the ML-KEM component; everything else is unchanged from a classical handshake.
+- **Fragmentation driven by key size.** The `IKE_INTERMEDIATE` request carrying the 1184 B ML-KEM encapsulation key crossed the 1280 B IKE message ceiling once headers were added, forcing strongSwan to fragment it at the IKE layer (RFC 7383). The 1088 B ciphertext in the response fit in one packet.
+- **Both secrets are combined.** The `--list-sas` output (`CURVE_25519/KE1_ML_KEM_768`) confirmed that both the X25519 and ML-KEM shared secrets were used to derive the final session key — neither alone is sufficient.
+- **`IKE_AUTH` is unaffected.** Its packet size is the same as it would be in a classical handshake; the hybrid overhead lives entirely in the added `IKE_INTERMEDIATE` exchange.
+
+Exercise 2 will make this concrete by running both configurations back-to-back and comparing them directly.
+
+---
+
 ### Exercise 2: Compare classical-only vs hybrid handshake
 
 This is the payoff exercise — the moment the whole head-to-head comparison stops being a table and becomes something you can see. We'll run the same handshake twice — once with pure X25519, once with our default hybrid proposal — and watch the differences in round trips, packet sizes, and timing. Let's go!
+
+We start with the classical-only run: both containers configured to use X25519 alone, no ML-KEM, no fragmentation. This gives us the baseline — the simplest possible IKEv2 handshake — against which we can measure everything the hybrid adds.
 
 **Step 1 — Switch to classical-only proposals**
 
@@ -515,7 +530,7 @@ kill $TCPDUMP_PID
 wait $TCPDUMP_PID 2>/dev/null
 ```
 
-Note the wall-clock time reported by `time`.
+Note the **real** (wall-clock) time reported by `time` — that's the end-to-end duration from sending the first `IKE_SA_INIT` packet to the moment the command returns with the tunnel established. The `user` and `sys` values show CPU time consumed by the process itself; they will be tiny (a few milliseconds at most), confirming that compute is not the bottleneck — virtually all of the elapsed time is network round-trip latency.
 
 Terminate the tunnel before the next test:
 ```bash
@@ -523,6 +538,8 @@ swanctl --terminate --ike pqc-tunnel
 ```
 
 **Step 4 — Restore hybrid config and capture again**
+
+Now we switch back to the hybrid proposal so we can run the same handshake with ML-KEM-768 added. This second capture will give us the side-by-side comparison: same containers, same network, same timing conditions — the only difference is the proposal string.
 
 In each container shell, revert the config: uncomment the hybrid proposal, comment out the classical one, and uncomment `fragmentation = yes`:
 
@@ -590,32 +607,10 @@ The three exchange-type labels decode as:
 
 So the difference is stark and structural: classical goes straight `SA_INIT → AUTH`, while hybrid wedges an entire `IKE_INTERMEDIATE` exchange (the two `#43[I]` fragments plus the `#43[R]` reply) in between — that's the ML-KEM round trip, and it's the *only* thing the two handshakes don't share.
 
-Then use `-q` for a compact size-and-count view:
+To see the packet sizes, run both captures with `-q`:
 ```bash
 tcpdump -r /tmp/classical.pcap -n -q
 tcpdump -r /tmp/hybrid.pcap -n -q
-```
-
-Here's both, trimmed and annotated (your exact byte counts will vary slightly):
-
-```
-# CLASSICAL — X25519 only
-Out 172.20.0.2.500  > 172.20.0.3.500:  UDP, length 232    # IKE_SA_INIT[I]
-P   172.20.0.2.500  > 172.20.0.3.500:  UDP, length 232    # IKE_SA_INIT[I]  ← duplicate (capture artifact, see note)
-In  172.20.0.3.500  > 172.20.0.2.500:  UDP, length 232    # IKE_SA_INIT[R]
-Out 172.20.0.2.4500 > 172.20.0.3.4500: UDP, length 357    # IKE_AUTH[I]
-In  172.20.0.3.4500 > 172.20.0.2.4500: UDP, length 213    # IKE_AUTH[R]
-#  → 2 round trips · no IKE_INTERMEDIATE · nothing fragmented · largest packet 357 B · NOT quantum-safe
-
-# HYBRID — X25519 + ML-KEM-768
-Out 172.20.0.2.500  > 172.20.0.3.500:  UDP, length 248    # IKE_SA_INIT[I]
-In  172.20.0.3.500  > 172.20.0.2.500:  UDP, length 256    # IKE_SA_INIT[R]
-Out 172.20.0.2.4500 > 172.20.0.3.4500: UDP, length 1252   # IKE_INTERMEDIATE[I] fragment 1  ← the ML-KEM public key
-Out 172.20.0.2.4500 > 172.20.0.3.4500: UDP, length 70     # IKE_INTERMEDIATE[I] fragment 2
-In  172.20.0.3.4500 > 172.20.0.2.4500: UDP, length 1157   # IKE_INTERMEDIATE[R]            ← the ML-KEM ciphertext
-Out 172.20.0.2.4500 > 172.20.0.3.4500: UDP, length 357    # IKE_AUTH[I]  ← byte-identical to classical
-In  172.20.0.3.4500 > 172.20.0.2.4500: UDP, length 213    # IKE_AUTH[R]  ← byte-identical to classical
-#  → 3 round trips · +1 exchange (IKE_INTERMEDIATE) · 2 fragments · every extra byte is the ML-KEM KE · quantum-safe
 ```
 
 The punchline jumps right out: the two captures are **identical except for the `IKE_INTERMEDIATE` exchange**. The `IKE_AUTH` packets are byte-for-byte the same size in both runs — every extra byte of the hybrid handshake lives in that one added round trip carrying ML-KEM. That's the entire cost of going quantum-safe, laid out line by line.
@@ -667,7 +662,7 @@ So even if a quantum computer one day recovers the X25519 shared secret from a r
 
 On the wire, RFC 8784 adds a `USE_PPK` notify to the (cleartext) `IKE_SA_INIT` so peers discover they both support it, then a `PPK_ID` notify inside the encrypted `IKE_AUTH` that signals which PPK is in use. You'll see both below.
 
-To make the "alternative to ML-KEM" point concrete, this exercise deliberately drops the key exchange back to **classical-only X25519** — standing in for a device too old to negotiate ML-KEM — and lets the PPK carry the quantum resistance on its own. (The PPK would happily mix into a hybrid exchange too, but that's belt-and-suspenders; here we want to see it standing alone.)
+To make the "alternative to ML-KEM" point concrete, this exercise deliberately drops the key exchange back to **classical-only X25519** — standing in for a device too old to negotiate ML-KEM — and lets the PPK carry the quantum resistance on its own. (The PPK would happily mix into a hybrid exchange too, layering quantum safety at both the algorithm and key-distribution levels; here we keep it to classical-only KE so the PPK's contribution is unambiguous.)
 
 **Step 1 — Drop to classical-only KE and enable the PPK**
 
@@ -853,73 +848,3 @@ docker compose down
 And that's all, folks! You just stood up a hybrid post-quantum VPN tunnel, captured it, and proved — with your own packets — that quantum-safe IKEv2 is both practical and cheap. Not bad for a couple of containers, huh? Now go and explore your own integrations and use cases. Nice job, really well done!
 
 
----
-
-## Configuration reference
-
-### IKE proposal breakdown
-
-```
-aes256gcm16 - prfsha256 - x25519 - ke1_mlkem768
-     │              │         │           │
-     │              │         │           └─ RFC 9370 additional KE #1: ML-KEM-768 (recommended)
-     │              │         │              carried in IKE_INTERMEDIATE exchange
-     │              │         └─ Main DH group: X25519 (ECDH on Curve25519, group #31)
-     │              │              carried in IKE_SA_INIT exchange
-     │              └─ PRF: HMAC-SHA-256
-     └─ Encryption: AES-256-GCM (AEAD, no separate integrity algorithm needed)
-```
-
-The `ke1_` prefix means "first RFC 9370 additional key exchange". You could chain more with `ke2_mlkem1024`, `ke3_...`, etc., each adding another round trip and another layer of keying material. RFC 9370 supports up to 7 additional key exchanges (`ke1_` through `ke7_`).
-
-### swanctl.conf options used
-
-| Option | Where | Meaning |
-|--------|-------|---------|
-| `proposals` | connection | IKE SA algorithm suite |
-| `fragmentation = yes` | connection | Enable [RFC 7383](https://www.rfc-editor.org/rfc/rfc7383) IKE fragmentation (required for large ML-KEM payloads) |
-| `ppk_id` | connection | Name of the [RFC 8784](https://www.rfc-editor.org/rfc/rfc8784) PPK to mix into the key schedule (Exercise 3; commented out by default) |
-| `ppk_required = yes` | connection | Refuse to establish unless both peers share the matching PPK (Exercise 3) |
-| `local_addrs` / `remote_addrs` | connection | Bind/connect address |
-| `auth = psk` | local/remote | Pre-shared key authentication (the lab PSK is a throwaway — see note below) |
-| `local_ts` / `remote_ts` | child | Traffic selectors for the ESP tunnel |
-| `start_action = none` | child | Do not auto-initiate on config load |
-| `start_action = start` | child | Auto-initiate immediately on config load |
-
-> **Note on the pre-shared key:** the PSK in `config/*/swanctl.conf` (`pqc-lab-preshared-key`) is a hardcoded throwaway for lab convenience only. Authentication is deliberately kept trivial so the focus stays on key exchange. Never commit secrets or reuse this pattern in production — use a high-entropy key from a secrets manager.
-
----
-
-## Appendix
-
-- The `ml` plugin (`--enable-ml`) is a standalone implementation of ML-KEM (FIPS 203) with no external dependencies. It ships in stable 6.x releases (this lab pins to **6.0.6**) but is opt-in — it is not part of the compiled-in defaults.
-- The `liboqs` library is no longer needed and is not supported in stable releases (as of 6.0.4+). The `ml` plugin replaces it.
-- ML-KEM via OpenSSL 3.5+ is also supported in strongSwan 6.0.2+ (`--enable-openssl`), but requires building OpenSSL 3.5 from source on Ubuntu 24.04. This lab uses the `ml` plugin instead: it is self-contained (no extra dependencies), keeps the Dockerfile simple and the build fast, and lets strongSwan own the ML-KEM implementation end-to-end — a cleaner setup when the goal is understanding how ML-KEM integrates into IKEv2 rather than evaluating a production crypto library stack. The OpenSSL 3.5 path makes more sense in production environments where a single FIPS 140-3 validated library is required across all algorithms.
-- The `ke1_` prefix in proposal strings implements RFC 9370 (Multiple Key Exchanges in IKEv2, 2023), which is backward compatible — peers that don't support additional key exchanges fall back to the base DH exchange.
-
-### Build dependencies
-
-Because strongSwan is compiled from a git checkout (not a release tarball), the `Dockerfile` installs the full autotools chain. Each is needed for a specific build stage — these are already handled, listed here only for understanding:
-
-| Package(s) | Why it's needed |
-|------------|-----------------|
-| `autoconf automake libtool gettext` | `./autogen.sh` runs `autoreconf` to generate `configure` (tarballs ship this pre-generated) |
-| `gperf` | generates perfect hash tables during `configure` |
-| `bison flex` | provide `yacc`/`lex` for strongSwan's config-file grammar parsers |
-| `build-essential libssl-dev pkg-config` | C toolchain and OpenSSL headers for the `openssl` plugin |
-| `iproute2 iputils-ping kmod` | runtime networking utilities inside the container |
-| `tcpdump` | packet capture for the lab exercises |
-| `vim` | editing `swanctl.conf` in-container for Exercises 2 and 3 |
-
-The Dockerfile also sets `load_modular = no` in `strongswan.conf`: strongSwan generates one `.conf` file per plugin, but they are empty here, so the default `load_modular = yes` would load **no** plugins and charon would fail on missing primitives like `NONCE_GEN`.
-
-### Reference RFCs
-
-| RFC | Title | Relevance |
-|-----|-------|-----------|
-| [RFC&nbsp;7296](https://www.rfc-editor.org/rfc/rfc7296) | IKEv2 | Base protocol; defines the 1280-byte unfragmented message ceiling |
-| [RFC&nbsp;7383](https://www.rfc-editor.org/rfc/rfc7383) | IKEv2 Fragmentation | How oversized IKE messages (like ML-KEM payloads) are split |
-| [RFC&nbsp;7748](https://www.rfc-editor.org/rfc/rfc7748) | Elliptic Curves for Security | Defines X25519 |
-| [RFC&nbsp;8784](https://www.rfc-editor.org/rfc/rfc8784) | Mixing Preshared Keys in IKEv2 for Post-quantum Security | Algorithm-independent quantum safety via a PPK folded into the key schedule (Exercise 3) |
-| [RFC&nbsp;9370](https://www.rfc-editor.org/rfc/rfc9370) | Multiple Key Exchanges in IKEv2 | Enables hybrid PQC; defines `IKE_INTERMEDIATE` exchange type 43 |
-| [FIPS&nbsp;203](https://csrc.nist.gov/pubs/fips/203/final) | Module-Lattice-Based KEM | The ML-KEM standard |
