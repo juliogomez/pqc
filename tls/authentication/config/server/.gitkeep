@@ -1,0 +1,2 @@
+# The certgen helper writes ca.crt, server.crt, and server.key here at runtime.
+# Generated keys/certs are git-ignored; this file just keeps the directory.

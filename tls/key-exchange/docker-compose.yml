@@ -1,0 +1,39 @@
+# Stack for the TLS post-quantum key-exchange lab (see this directory's README).
+# Two roles, like the IKEv2 labs' initiator/responder:
+#
+#   tls-server  - runs `openssl s_server` (the TLS endpoint that accepts)
+#   tls-client  - runs `openssl s_client` (the TLS endpoint that connects)
+#
+# Both use the same OpenSSL 3.5 image. The server certificate is generated
+# inside the server container during Exercise 1 (the key exchange does not
+# depend on it), so this lab needs no certgen helper and no shared volumes.
+services:
+  tls-server:
+    build:
+      context: ../../docker
+      dockerfile: Dockerfile.tls
+    container_name: tls-server
+    # NET_RAW lets tcpdump capture the handshake on the wire.
+    cap_add: [NET_RAW]
+    networks:
+      tls_net:
+        ipv4_address: 172.22.0.2
+
+  tls-client:
+    build:
+      context: ../../docker
+      dockerfile: Dockerfile.tls
+    container_name: tls-client
+    cap_add: [NET_RAW]
+    networks:
+      tls_net:
+        ipv4_address: 172.22.0.3
+    depends_on:
+      - tls-server
+
+networks:
+  tls_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24

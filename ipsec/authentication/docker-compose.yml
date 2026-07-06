@@ -7,7 +7,7 @@
 services:
   auth-responder:
     build:
-      context: ../docker
+      context: ../../docker
       dockerfile: Dockerfile
     container_name: ike-auth-responder
     # Least privilege: IPsec/XFRM policy install needs NET_ADMIN; tcpdump needs NET_RAW.
@@ -20,7 +20,7 @@ services:
 
   auth-initiator:
     build:
-      context: ../docker
+      context: ../../docker
       dockerfile: Dockerfile
     container_name: ike-auth-initiator
     cap_add: [NET_ADMIN, NET_RAW]
@@ -37,7 +37,7 @@ services:
   #   docker compose run --rm certgen ecdsa
   certgen:
     build:
-      context: ../docker
+      context: ../../docker
       dockerfile: Dockerfile
     container_name: ike-auth-certgen
     profiles: ["setup"]

@@ -8,15 +8,15 @@
 services:
   auth-responder:
     build:
-      context: ../docker
+      context: ../../docker
       dockerfile: Dockerfile.mldsa
 
   auth-initiator:
     build:
-      context: ../docker
+      context: ../../docker
       dockerfile: Dockerfile.mldsa
 
   certgen:
     build:
-      context: ../docker
+      context: ../../docker
       dockerfile: Dockerfile.mldsa

@@ -1,0 +1,4 @@
+# hostapd EAP server user database. One catch-all entry: any identity may
+# authenticate with EAP-TLS (the actual trust comes from the client certificate
+# being signed by our CA, checked during the TLS handshake).
+* TLS

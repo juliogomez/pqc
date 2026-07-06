@@ -1,0 +1,58 @@
+# Stack for the TLS post-quantum authentication lab (see this directory's README).
+# Two roles on a private network, like the IKEv2 labs' initiator/responder:
+#
+#   tls-auth-server  - runs `openssl s_server` and proves its identity with a cert
+#   tls-auth-client  - runs `openssl s_client` and proves its identity too (mTLS)
+#
+# A one-shot certgen helper mints the lab CA + server/client certs (ECDSA or
+# ML-DSA) and installs them into each role's config dir.
+services:
+  tls-auth-server:
+    build:
+      context: ../../docker
+      dockerfile: Dockerfile.tls
+    container_name: tls-auth-server
+    # NET_RAW lets tcpdump capture the handshake on the wire.
+    cap_add: [NET_RAW]
+    volumes:
+      - ./config/server:/cfg
+    networks:
+      tls_auth_net:
+        ipv4_address: 172.23.0.2
+
+  tls-auth-client:
+    build:
+      context: ../../docker
+      dockerfile: Dockerfile.tls
+    container_name: tls-auth-client
+    cap_add: [NET_RAW]
+    volumes:
+      - ./config/client:/cfg
+    networks:
+      tls_auth_net:
+        ipv4_address: 172.23.0.3
+    depends_on:
+      - tls-auth-server
+
+  # One-shot helper that mints the CA + server/client certs and installs them
+  # into each role's config dir. Not started by `up` (setup profile):
+  #   docker compose run --rm certgen ecdsa
+  #   docker compose run --rm certgen ml-dsa-65
+  certgen:
+    build:
+      context: ../../docker
+      dockerfile: Dockerfile.tls
+    container_name: tls-auth-certgen
+    profiles: ["setup"]
+    entrypoint: ["/bin/sh", "/gen-certs.sh"]
+    volumes:
+      - ./gen-certs.sh:/gen-certs.sh:ro
+      - ./config/server:/work/server
+      - ./config/client:/work/client
+
+networks:
+  tls_auth_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/24

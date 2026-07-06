@@ -1,0 +1,9 @@
+services:
+  lattice-lab:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.lattice
+    container_name: lattice-lab
+    # Pure-math lab: no networking, no elevated capabilities needed.
+    volumes:
+      - ./scripts:/lab

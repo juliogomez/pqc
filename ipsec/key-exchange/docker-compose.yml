@@ -1,11 +1,11 @@
 services:
   responder:
     build:
-      context: ../docker
+      context: ../../docker
       dockerfile: Dockerfile
     container_name: ike-responder
     # Least privilege: IPsec/XFRM policy install needs NET_ADMIN; tcpdump needs NET_RAW.
-    # (Avoid privileged: true — it grants far more than this lab requires.)
+    # (Avoid privileged: true; it grants far more than this lab requires.)
     cap_add: [NET_ADMIN, NET_RAW]
     volumes:
       - ./config/responder:/usr/local/etc/swanctl
@@ -15,7 +15,7 @@ services:
 
   initiator:
     build:
-      context: ../docker
+      context: ../../docker
       dockerfile: Dockerfile
     container_name: ike-initiator
     cap_add: [NET_ADMIN, NET_RAW]

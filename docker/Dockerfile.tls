@@ -1,0 +1,29 @@
+# Image for the TLS post-quantum labs (tls-key-exchange and tls-authentication).
+#
+# Unlike the strongSwan images (IKEv2) and the hostap image (MACsec/EAP-TLS),
+# these labs talk plain TLS 1.3 with the OpenSSL command-line tools, so all we
+# need is a recent OpenSSL plus a couple of packet tools to look at the wire.
+#
+# Debian trixie ships OpenSSL 3.5, which is the first mainstream OpenSSL that
+# knows the post-quantum pieces out of the box: the hybrid ML-KEM key-exchange
+# group (X25519MLKEM768) and ML-DSA certificates, both straight from the default
+# provider. No external libraries, no oqs-provider, no patches.
+#
+# Base pinned by digest for reproducible builds (debian:trixie-slim as of this
+# writing), the same OpenSSL 3.5 family the MACsec and authentication labs use.
+FROM debian:trixie-slim@sha256:28de0877c2189802884ccd20f15ee41c203573bd87bb6b883f5f46362d24c5c2
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# tshark dissects the TLS handshake (proving X25519MLKEM768 and ML-DSA on the
+# wire); preseed its debconf prompt so the build stays non-interactive.
+RUN echo "wireshark-common wireshark-common/install-setuid boolean false" | debconf-set-selections \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        openssl ca-certificates \
+        iproute2 iputils-ping tcpdump tshark vim procps \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY entrypoint-tls.sh /entrypoint-tls.sh
+RUN chmod +x /entrypoint-tls.sh
+
+ENTRYPOINT ["/entrypoint-tls.sh"]

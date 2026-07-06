@@ -1,0 +1,67 @@
+# Stack for the MACsec + EAP-TLS lab (see this directory's README.md). This one
+# lab covers both post-quantum pillars in a single EAP-TLS handshake:
+#   - key exchange: hybrid ML-KEM (X25519MLKEM768), the TLS 1.3 group
+#   - authentication: ML-DSA certificates (reissue with certgen ml-dsa-*)
+#
+# Two roles, exactly like the IKEv2 labs' initiator/responder:
+#   macsec-authenticator  - the "switch port": hostapd + integrated EAP-TLS server
+#   macsec-supplicant     - the "endpoint": wpa_supplicant EAP-TLS peer
+#
+# The supplicant shares the authenticator's network namespace
+# (network_mode: service:macsec-authenticator) so the two are joined by a direct
+# veth pair (a virtual Ethernet "cable"). 802.1X EAPOL frames go to the PAE group
+# address (01:80:c2:00:00:03), which Linux bridges filter by default, so a
+# point-to-point veth is used instead of a Docker bridge. This keeps the lab
+# running on plain Docker with no host-side configuration.
+services:
+  macsec-authenticator:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.macsec
+    container_name: macsec-authenticator
+    # NET_ADMIN: create the veth link + (appendix) MACsec interfaces. NET_RAW: tcpdump.
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      MACSEC_ROLE: authenticator
+    volumes:
+      - ./config/authenticator:/cfg
+    healthcheck:
+      test: ["CMD", "ip", "link", "show", "sup"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 2s
+
+  macsec-supplicant:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.macsec
+    container_name: macsec-supplicant
+    cap_add: [NET_ADMIN, NET_RAW]
+    # Share the authenticator's netns so both ends of the veth pair are reachable.
+    network_mode: "service:macsec-authenticator"
+    environment:
+      MACSEC_ROLE: supplicant
+    volumes:
+      - ./config/supplicant:/cfg
+    depends_on:
+      macsec-authenticator:
+        condition: service_healthy
+
+  # One-shot helper that mints the CA + EAP server/supplicant certs and installs
+  # them into each role's config dir. Not started by `up` (setup profile):
+  #   docker compose run --rm certgen ecdsa        # classical baseline
+  #   docker compose run --rm certgen ml-dsa-44    # post-quantum signatures
+  # The key exchange (hybrid ML-KEM) is negotiated by TLS 1.3 either way and is
+  # independent of the certificate algorithm.
+  certgen:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.macsec
+    container_name: macsec-certgen
+    profiles: ["setup"]
+    entrypoint: ["/bin/sh", "/gen-certs.sh"]
+    volumes:
+      - ./gen-certs.sh:/gen-certs.sh:ro
+      - ./config/authenticator:/work/authenticator
+      - ./config/supplicant:/work/supplicant

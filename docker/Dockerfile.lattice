@@ -1,0 +1,20 @@
+# Image for the Module-Lattice Foundations lab. Unlike the strongSwan images
+# (Dockerfile / Dockerfile.mldsa), this lab is pure math: a small Python
+# environment with numpy (for the readable toy crypto) and fpylll (for real
+# LLL/BKZ lattice reduction in the attack-scaling exercise).
+#
+# Base pinned by digest for reproducible builds (debian:bookworm-slim as of
+# this writing). Debian bookworm packages python3-fpylll directly, so no pip
+# build of the fplll C++ library is needed.
+FROM debian:bookworm-slim@sha256:96e378d7e6531ac9a15ad505478fcc2e69f371b10f5cdf87857c4b8188404716
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-numpy python3-fpylll vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# The lab scripts are bind-mounted here by docker-compose (see ../module-lattices).
+WORKDIR /lab
+
+# No daemon to run: keep the container alive so `docker compose up -d` leaves it
+# ready for `docker exec -it ... python3 <script>` and interactive editing.
+CMD ["sleep", "infinity"]

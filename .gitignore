@@ -7,9 +7,24 @@ README.legacy.md
 
 # Generated lab credentials (CA + leaf keys/certs) for the IKEv2 mutual-auth lab.
 # Never commit private keys; these are produced at runtime by gen-certs.sh.
-authentication/config/*/private/
-authentication/config/*/x509/
-authentication/config/*/x509ca/
+ipsec/authentication/config/*/private/
+ipsec/authentication/config/*/x509/
+ipsec/authentication/config/*/x509ca/
+
+# Generated lab credentials for the TLS authentication lab (CA + server/client
+# keys/certs), produced at runtime by gen-certs.sh. Never commit private keys.
+tls/authentication/config/*/*.crt
+tls/authentication/config/*/*.key
+
+# Generated lab credentials for the MACsec EAP-TLS lab (CA + server/client
+# certs and keys), produced at runtime by gen-certs.sh into each role's config
+# dir. The .conf and eap_user files are tracked; only the crypto material isn't.
+macsec/config/*/*.crt
+macsec/config/*/*.key
+
+# Python bytecode cache from the module-lattices lab scripts
+__pycache__/
+*.pyc
 
 # Editor / OS cruft
 .DS_Store
