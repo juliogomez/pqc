@@ -27,6 +27,7 @@ __pycache__/
 *.pyc
 
 # Editor / OS cruft
+.cursor/
 .DS_Store
 *.swp
 *~
