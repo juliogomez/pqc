@@ -4,7 +4,7 @@
 # credential directories.
 #
 # Run via the certgen helper service (which mounts both peers' config dirs),
-# from the authentication/ directory:
+# from the ipsec/authentication/ directory:
 #   docker compose run --rm certgen ecdsa                                   # Stage 1
 #   docker compose -f docker-compose.yml -f docker-compose.mldsa.yml \
 #       run --rm certgen ml-dsa-44                                          # Stage 2

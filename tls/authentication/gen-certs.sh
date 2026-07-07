@@ -4,14 +4,14 @@
 # config directory.
 #
 # Run via the certgen helper service (which mounts both roles' config dirs),
-# from the tls-authentication/ directory:
+# from the tls/authentication/ directory:
 #   docker compose run --rm certgen ecdsa          # classical certificates
 #   docker compose run --rm certgen ml-dsa-65      # post-quantum certificates
 #
 # The certificate algorithm is the whole point of this lab: ecdsa is today's
 # classical baseline, the ml-dsa-* types make the certificates post-quantum.
 # (The key exchange is independent of this and is covered by the companion
-# tls-key-exchange lab.)
+# tls/key-exchange lab.)
 #
 # LAB ONLY: keys are generated unencrypted for convenience. Never reuse them or
 # commit them; .gitignore excludes the generated material.

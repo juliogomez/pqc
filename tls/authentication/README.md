@@ -19,7 +19,6 @@ Ready? Let's find out who is on the other end.
 5. [Our tool of choice: OpenSSL 3.5](#our-tool-of-choice-openssl-35)
 6. [Let's get our hands dirty: the lab](#lets-get-our-hands-dirty-the-lab)
 7. [Where TLS authentication stands today](#where-tls-authentication-stands-today)
-8. [How this compares to the IKEv2 authentication lab](#how-this-compares-to-the-ikev2-authentication-lab)
 
 ---
 
@@ -41,7 +40,7 @@ By the end of this lab you'll have seen, with your own certificates:
 
 The key-exchange labs had one clear villain: **"harvest now, decrypt later"**. An attacker records your traffic today and decrypts it once a quantum computer arrives. That makes post-quantum key exchange urgent right now.
 
-Authentication is different, and this trips up a lot of people. A signature on a live handshake only has to resist forgery **up to the moment it is checked**. If a quantum computer that can forge signatures shows up in 2035, it cannot go back in time and fake your 2026 handshake. That session is already over. So for a single TLS handshake, there is no "harvest now" version of the threat.
+Authentication is different. A signature on a live handshake only has to resist forgery **up to the moment it is checked**. If a quantum computer that can forge signatures shows up in 2035, it cannot go back in time and fake your 2026 handshake. That session is already over. So for a single TLS handshake, there is no "harvest now" version of the threat.
 
 But that does not mean you can relax. Authentication still has to go post-quantum, just for slower reasons:
 
@@ -81,6 +80,13 @@ An ECDSA certificate is under 400 bytes. The ML-DSA-65 one is about **15 times**
 
 One nice contrast with the [IKEv2 authentication lab](../../ipsec/authentication/README.md): IKEv2 runs over UDP, which has no built-in way to carry a message that is bigger than one packet, so those big certificates force the `IKE_AUTH` message to split into many fragments (IKEv2's own fragmentation, RFC 7383), and that is where the rough edges live. TLS runs over TCP instead, which streams the bytes for you, so the certificates just make the handshake longer rather than forcing fragmentation. The size is still real, it just shows up as more bytes to send, not as a fragmentation headache.
 
+So why care about a handshake that is a few kilobytes heavier? Two reasons, and neither is fragmentation:
+
+- **Latency, via TCP slow start.** A fresh TCP connection doesn't send at full speed; it starts with a small *initial congestion window*, typically about 10 packets (~14 KB), and only ramps up once the other side acknowledges receipt. A ~2.5 KB ECDSA handshake fits inside that very first burst, so the server sends it and you're done. A ~16 KB ML-DSA handshake does **not** fit: the server sends the first ~14 KB, then has to stop and wait for the client's ACK before it can send the rest, adding a full extra round trip to connection setup. On a low-latency LAN you'll barely notice; on a high-latency or lossy link (mobile, satellite, far-away server) that added round trip is exactly what you feel as a slower connection.
+- **Bandwidth, at scale.** A few extra kilobytes per handshake is nothing for one connection, but a busy server terminates millions or billions of them, and the same bytes hurt on metered or constrained links (IoT, embedded, mobile data). The cost is per-connection and it adds up.
+
+That is the real implication of the size jump, and it's why Exercise 3 has you measure the handshake bytes directly rather than just admire the bigger certificates.
+
 ---
 
 ## Our tool of choice: OpenSSL 3.5
@@ -109,6 +115,12 @@ Two containers on a private Docker network, like the other labs' two peers:
 - **`tls-auth-client`** (172.23.0.3): runs `openssl s_client` and proves its identity too.
 
 Both trust one small **CA** we spin up just for the lab. The CA signs a server certificate and a client certificate, and both sides get the CA certificate so they can check each other. That is **mutual TLS**: each end proves who it is.
+
+> **What about the key exchange?** None of the commands below set `-groups`, so OpenSSL 3.5 just uses its default, which is the hybrid `X25519MLKEM768` you met in the [key-exchange lab](../key-exchange/README.md). We leave that alone on purpose and focus on *identity* here. The nice side effect: a connection in this lab is already quantum-safe on both fronts at once, hybrid key exchange and (by Exercise 3) ML-DSA authentication.
+
+### Prerequisites
+
+**Docker** with the Compose v2 plugin (`docker compose ...`), and three terminals this time: one on your host for the certificate helper and cleanup, one for the server container, one for the client. Everything else, OpenSSL 3.5 and the small cert-generation script, is baked into the image. Doing the [TLS key-exchange lab](../key-exchange/README.md) first isn't required, but the two pair naturally: key exchange there, identity here.
 
 ### Build and start
 
@@ -194,7 +206,7 @@ Now let's actually use certificates to authenticate a real handshake, starting w
 docker compose run --rm --build certgen ecdsa
 ```
 
-This builds the lab CA and issues an ECDSA server certificate and an ECDSA client certificate, dropping each (plus the CA certificate) into the right config directory, which is mounted into each container at `/cfg`. The `--build` makes sure the helper uses the same OpenSSL 3.5 image as the two roles (it prints its OpenSSL version as it runs). You need to run this before starting the server in the next step, otherwise `/cfg/server.key` won't exist yet.
+This builds the lab CA and issues an ECDSA server certificate and an ECDSA client certificate, dropping each (plus the CA certificate) into the right config directory, which is mounted into each container at `/cfg`. The `--build` makes sure the helper uses the same OpenSSL 3.5 image as the two roles (it prints its OpenSSL version as it runs). 
 
 **Step 2: Start the server, requiring a client certificate**
 
@@ -237,7 +249,7 @@ Stop the server with Ctrl-C, but keep the containers up and the terminals connec
 
 ### Exercise 3: Mutual TLS with ML-DSA certificates
 
-Same handshake, post-quantum certificates this time. The lesson is in how little changes to *run* it, and how much changes on the *wire*.
+Same handshake, post-quantum certificates this time. The lesson is in **how little changes** to *run* it, and how much changes on the *wire*.
 
 **Step 1: Reissue the certificates as ML-DSA**
 
@@ -278,7 +290,7 @@ Verify return code: 0 (ok)
 
 (Your exact byte counts will differ. The jump is the point.)
 
-That `Peer signature type: mldsa65` is the proof: the server authenticated itself with an **ML-DSA signature**, verified against an ML-DSA CA, over a real TLS 1.3 handshake. Both ends are now quantum-safe for authentication, and you changed one word (`ecdsa` to `ml-dsa-65`) to get there.
+That `Peer signature type: mldsa65` is the proof: the server authenticated itself with an **ML-DSA signature**, verified against an ML-DSA CA, over a real TLS 1.3 handshake. Both ends are now quantum-safe for authentication, and the only thing that changed is the type of certificates you use (`ecdsa` to `ml-dsa-65`).
 
 **Step 4: Compare the two handshakes**
 
@@ -323,20 +335,3 @@ That's a wrap! You generated post-quantum certificates, measured the size jump, 
 - **The TLS code points are still settling.** The signature scheme identifiers that let TLS negotiate ML-DSA are recent and still moving through the IETF TLS working group. OpenSSL implements them, but expect details to shift before everything is final. One practical quirk: if a server offers both a classical and an ML-DSA certificate, OpenSSL often prefers the classical one, so you may need `-sigalgs mldsa65` to force the post-quantum choice. (In this lab the server holds *only* an ML-DSA certificate, so it is always chosen.)
 
 So just like the IKEv2 story, the building blocks are here and worth getting hands-on with now, even though the wider ecosystem (public CAs, browsers, every server) still has a long way to go.
-
----
-
-## How this compares to the IKEv2 authentication lab
-
-Both labs make *authentication* quantum-safe with ML-DSA certificates. The differences are in the protocol and how mature the tooling is:
-
-| | IKEv2 ([authentication lab](../../ipsec/authentication/README.md)) | TLS (this lab) |
-|-|-----------------------------------------------------------|----------------|
-| Protocol | IKEv2 | TLS 1.3 |
-| Tool | strongSwan | OpenSSL |
-| PQC auth available on | experimental `ml-dsa` branch | stable OpenSSL 3.5 |
-| Big certs cause | `IKE_AUTH` fragmentation (many fragments) | a longer handshake over TCP (no fragmentation) |
-| Signature proven by | `authentication ... with ML_DSA_44 successful` | `Peer signature type: mldsa65` |
-| Identity carried in | certificate SAN matched as IKE ID | certificate, verified against the CA |
-
-Same idea (ML-DSA certificates proving identity), two protocols, with TLS a step ahead on tooling maturity.

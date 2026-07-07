@@ -10,6 +10,8 @@ Ready? Let's find out.
 
 ---
 
+
+
 ## Contents
 
 1. [What are we trying to figure out?](#what-are-we-trying-to-figure-out)
@@ -18,9 +20,10 @@ Ready? Let's find out.
 4. [Head-to-head: classical vs hybrid](#head-to-head-classical-vs-hybrid)
 5. [Our tool of choice: OpenSSL 3.5](#our-tool-of-choice-openssl-35)
 6. [Let's get our hands dirty: the lab](#lets-get-our-hands-dirty-the-lab)
-7. [How this compares to the IKEv2 and MACsec labs](#how-this-compares-to-the-ikev2-and-macsec-labs)
 
 ---
+
+
 
 ## What are we trying to figure out?
 
@@ -36,11 +39,13 @@ By the end of this lab you'll have seen, with your own packets:
 
 ---
 
+
+
 ## Why should you care? The quantum threat
 
 The story is the same one from the [IKEv2 key-exchange lab](../../ipsec/key-exchange/README.md), so we'll keep it short here.
 
-A classical TLS key exchange uses **(EC)DHE**: the client and server each send a public value, and they each compute the same shared secret from it. That secret then keys all the symmetric encryption for the session. The problem is that a large enough quantum computer running **Shor's algorithm** can recover that secret from the public values alone.
+A classical TLS key exchange uses **(EC)DHE** (this is the same ephemeral X25519/ECDH exchange from the [IKEv2 lab](../../ipsec/key-exchange/README.md), just written the way TLS folks write it: the `(EC)` covers both finite-field DH and its elliptic-curve variant, and the trailing `E` spells out "ephemeral"): the client and server each send a public value, and they each compute the same shared secret from it. That secret then keys all the symmetric encryption for the session. The problem is that a large enough quantum computer running **Shor's algorithm** can recover that secret from the public values alone.
 
 And here is the real problem, the same **"harvest now, decrypt later"** trap: an attacker can record your TLS traffic today and decrypt it years from now, once the hardware exists. Anything you send over HTTPS that still matters in ten years is already at risk.
 
@@ -48,24 +53,30 @@ The fix is **hybrid ML-KEM**: run the classical X25519 exchange and the post-qua
 
 ---
 
+
+
 ## Meet the two key exchanges
 
-### Classical: x25519
+
+
+### Classical: DH (x25519)
 
 **X25519** is the most common key exchange in modern TLS 1.3. It is fast, has small 32-byte public values, and has been trusted for years. Its weakness is the one above: Shor's algorithm breaks it.
 
-### Hybrid: X25519MLKEM768
+### Hybrid: DH + ML-KEM (X25519MLKEM768)
 
-**`X25519MLKEM768`** is a single TLS group that runs both halves at once:
+`X25519MLKEM768` is a single TLS group that runs both halves at once:
 
-- the classical **X25519** exchange, and
+- the classical DH / **X25519** exchange, and
 - the post-quantum **ML-KEM-768** ([FIPS 203](https://csrc.nist.gov/pubs/fips/203/final)) key encapsulation.
 
-The TLS key schedule then derives the session keys from **both** shared secrets. If ML-KEM ever turns out to have a flaw, X25519 still protects you today. If a quantum computer breaks X25519, ML-KEM still protects you tomorrow. You only lose if both fall, which is the whole point of going hybrid.
+The TLS key schedule then derives the session keys from **both** shared secrets. If ML-KEM ever turns out to have a flaw, DH still protects you today. If a quantum computer breaks DH, ML-KEM still protects you tomorrow. You only lose if both fall, which is the whole point of going hybrid.
 
 > **Curious why ML-KEM resists a quantum computer?** The "ML" stands for "Module Lattice". The companion [module-lattices lab](../../module-lattices/README.md) builds that math from scratch and runs a real lattice attack to show why it holds. Worth a look if you want to understand the reason instead of just trusting it.
 
 ---
+
+
 
 ## Head-to-head: classical vs hybrid
 
@@ -75,12 +86,14 @@ This is the heart of the lab, and Exercise 2 lets you reproduce every number bel
 
 The hybrid group joins the classical and post-quantum public values together, so the `key_share` carries both:
 
-| | x25519 | X25519MLKEM768 (hybrid) |
-|-|--------|-------------------------|
-| Client key share | 32 B | **1216 B** (32 + 1184) |
-| Server key share | 32 B | **1120 B** (32 + 1088) |
-| TLS 1.3 group ID | `0x001d` | `0x11ec` |
-| Quantum-safe | no | yes |
+
+|                  | x25519   | X25519MLKEM768 (hybrid) |
+| ---------------- | -------- | ----------------------- |
+| Client key share | 32 B     | **1216 B** (32 + 1184)  |
+| Server key share | 32 B     | **1120 B** (32 + 1088)  |
+| TLS 1.3 group ID | `0x001d` | `0x11ec`                |
+| Quantum-safe     | no       | yes                     |
+
 
 So the hybrid `ClientHello` and `ServerHello` get about 1.1 KB heavier each. That is the whole cost, and you'll measure it yourself.
 
@@ -88,10 +101,14 @@ So the hybrid `ClientHello` and `ServerHello` get about 1.1 KB heavier each. Tha
 
 Here is the good news. In the [IKEv2 lab](../../ipsec/key-exchange/README.md), ML-KEM's big payloads needed a brand new round trip (`IKE_INTERMEDIATE`, RFC 9370) to carry them. **TLS 1.3 needs none.** The hybrid key share travels in the same `ClientHello` and `ServerHello` that a classical handshake already uses, so the handshake is still **one round trip**. The messages are just bigger.
 
-| Mode | Round trips | What carries the key exchange |
-|------|-------------|-------------------------------|
-| x25519 only | 1 | `ClientHello` -> `ServerHello` |
-| X25519MLKEM768 (hybrid) | 1 | `ClientHello` -> `ServerHello` (same messages, larger) |
+
+| Mode                    | Round trips | What carries the key exchange                          |
+| ----------------------- | ----------- | ------------------------------------------------------ |
+| x25519 only             | 1           | `ClientHello` -> `ServerHello`                         |
+| X25519MLKEM768 (hybrid) | 1           | `ClientHello` -> `ServerHello` (same messages, larger) |
+
+
+
 
 ### What stays the same
 
@@ -99,38 +116,50 @@ The record encryption is unchanged: TLS 1.3 uses **AES-GCM**, which is symmetric
 
 ---
 
+
+
 ## Our tool of choice: OpenSSL 3.5
 
-The other labs reached for strongSwan (IKEv2) or wpa_supplicant and hostapd (MACsec). For plain TLS we use the tool everyone already knows: **[OpenSSL](https://openssl-library.org/)**, specifically **3.5 or newer**.
+The other labs reached for strongSwan (IKEv2) or wpa_supplicant and hostapd (MACsec). For plain TLS we use the tool everyone knows: **[OpenSSL](https://openssl-library.org/)** **3.5 or newer**.
 
-Why 3.5? Because it is the first mainstream OpenSSL that ships the post-quantum pieces in the default provider, with no extra libraries and no patches. That includes the `X25519MLKEM768` group we need here. Older OpenSSL (like the 3.0 on Ubuntu 24.04) does not know the group at all and rejects it with an error.
+Why 3.5? Because it is the first mainstream OpenSSL that ships the post-quantum pieces in the default provider, with no extra libraries and no patches. That includes the `X25519MLKEM768` group we need here. Older OpenSSL version do not know the group at all and rejects it with an error.
 
 Both containers in this lab run OpenSSL 3.5. We use two OpenSSL commands:
 
-- **`openssl s_server`**: a small TLS server that accepts connections.
-- **`openssl s_client`**: a small TLS client that connects and prints what it negotiated.
+- `openssl s_server`: a small TLS server that accepts connections.
+- `openssl s_client`: a small TLS client that connects and prints what it negotiated.
 
 That is all we need to run a real TLS 1.3 handshake and look inside it.
 
 ---
+
+
 
 ## Let's get our hands dirty: the lab
 
 Here's the plan:
 
 - **[Exercise 1](#exercise-1-run-a-hybrid-tls-13-handshake)**: run a TLS 1.3 handshake that negotiates hybrid `X25519MLKEM768`, and confirm it in the OpenSSL output.
-- **[Exercise 2](#exercise-2-prove-it-on-the-wire-and-compare)**: capture the handshake, prove in the bytes that the key share is hybrid, then run a classical handshake next to it and compare. (This is the payoff.)
+- **[Exercise 2](#exercise-2-prove-it-on-the-wire-and-compare)**: capture the handshake, prove in the bytes that the key share is hybrid, then run a classical handshake next to it and compare.
+
+
 
 ### How the topology works
 
 Two containers on a private Docker network:
 
-- **`tls-server`** (172.22.0.2): runs `openssl s_server`.
-- **`tls-client`** (172.22.0.3): runs `openssl s_client`.
+- `tls-server` (172.22.0.2): runs `openssl s_server`.
+- `tls-client` (172.22.0.3): runs `openssl s_client`.
+
+
+
+### Pre-requisites
+
+**Docker** with the Compose v2 plugin (the `docker compose` subcommand), plus two terminal windows: one for the server container, one for the client. OpenSSL 3.5, `tcpdump`, and `tshark` all live inside the image, so there is nothing to install on your workstation. The first `docker compose build` pulls the required components; every run after that is quick. If you have already done the [IKEv2 key-exchange lab](../../ipsec/key-exchange/README.md) you'll fly through this one, it's the same story over a different protocol.
 
 ### Build and start
 
-Everything runs **locally on your workstation**. Clone the repo and run all commands from the `tls/key-exchange/` directory:
+Everything runs **locally on your workstation**. Run all commands from the `tls/key-exchange/` directory:
 
 ```bash
 cd tls/key-exchange
@@ -148,6 +177,7 @@ docker compose ps
 ```
 
 Expected:
+
 ```
 NAME         STATUS
 tls-server   Up
@@ -155,6 +185,8 @@ tls-client   Up
 ```
 
 ---
+
+
 
 ### Exercise 1: Run a hybrid TLS 1.3 handshake
 
@@ -202,13 +234,15 @@ New, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384
 Protocol: TLSv1.3
 ```
 
-That `Negotiated TLS1.3 group: X25519MLKEM768` line is the proof. OpenSSL only prints it when a hybrid or post-quantum group is chosen. The session keys for this TLS connection are now rooted in ML-KEM.
+That `Negotiated TLS1.3 group: X25519MLKEM768` line is the proof. OpenSSL only prints it when a hybrid post-quantum group is chosen. The session keys for this TLS connection are now rooted in ML-KEM.
 
 > **Heads up:** the client also prints a `verify error` line because the server's certificate is self-signed and we did not give the client a CA to trust. That is fine here. This lab is about the key exchange, not who the server is. Proving identity is the [authentication lab's](../authentication/README.md) story.
 
-Stop the server with Ctrl-C when you've seen the line. Leave the containers up for Exercise 2.
+Stop the server with Ctrl+C when you've seen the line. Leave the containers up for Exercise 2.
 
 ---
+
+
 
 ### Exercise 2: Prove it on the wire, and compare
 
@@ -290,12 +324,14 @@ Key Share Entry: Group: x25519, Key Exchange length: 32
 
 **32 bytes each.** Side by side:
 
-| | x25519 (classical) | X25519MLKEM768 (hybrid) |
-|-|--------------------|-------------------------|
-| Client key share | 32 B | 1216 B |
-| Server key share | 32 B | 1120 B |
-| Round trips | 1 | 1 |
-| Quantum-safe | no | yes |
+
+|                  | x25519 (classical) | X25519MLKEM768 (hybrid) |
+| ---------------- | ------------------ | ----------------------- |
+| Client key share | 32 B               | 1216 B                  |
+| Server key share | 32 B               | 1120 B                  |
+| Round trips      | 1                  | 1                       |
+| Quantum-safe     | no                 | yes                     |
+
 
 That is the core finding of the lab: **post-quantum key exchange in TLS 1.3 costs about a kilobyte extra in each of the first two handshake messages, and nothing else.** No extra round trip, no change to the record cipher.
 
@@ -307,6 +343,17 @@ That is the core finding of the lab: **post-quantum key exchange in TLS 1.3 cost
 
 ---
 
+
+
+### Troubleshooting
+
+- **The** `Negotiated TLS1.3 group` **line never shows up.** Either the group name is misspelled (it's `X25519MLKEM768`, and case matters) or you're on an OpenSSL older than 3.5 that doesn't know the group. `openssl version` inside the container should say 3.5.x.
+- **The client dies with a fatal "handshake failure" alert.** Server and client have to offer the *same* group. Start the server with `-groups x25519` but connect with `-groups X25519MLKEM768` (or the other way round) and there is nothing in common, so the server rejects it. Match them.
+- **The wrong group gets negotiated, or the server won't start on 4433.** A previous `s_server` is still holding the port. This is the easy trap in Exercise 2: kill the old one first (`kill $SSERVER_PID`, or `pkill -f s_server` if you lost the PID), otherwise your new capture quietly talks to the stale server.
+- **The capture only shows one key share instead of two.** The `ServerHello` didn't make it into the pcap. Let the handshake finish for a second before you stop `tcpdump`, then read the file again.
+
+
+
 ### Cleanup
 
 ```bash
@@ -316,20 +363,3 @@ docker compose down
 `docker compose down` stops and removes the containers and the `tls_net` network. The built image is kept, so the next `docker compose up -d` starts right away. The certificate and captures lived in the container's `/tmp`, so they vanish with the containers, nothing is left on your host.
 
 That's a wrap! You ran a real post-quantum TLS handshake, confirmed the hybrid group, and measured its exact cost on the wire. Next, the [authentication lab](../authentication/README.md) takes care of the other half of the handshake: proving who the server (and client) really is, with post-quantum certificates.
-
----
-
-## How this compares to the IKEv2 and MACsec labs
-
-All three labs make the *key exchange* quantum-safe with hybrid ML-KEM. What differs is the protocol carrying it:
-
-| | IKEv2 ([key-exchange lab](../../ipsec/key-exchange/README.md)) | MACsec ([lab](../../macsec/README.md)) | TLS (this lab) |
-|-|-------------------------------------------------------|--------------------------------------------------|----------------|
-| Layer | 3 (IP) | 2 (Ethernet) | 4+ (over TCP) |
-| Underlying handshake | IKEv2 + RFC 9370 | EAP-TLS (TLS 1.3) | TLS 1.3 |
-| Hybrid group | `x25519-ke1_mlkem768` | `X25519MLKEM768` | `X25519MLKEM768` |
-| Extra round trip for ML-KEM? | Yes (`IKE_INTERMEDIATE`) | No | No |
-| Data-plane cipher | ESP AES-GCM | MACsec AES-GCM | TLS record AES-GCM |
-| Tool | strongSwan | wpa_supplicant + hostapd | OpenSSL |
-
-Same idea, three different protocols: keep the classical exchange, add ML-KEM next to it, and derive the keys from both.

@@ -2,7 +2,7 @@
 
 ### Is your switch fabric ready for a quantum computer?
 
-A lot of network encryption happens one layer below the VPN. **MACsec (IEEE 802.1AE)** encrypts Ethernet frames at **Layer 2**, one hop at a time: between switches, between a host and its access port, or across a data-center fabric or a 5G fronthaul link. So if you run network infrastructure, here is a fair question: is MACsec ready for a quantum computer, and if not, where does the post-quantum work go?
+A lot of network encryption happens one layer below the VPN. **MACsec (IEEE 802.1AE)** encrypts Ethernet frames at **Layer 2**, one hop at a time: between switches, between a host and its access port, or across a data-center fabric or a 5G fronthaul link. So if you run network infrastructure, here is a fair question: is MACsec ready for a cryptographically relevant quantum computer, and if not, where does the post-quantum work go?
 
 The answer is simpler than you might expect. MACsec's whole quantum story lives in **one place**: the **EAP-TLS** handshake that sets up its keys. That single handshake is where *both* halves of the post-quantum upgrade happen:
 
@@ -23,7 +23,7 @@ Ready? Let's start.
 4. [Where's the quantum risk? (Not where you'd think)](#wheres-the-quantum-risk-not-where-youd-think)
 5. [The post-quantum pieces: ML-KEM and ML-DSA in EAP-TLS](#the-post-quantum-pieces-ml-kem-and-ml-dsa-in-eap-tls)
 6. [Our tools of choice: wpa_supplicant, hostapd, and OpenSSL 3.5](#our-tools-of-choice-wpa_supplicant-hostapd-and-openssl-35)
-7. [Hands-on: the lab](#hands-on-the-lab)
+7. [Let's get our hands dirty: the lab](#lets-get-our-hands-dirty-the-lab)
 
 ---
 
@@ -45,7 +45,7 @@ By the end of this lab you will have seen, in your own packets:
 
 ## Why should you care? MACsec and Layer 2
 
-First, some background. **MACsec** ([IEEE 802.1AE](https://1.ieee802.org/security/802-1ae/)) is link-layer encryption for Ethernet. Where IPsec protects IP packets end to end at Layer 3, MACsec protects *frames* at Layer 2, on a single hop: switch-to-switch, host-to-switch, or across a provider's Carrier Ethernet. It encrypts and integrity-protects the whole frame payload with **AES-GCM**, adding a small SecTAG header and an ICV (integrity check value) trailer.
+First, some background. **MACsec** ([IEEE 802.1AE](https://1.ieee802.org/security/802-1ae/)) is link-layer encryption for Ethernet. Where IPsec protects IP packets end to end at Layer 3, MACsec protects *frames* at Layer 2, on a single hop: switch-to-switch, host-to-switch, or across a provider's Carrier Ethernet. It encrypts and integrity-protects the whole frame payload with **AES-GCM**.
 
 Where does it show up in real infrastructure?
 
@@ -64,7 +64,7 @@ The data plane uses symmetric crypto, so it is already quantum-safe. Any quantum
 
 ## Where does MACsec get its keys? MKA, CAK, and the key hierarchy
 
-This is the central part of the MACsec story, and one that most people never look at closely. A MACsec link does not simply "have a key". It builds one through a chain of steps, and each step has a name worth knowing.
+A MACsec link does not simply "have a key". It builds one through a chain of steps.
 
 ```mermaid
 graph TD
@@ -100,7 +100,7 @@ That last step is where the quantum risk concentrates, so it is worth being clea
 - a **key exchange**, where the two sides run (EC)DHE to agree on a shared secret (this is what the MSK is derived from), and
 - an **authentication** step, where each side proves its identity by signing the handshake with the private key behind its certificate (ECDSA or RSA), and the other side verifies that signature against the certificate.
 
-Both jobs rely on public-key cryptography, and public-key cryptography is exactly what Shor's algorithm breaks. So both quantum-vulnerable pieces live in that one handshake. They are the two classic halves of cryptography, and a quantum computer breaks each one in a different way:
+Both jobs rely on public-key cryptography, and public-key cryptography is exactly what Shor's algorithm breaks. So both pieces are quantum-vulnerable and live in that one handshake. They are the two classic halves of cryptography, and a quantum computer breaks each one in a different way:
 
 | | Key exchange | Authentication |
 |-|--------------|----------------|
@@ -142,7 +142,7 @@ There is one useful difference from IKEv2. IKEv2 needed a whole new round trip (
 | Quantum-safe | no | yes | yes |
 | TLS 1.3 group ID | `0x001d` | `0x0200`* | `0x11ec` |
 
-\* pure ML-KEM groups exist but hybrids are the recommended deployment; we use the hybrid throughout.
+\* pure ML-KEM groups exist but hybrids are the recommended deployment; we use the hybrid.
 
 You will see every one of those byte counts in the capture in [Exercise 2](#exercise-2-prove-the-key-exchange-is-post-quantum).
 
@@ -153,7 +153,7 @@ EAP-TLS authentication is ordinary TLS 1.3 certificate authentication, so making
 1. **The certificates are signed with ML-DSA** instead of ECDSA: the CA signs leaf certs with an ML-DSA key, and the leaf certs carry ML-DSA public keys.
 2. **The handshake `CertificateVerify` uses ML-DSA**: each peer signs the transcript with its ML-DSA private key, and the other side verifies with the ML-DSA public key from the cert.
 
-ML-DSA ([FIPS 204](https://csrc.nist.gov/pubs/fips/204/final), the standardized form of Dilithium) is a lattice-based signature scheme with no known quantum attack. It comes in three sizes (ML-DSA-44, -65, and -87), trading size for security margin. Its main practical feature is its **size**: ML-DSA keys and signatures are much larger than ECDSA's, and that shows up in everything that has to carry a certificate.
+ML-DSA ([FIPS 204](https://csrc.nist.gov/pubs/fips/204/final)) is a lattice-based signature scheme with no known quantum attack. It comes in three sizes (ML-DSA-44, -65, and -87), trading size for security margin. Its main practical feature is its **size**: ML-DSA keys and signatures are much larger than ECDSA's, and that shows up in everything that has to carry a certificate.
 
 Here is what that looks like in *this lab's actual certificates* (measured with `openssl x509 ... -outform DER | wc -c`):
 
@@ -175,9 +175,9 @@ The IKEv2 labs used strongSwan because it speaks IKEv2. MACsec uses a completely
 
 - **[wpa_supplicant](https://w1.fi/wpa_supplicant/)** is the **supplicant**: the endpoint side of 802.1X. It runs the EAP-TLS peer and the MKA state machine.
 - **[hostapd](https://w1.fi/hostapd/)** is the **authenticator**: the switch-port side. We use its **integrated EAP-TLS server** so the whole lab is self-contained (no external RADIUS server needed).
-- **[OpenSSL 3.5+](https://openssl-library.org/)** provides the actual TLS 1.3 crypto. It is the piece that provides *both* post-quantum algorithms: ML-KEM groups and ML-DSA signatures, straight from the default provider.
+- **[OpenSSL 3.5+](https://openssl-library.org/)** provides the TLS 1.3 crypto with *both* post-quantum algorithms: ML-KEM groups and ML-DSA signatures.
 
-Both wpa_supplicant and hostapd are compiled from source in [docker/Dockerfile.macsec](../docker/Dockerfile.macsec), against Debian trixie's OpenSSL 3.5. Why from source rather than the distro package? Because **EAP-TLS over TLS 1.3 is disabled by default**, on *both* ends, and the stock packages do not turn it on:
+Both wpa_supplicant and hostapd are compiled from source. Why from source rather than the distro package? Because **EAP-TLS over TLS 1.3 is disabled by default**, on *both* ends, and the stock packages do not turn it on:
 
 - wpa_supplicant disables TLS 1.3 for EAP-TLS unless built with **`CONFIG_EAP_TLSV1_3=y`** (a build-time flag). The Debian package is not built with it, so it caps EAP-TLS at TLS 1.2, and **without TLS 1.3 there is no ML-KEM** (and no ML-DSA certificate auth either).
 - hostapd's EAP server *also* disables TLS 1.3 by default (`TLS_CONN_DISABLE_TLSv1_3` in its config defaults); it has to be turned back on with **`tls_flags=[ENABLE-TLSv1.3]`** in `hostapd.conf`.
@@ -190,7 +190,7 @@ These two gates are the single most important practical pitfall in post-quantum 
 
 ---
 
-## Hands-on: the lab
+## Let's get our hands dirty: the lab
 
 Here is the plan. We run **one** EAP-TLS handshake and examine its two independent halves, key exchange and authentication, one at a time. But before we start, it is worth being clear about where each half begins, because the two are *not* in the same state at the baseline:
 
@@ -200,19 +200,23 @@ Here is the plan. We run **one** EAP-TLS handshake and examine its two independe
 So the order is *not* "start fully classical, then make everything post-quantum". Instead: the key exchange is already post-quantum from the start (Exercise 2 proves it in the bytes, and shows how easily a misconfiguration loses it), while the authentication is the one piece we switch over ourselves (Exercise 3). Keep that split in mind as you read each exercise:
 
 - **[Exercise 1](#exercise-1-run-the-eap-tls-handshake-ecdsa-baseline)**: run a real EAP-TLS handshake between a supplicant and an authenticator with the classical **ECDSA** certs, watch it derive the key material that roots the MACsec CAK, and record a baseline frame count. (Its key exchange is *already* hybrid ML-KEM; only its authentication is still classical.)
-- **[Exercise 2](#exercise-2-prove-the-key-exchange-is-post-quantum)**: capture that same handshake and prove, in the bytes, that its key exchange negotiated hybrid `X25519MLKEM768`, then remove the TLS 1.3 override and watch it silently downgrade to classical crypto. (This is the key-exchange result.)
+- **[Exercise 2](#exercise-2-prove-the-key-exchange-is-post-quantum)**: capture that same handshake and prove, in the bytes, that its key exchange negotiated hybrid `X25519MLKEM768`, then remove the TLS 1.3 override and watch it silently downgrade to classical crypto.
 - **[Exercise 3](#exercise-3-make-authentication-post-quantum-ml-dsa)**: reissue the certificates as **ML-DSA**, run the same handshake, confirm the *authentication* is now genuinely post-quantum, and measure the EAPOL fragmentation cost.
 
 ### How the topology works
 
-The two roles are two containers, exactly like the IKEv2 labs' initiator/responder:
+We will have two containers, exactly like in the IKEv2 labs' initiator/responder:
 
 - **`macsec-authenticator`**: the "switch port", runs hostapd with the integrated EAP-TLS server.
 - **`macsec-supplicant`**: the "endpoint", runs wpa_supplicant as the EAP-TLS peer.
 
 They are joined by a **veth pair** (a virtual Ethernet "cable"): `aut` on the authenticator end, `sup` on the supplicant end. To make that direct L2 link work on plain Docker, the supplicant container shares the authenticator's network namespace (`network_mode: service:macsec-authenticator` in the compose file). Why not a normal Docker bridge network? Because 802.1X EAPOL frames are sent to the **PAE group multicast address** `01:80:c2:00:00:03`, which Linux bridges filter out by default. A point-to-point veth delivers them unfiltered, so the lab needs no host-side configuration.
 
-> **What is the "PAE group address"?** A *PAE* (Port Access Entity) is the 802.1X software on each port that runs the authentication state machine: the supplicant on one side, the authenticator on the other. Instead of addressing each other by MAC, the two PAEs talk over a fixed IEEE-reserved Layer 2 multicast address, `01:80:c2:00:00:03`, called the **PAE group address**. It is a well-known "everyone doing 802.1X on this link, listen here" address, so a device can start EAPOL before it knows anything about its neighbour (or even has an IP). It is one of the reserved `01:80:c2:00:00:0X` link-local multicast addresses that, by design, are meant to stay on a single hop and never be forwarded, which is exactly why a normal bridge drops them.
+> **What is the "PAE group address"?** A *PAE* (Port Access Entity) is the 802.1X software on each port that runs the authentication state machine: the supplicant on one side, the authenticator on the other. Instead of addressing each other by MAC, the two PAEs talk over a fixed IEEE-reserved Layer 2 multicast address, `01:80:c2:00:00:03`, called the **PAE group address**. It is a well-known "everyone doing 802.1X on this link, listen here" address, so a device can start EAPOL before it knows anything about its neighbour (or even has an IP). 
+
+### Prerequisites
+
+**Docker** with the Compose v2 plugin (`docker compose ...`), and three terminals: two for the container shells (authenticator and supplicant) and one on your host for `docker compose` commands like reissuing certificates. Everything the handshake needs, wpa_supplicant, hostapd, OpenSSL 3.5, `tcpdump`, and `tshark`, is compiled into the image. One caveat to know going in: this lab exercises the EAP-TLS *handshake*, which runs on any Docker host, but actually encrypting frames with the kernel MACsec driver needs a kernel built with `CONFIG_MACSEC` (Docker Desktop's LinuxKit kernel doesn't have it), so the data plane itself is out of scope, see [A note on the data plane](#a-note-on-the-data-plane) at the end for how you'd drive it on a Linux host.
 
 ### Build and start
 
@@ -262,8 +266,6 @@ hostapd -dd /cfg/hostapd.conf 2>&1 | tee /tmp/h.log
 
 It loads the server certificate and waits for a supplicant. Leave this running and open a **second terminal** for the supplicant.
 
-> **Which terminal am I in?** This matters for the whole lab. Because the supplicant shares the authenticator's network namespace, **both containers show the same shell hostname** (for example `root@4cc1a017b6c8`), so the prompt does *not* tell your two terminals apart. Whenever a command is labelled `# authenticator container` or `# supplicant container`, confirm where you are first with `echo $MACSEC_ROLE` (prints `authenticator` or `supplicant`), or check `ls /cfg` (the authenticator has `server.crt` + `hostapd.conf`, the supplicant has `client.crt` + `wpa_supplicant.conf`). Running a command in the wrong container is the most common cause of `No such file or directory` on `/cfg/...` here.
-
 **Step 2: Run the supplicant (wpa_supplicant EAP-TLS peer)**
 
 ```bash
@@ -271,7 +273,7 @@ docker exec -it macsec-supplicant bash
 wpa_supplicant -dd -Dwired -isup -c /cfg/wpa_supplicant.conf 2>&1 | tee /tmp/w.log
 ```
 
-`-Dwired` selects the wired 802.1X driver, `-isup` binds to the supplicant end of the veth, and (as on the authenticator) `tee` saves the verbose stream to `/tmp/w.log`. Give it a second or two, until `CTRL-EVENT-EAP-SUCCESS` scrolls past, then **Ctrl-C both** `wpa_supplicant` (this terminal) and `hostapd` (the first terminal). Now, instead of scrolling back through hundreds of debug lines, pull out just the milestones with `grep`. (The `-dd` logs contain some non-text bytes from the crypto dumps, so every `grep` on these logs uses `-a` to force text mode. Without it, `grep` may just print `binary file matches` instead of the line you want.)
+`-Dwired` selects the wired 802.1X driver, `-isup` binds to the supplicant end of the veth, and (as on the authenticator) `tee` saves the verbose stream to `/tmp/w.log`. Give it a second or two, until `CTRL-EVENT-EAP-SUCCESS` scrolls past, then **Ctrl-C both** `wpa_supplicant` (this terminal) and `hostapd` (the first terminal). Now, instead of scrolling back through hundreds of debug lines, pull out just the milestones with `grep`.
 
 In the **supplicant** shell, look at the client's view of the handshake: the method, the TLS version, and the derived key material:
 
@@ -301,15 +303,15 @@ authsrv: remote certificate verification success
 aut: STA ... IEEE 802.1X: authorizing port
 ```
 
-Three things just happened, and they are the whole point:
+Three things just happened:
 
 - **`method 13 (TLS)`**: the supplicant authenticated with EAP-TLS, and its certificate chain validated against the lab CA.
-- **`Using TLS version TLSv1.3`**: the handshake ran on TLS 1.3 (the supplicant grep shows it; the authenticator negotiated the same version). This is the gate from earlier doing its job; in Exercise 2 you will see what happens without it. (If you `grep` the raw log more broadly you will also see a couple of `Using TLS version TLSv1.2` lines. That is TLS 1.3's record-layer *legacy* version field, not a downgrade. Since hostapd is pinned to 1.3-only, the fact that the handshake succeeded proves the session is really 1.3, and Exercise 2 confirms it in the ServerHello bytes.)
+- **`Using TLS version TLSv1.3`**: the handshake ran on TLS 1.3 (the supplicant grep shows it; the authenticator negotiated the same version). This is the gate from earlier doing its job; in Exercise 2 you will see what happens without it. 
 - **`EAP-TLS: Derived key (len=64)`**: that 64-byte value is the **MSK**. This is the exact key material that, in a full MACsec deployment, becomes the **CAK** that MKA uses to derive the SAK. You are watching the root of the MACsec key hierarchy being created from a real EAP-TLS handshake. As described in the plan, this baseline handshake is already split in two: its *secrecy* comes from a hybrid ML-KEM key exchange (we prove that in [Exercise 2](#exercise-2-prove-the-key-exchange-is-post-quantum)), while its *authentication* is still classical ECDSA (we upgrade that in [Exercise 3](#exercise-3-make-authentication-post-quantum-ml-dsa)).
 
 The supplicant "connecting to `01:80:c2:00:00:03`" is it talking to the PAE group address. This confirms the exchange is real 802.1X over Layer 2, not an IP conversation.
 
-**Step 3: Record the baseline frame count.** This is the number [Exercise 3](#exercise-3-make-authentication-post-quantum-ml-dsa) compares against. The capture and the handshake happen in **two different shells**, and the one thing that matters is that the handshake runs *while* the capture is live. If you count the pcap before a handshake has run into it, you will get `0`: an empty capture window, not a broken lab. First, if hostapd or the supplicant are still running from Steps 1-2, stop them (Ctrl-C).
+**Step 3: Record the baseline frame count.** This is the number [Exercise 3](#exercise-3-make-authentication-post-quantum-ml-dsa) compares against. The capture and the handshake happen in **two different shells**, and the one thing that matters is that the handshake runs *while* the capture is live. First, if hostapd or the supplicant are still running from Steps 1-2, stop them (Ctrl-C).
 
 In the **authenticator** shell, start the capture and the EAP server in the background:
 
@@ -357,18 +359,16 @@ grep -ac "more fragments will follow" /tmp/w.log
 1
 ```
 
-Just **one**. It is worth being precise here, because "14 frames" and "1 fragment" count *completely different things*, and it is easy to assume they are the same measure:
+Just **one**. It is worth to be precise here, because "14 frames" and "1 fragment" count *completely different things*, and it is easy to assume they are measuring the same thing:
 
 - An **EAPOL frame** is *one packet on the wire*. The **14** is the whole authentication exchange end to end: the EAPOL-Start, the identity request/response, the EAP-TLS start, then the TLS handshake flights (ClientHello; ServerHello + server certificate; client certificate; the Finished messages), and finally EAP-Success. Nearly all of these happen in *every* EAP-TLS handshake, whether or not anything is fragmented; they are just the protocol's normal exchange. EAP is strictly step-by-step, one request then one response at a time, so each flight is at least a request **and** a response.
 - **Fragmentation** is a *different* measure entirely. It happens only when a *single* TLS message is too big to fit in one EAP packet, so it is split across several packets (every non-final piece flagged `more fragments will follow`, and each piece separately acknowledged). The **1** means exactly one TLS message had to be split.
 
 So "1 fragment but 14 frames" is not a contradiction. Most of those frames are just the ordinary EAP-TLS exchange that would happen even with *zero* fragmentation, and only **one** message here was large enough to need splitting. Fragmentation *adds* frames on top (each extra fragment is another packet plus its ACK), but it is not what creates most of them. (This is the relationship Exercise 3 relies on: growing the certificate increases the *fragments*, which in turn increases the *frame* count, but the two never grow one-for-one.)
 
-And it is worth knowing *why* that one split happens even here. It is the **ClientHello** being split to carry the 1216-byte hybrid ML-KEM key share, *not* the certificate (the 483-byte ECDSA cert fits comfortably in one EAP message). So even the classical baseline already fragments once, because of the post-quantum *key exchange*.
+And it is worth knowing *why* that one split happens. It is the **ClientHello** being split to carry the 1216-byte hybrid ML-KEM key share, *not* the certificate (the 483-byte ECDSA cert fits comfortably in one EAP message). So even the classical baseline already fragments once, because of the post-quantum *key exchange*.
 
 Keep all three numbers in mind (**14 frames**, **483-byte cert**, **1 client fragment**); Exercise 3 compares against them.
-
-> **Getting `0`?** The pcap was counted before any handshake ran into it. Make sure `tcpdump` is started *first*, the `wpa_supplicant` handshake runs *while* it is capturing (watch for `EAP-SUCCESS` in `/tmp/w.log`), and you only `kill $TCPDUMP_PID` *after* it finishes. You can check the file with `tcpdump -r /tmp/ecdsa.pcap | wc -l`.
 
 Stop hostapd with `pkill hostapd` once you have seen the success (here it is running in the **background**, so Ctrl-C will not reach it). Leave the containers up for Exercise 2.
 
@@ -384,7 +384,7 @@ On the authenticator, capture EAPOL frames (`ether proto 0x888e` is EAPOL) while
 
 > **Shortcut:** this step re-captures into the same `/tmp/ecdsa.pcap` you made in [Exercise 1 Step 3](#exercise-1-run-the-eap-tls-handshake-ecdsa-baseline) (deliberately the same filename: it is the *same* ECDSA handshake, and it already contains everything Step 2 decodes). If that file still has frames (check with `tcpdump -r /tmp/ecdsa.pcap | wc -l`), you can **skip straight to Step 2**. Only re-capture with the rest of Step 1 below if you skipped Exercise 1 Step 3 or restarted the containers (a restart wipes `/tmp`).
 
-First, clear out anything left running from Exercise 1; this matters. A `wpa_supplicant` that is still running from a previous step is *already authenticated* and (with `fast_reauth=0`) just sits idle, so it produces **no new handshake**. A second stray `hostapd` competes for the port. Either way, your capture comes back with **0 packets**. Stop leftovers on both ends:
+First, clear out anything left running from Exercise 1; this matters. A `wpa_supplicant` that is still running from a previous step is *already authenticated* and just sits idle, so it produces **no new handshake**. A second stray `hostapd` competes for the port. Either way, your capture comes back with **0 packets**. Stop leftovers on both ends:
 
 ```bash
 # in the authenticator container
@@ -417,8 +417,6 @@ Back on the authenticator, stop the capture:
 ```bash
 kill $TCPDUMP_PID
 ```
-
-> **`0 packets captured`?** Something from a previous step was still running, usually an already-authenticated `wpa_supplicant` (which will not re-handshake) or a duplicate `hostapd`. Kill every `hostapd`/`tcpdump` on the authenticator and every `wpa_supplicant` on the supplicant (plus `rm -f /run/wpa/sup`), then redo this step so a *fresh* handshake runs into the capture. Confirm the file has packets with `tcpdump -r /tmp/ecdsa.pcap | wc -l`.
 
 **Step 2: Decode the negotiated group**
 
@@ -473,7 +471,7 @@ The client's `X25519MLKEM768` key share is **1216 bytes** (32 B X25519 + 1184 B 
 
 **Step 3: Remove the gate, and watch the silent downgrade**
 
-This is the most important part to remember. Hybrid ML-KEM only happens if the EAP-TLS handshake runs **TLS 1.3**, and TLS 1.3 is only used when *both* ends allow it. TLS always negotiates the **highest version both sides support**, so the effective limit is whichever end sets the *lower* ceiling. The dangerous case is when one end quietly drops its ceiling to TLS 1.2 while the other is still willing to speak 1.2. The handshake then negotiates down to classical crypto, loses ML-KEM entirely, and **still reports `EAP-SUCCESS`**. No error is shown.
+Hybrid ML-KEM only happens if the EAP-TLS handshake runs **TLS 1.3**, and TLS 1.3 is only used when *both* ends allow it. TLS always negotiates the **highest version both sides support**, so the effective limit is whichever end sets the *lower* ceiling. The dangerous case is when one end quietly drops its ceiling to TLS 1.2 while the other is still willing to speak 1.2. The handshake then negotiates down to classical crypto, loses ML-KEM entirely, and **still reports `EAP-SUCCESS`**. No error is shown.
 
 The simplest way to trigger that is on the **authenticator** (the EAP server). Its `hostapd.conf` pins the handshake to TLS 1.3 with:
 
@@ -486,8 +484,6 @@ tls_flags=[ENABLE-TLSv1.3][DISABLE-TLSv1.0][DISABLE-TLSv1.1][DISABLE-TLSv1.2]
 ```bash
 sed -i 's/^tls_flags=/#tls_flags=/' /cfg/hostapd.conf
 ```
-
-(We restore it with the exact inverse `sed` at the end of the step, so no backup file is needed and re-running is safe.)
 
 Now capture a **fresh** handshake against the loosened server. This is the same three-shell capture flow as Step 1, just writing to `/tmp/down.pcap`. As always, the handshake must run *while* the capture is live (edit config -> capture -> handshake -> stop capture -> decode). Do not skip this and read the old pcap: you will get empty output.
 
@@ -509,8 +505,6 @@ pkill wpa_supplicant 2>/dev/null; rm -f /run/wpa/sup   # clear any leftover supp
 wpa_supplicant -Dwired -isup -c /cfg/wpa_supplicant.conf -t -dd > /tmp/w.log 2>&1 &
 sleep 5
 ```
-
-(That `pkill` matters: a supplicant still running from an earlier step is already authenticated and will not re-handshake, so the capture would come back empty.)
 
 First, does it even work? In the **supplicant** shell, confirm the handshake completed:
 
@@ -573,7 +567,7 @@ grep tls_flags /cfg/hostapd.conf   # confirm it's back to: tls_flags=[ENABLE-TLS
 
 The key exchange is done. Now the other half: the *identity* proof. So far the certificates have been classical **ECDSA**, exactly what Shor's algorithm forges. Switch the *same lab* to post-quantum certificates by reissuing them as **ML-DSA**. No rebuild, no config change.
 
-`docker compose` is a **host** command, so run it in a **third terminal** on the host, from the same `macsec/` directory you started the lab in (that is where `docker-compose.yml` lives; running it elsewhere gives `no configuration file provided: not found`). Do *not* run it in the authenticator or supplicant shells; those are `docker exec` sessions inside the containers, and running this there would force you to exit and disconnect them. Keep terminal 1 (authenticator) and terminal 2 (supplicant) open.
+`docker compose` is a **host** command, so run it in a **third terminal** on the host, from the same `macsec/` directory you started the lab in (that is where `docker-compose.yml` lives; running it elsewhere gives `no configuration file provided: not found`). Keep terminal 1 (authenticator) and terminal 2 (supplicant) open.
 
 ```bash
 # third terminal, on the host, from the macsec/ directory
@@ -725,6 +719,23 @@ The pattern measured in this lab:
 
 Everything in this lab lived in the **control plane**: the EAP-TLS handshake that establishes and authenticates the keys, which we made post-quantum in both halves. The **data plane**, the actual per-frame encryption MACsec performs once the SAK is installed, deliberately needs no changes. It is standard **AES-GCM**, symmetric crypto that is already quantum-safe (a large enough key defeats Grover's algorithm). So there is nothing post-quantum to do there: all the quantum risk, and all the work in this lab, was in the handshake that roots the keys, not in the cipher that uses them.
 
+That is *why* we stop at the handshake. 
+
+---
+
+### Cleanup
+
+```bash
+docker compose down
+# Remove generated CA + certs/keys (written to host via bind mounts; include private keys)
+rm -rf config/authenticator/ca.crt config/authenticator/server.crt config/authenticator/server.key \
+       config/supplicant/ca.crt config/supplicant/client.crt config/supplicant/client.key
+```
+
+---
+
+That is it. You followed MACsec's keys from the data plane back to the EAP-TLS handshake that roots them, ran that handshake for real, proved in the captured bytes that it negotiates hybrid ML-KEM (and that it quietly will not unless you make it), then made its certificates post-quantum with a one-line reissue and measured the size cost on the wire. Both halves, one handshake. Well done!
+
 ---
 
 ### How this compares to the other labs
@@ -744,16 +755,3 @@ MACsec is the one protocol family in this repo that puts *both* post-quantum pil
 | Data-plane cipher | MACsec AES-GCM | ESP AES-GCM | AES-GCM record layer |
 
 Put the labs together and you have seen the full post-quantum picture for network infrastructure: **ML-KEM** secures the key exchange against harvest-now-decrypt-later, **ML-DSA** secures authentication against future forgery, and both run inside the *same* protocols you already use (TLS 1.3 under EAP-TLS, IKEv2), just with bigger payloads and a few configuration gates to get right.
-
----
-
-### Cleanup
-
-```bash
-docker compose down
-# Remove generated CA + certs/keys (written to host via bind mounts; include private keys)
-rm -rf config/authenticator/ca.crt config/authenticator/server.crt config/authenticator/server.key \
-       config/supplicant/ca.crt config/supplicant/client.crt config/supplicant/client.key
-```
-
-That is it. You followed MACsec's keys from the data plane back to the EAP-TLS handshake that roots them, ran that handshake for real, proved in the captured bytes that it negotiates hybrid ML-KEM (and that it quietly will not unless you make it), then made its certificates post-quantum with a one-line reissue and measured the size cost on the wire. Both halves, one handshake. Well done!

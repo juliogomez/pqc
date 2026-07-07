@@ -4,7 +4,7 @@
 
 The companion [key-exchange lab](../ipsec/key-exchange/README.md) makes a VPN's *key exchange* quantum-safe with **ML-KEM**. The [authentication lab](../ipsec/authentication/README.md) makes its *authentication* quantum-safe with **ML-DSA**. Both labs lean on the same "ML-" prefix, which stands for "Module Lattice", and both quietly promise the same thing: "no known quantum attack." This lab is where we cash that check.
 
-This is the **optional deep-dive** of the three labs: the place to come if you want to understand *why* they're safe rather than just take it on faith. Here's the secret those two labs share: **ML-KEM and ML-DSA stand on the exact same mathematical foundation.** Learn it once, and you understand the security of *both*. No prior crypto-math required: we'll build it from vectors up, in readable Python you run yourself, and finish by launching a *real* lattice attack and watching it hit a wall. The only thing you need installed is **Docker**.
+This is the **optional deep-dive** behind the other labs: the place to come if you want to understand *why* they're safe rather than just take it on faith. Here's the secret those two labs share: **ML-KEM and ML-DSA stand on the exact same mathematical foundation.** Learn it once, and you understand the security of *both*. No prior crypto-math required: we'll build it from vectors up, in readable Python you run yourself, and finish by launching a *real* lattice attack and watching it hit a wall. The only thing you need installed is **Docker**.
 
 Ready to meet the math a quantum computer can't crack? Let's dig in.
 
@@ -196,6 +196,8 @@ ML-DSA (FIPS 204, the [authentication lab](../ipsec/authentication/README.md)'s 
 
 Forging a signature without the key means producing a short `z` satisfying that relation for a fresh challenge, which is an **MSIS** problem. So ML-DSA's unforgeability rests on MSIS, while its key secrecy rests on MLWE. The enormous ML-DSA certificates and signatures that blow `IKE_AUTH` up to six fragments in the authentication lab are these `t` and `z` values.
 
+> **What we actually build below:** the hands-on exercises take the *KEM* side (ML-KEM / Module-LWE) all the way to a working shared secret, because that's the cleanest way to watch a module lattice do real work. Module-SIS and the full ML-DSA signature stay on paper here. If you want to see ML-DSA actually sign and verify, that's the job of the [IKEv2](../ipsec/authentication/README.md) and [TLS](../tls/authentication/README.md) authentication labs.
+
 > **One foundation, two jobs.** ML-KEM = MLWE → encryption/KEM. ML-DSA = MLWE (hide key) + MSIS (block forgery) → signatures. Different costumes, same module-lattice hardness underneath. That's why a single lab can explain both.
 
 ---
@@ -238,6 +240,10 @@ Enough theory: let's run it. Everything here runs **locally on your own workstat
 - **[Exercise 3](#exercise-3-build-a-baby-ml-kem)**: implement a mini Module-LWE KEM over the real ring and agree on a shared secret.
 - **[Exercise 4](#exercise-4-run-a-real-attack-and-watch-it-stall)**: launch a real lattice attack and measure the cost exploding.
 
+### Prerequisites
+
+Just **Docker**, with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else, Python, `numpy`, and `fpylll`, lives inside the container, so there is nothing to install on your host and nothing to uninstall later. The first `docker compose build` takes a minute or two while it pulls Debian and the lattice library; after that it is instant. No prior crypto-math needed, though if you are comfortable with vectors and "mod q" arithmetic you will move through it faster.
+
 ### Build and start
 
 Run all commands in this lab from the `module-lattices/` directory:
@@ -264,6 +270,8 @@ docker exec lattice-lab python3 lattice_basics.py
 ```
 
 (Prefer an interactive shell? `docker exec -it lattice-lab bash` drops you into `/lab`, where `vim` is available for tinkering.)
+
+> **Why your numbers will match the ones below:** each script pins its random seed, so the vectors, hashes, and noise readings you see are the same ones printed here, run after run. Change a seed (or any parameter) and the numbers move, that's expected, and honestly a good way to convince yourself nothing is faked. The one thing that *will* drift is the wall-clock times in Exercise 4, since those depend on your machine.
 
 ---
 
@@ -402,6 +410,8 @@ docker exec lattice-lab python3 attack_scaling.py
 
 Now we *attack* LWE for real. The script builds genuine LWE instances, embeds each as a "unique shortest vector" problem (the standard **primal** attack), and unleashes `fpylll`'s LLL and BKZ on it, timing each as the dimension climbs:
 
+(You'll notice the header says `q=97`, not the `3329` from the baby-Kyber lab. That's deliberate: a small modulus and tiny ternary secrets keep the embedded lattice loose enough that the reductions actually finish on a laptop. The point here is the *scaling* of the effort as `n` grows, not the specific modulus.)
+
 ```
 LWE dim n | lattice dim |  solved? |       effort |  time (s)
 ------------------------------------------------------------------------
@@ -429,6 +439,13 @@ You just watched, in wall-clock seconds, the thing the theory promised: the cost
 > **Push it further.** Edit `scripts/attack_scaling.py` and add `70` or `80` to the dimension loop, but be ready to wait. Each step up the dimension is a step up the exponential. That impatience you feel is the security.
 
 ---
+
+### Troubleshooting
+
+- **`python3: can't open file '/lab/scripts/...'`** — drop the `scripts/` prefix. The scripts are mounted straight into the container's working directory, so it's just `python3 baby_kyber.py`.
+- **`ModuleNotFoundError: No module named 'numpy'` (or `fpylll`)** — you ran the script on your host by accident. Those libraries only exist inside `lattice-lab`; always go through `docker exec lattice-lab ...`.
+- **`docker exec` says the container isn't running** — start it with `docker compose up -d`, then `docker compose ps` to confirm.
+- **Exercise 4 seems to hang around `n=60`** — it isn't hung, BKZ is just grinding. That pause *is* the lesson. If you added bigger dimensions to the loop, settle in.
 
 ### Cleanup
 

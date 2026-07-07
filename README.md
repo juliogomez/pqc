@@ -13,7 +13,7 @@ The labs are grouped into three protocol families (IKEv2, TLS, and MACsec), and 
 
 ## IKEv2 / IPsec (Layer 3 VPNs)
 
-Take a real IKEv2/IPsec VPN tunnel post-quantum with **strongSwan**.
+Take a real IKEv2/IPsec VPN tunnel post-quantum.
 
 | Lab | What you'll do |
 |-----|----------------|
@@ -55,7 +55,7 @@ An optional deep-dive for when you want to understand the shared module-lattice 
 
 ## Prerequisites
 
-These labs run entirely on **your own local workstation** (laptop or desktop): no cloud, no remote servers, no dedicated hardware. Everything happens inside throwaway Docker containers on your machine, so you can run, break, and rerun them as many times as you like.
+These labs run entirely on **your own local workstation** (laptop or desktop): no cloud, no remote servers, no dedicated hardware. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile strongSwan (or wpa_supplicant and hostapd) from source, so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section, so you can drop straight into whichever one you like.
 
 ## A note on lab security
 
