@@ -2,12 +2,11 @@
 
 A set of hands-on labs that take real network security protocols all the way to **post-quantum**, one piece of the handshake at a time, plus a foundations lab on the lattice math underneath it all. You'll spin up containers, capture packets, and measure the trade-offs with your own eyes. Everything runs locally; the only thing you need is **Docker**.
 
-Every secure handshake rests on two pillars, and quantum computers threaten both:
+Every secure handshake rests on two pillars, and a cryptographically relevant quantum computer threaten both:
 
 - **Key exchange** decides the shared secret. It's vulnerable to *"harvest now, decrypt later"*: an attacker records your traffic today and decrypts it once a quantum computer arrives. This is the urgent one. The fix is **ML-KEM**.
 - **Authentication** proves who's on the other end. Its quantum deadline is different (and sneakier): there's no retroactive forgery, but your long-lived certificates and CAs must outlive the threat. The fix is **ML-DSA**.
 
-The labs are grouped into three protocol families (IKEv2, TLS, and MACsec), and each tackle both pillars: IKEv2 and TLS split them across two labs, while MACsec covers both in a single EAP-TLS handshake. There is a bonus lab covering the math foundation that explains *why* post-quantum algorithms work.
 
 ---
 
@@ -24,7 +23,7 @@ Start with **Key Exchange**: it introduces the containers, strongSwan, and the h
 
 ## TLS 1.3 (the web's secure channel)
 
-Take **TLS** post-quantum, the protocol behind HTTPS and most application traffic.
+Take TLS post-quantum, the protocol behind HTTPS and most application traffic.
 
 | Lab | What you'll do |
 |-----|----------------|
@@ -35,7 +34,7 @@ Same two pillars as the other protocol families, this time at the application la
 
 ## MACsec / 802.1X (Layer 2 link encryption)
 
-Take **MACsec (IEEE 802.1AE)** post-quantum, one layer down from IPsec: essentially the same TLS 1.3 handshake from the TLS lab, now carried at Layer 2. MACsec's entire quantum exposure is in that EAP-TLS handshake, so the lab runs the whole post-quantum upgrade in userspace on plain Docker.
+Take MACsec (IEEE 802.1AE) post-quantum, one layer down from IPsec: essentially the same TLS 1.3 handshake from the TLS lab, now carried at Layer 2. MACsec's entire quantum exposure is in that EAP-TLS handshake, so the lab runs the whole post-quantum upgrade in userspace on plain Docker.
 
 | Lab | What you'll do |
 |-----|----------------|
