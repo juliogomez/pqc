@@ -48,7 +48,7 @@ Take SSH post-quantum, the protocol behind remote shells, `git`, CI/CD deploys, 
 
 | Lab | What you'll do |
 |-----|----------------|
-| **[SSH](ssh/README.md)** | Watch a real OpenSSH handshake negotiate hybrid **ML-KEM** (`mlkem768x25519-sha256`) with zero config, prove it in the cleartext bytes and measure its size cost, catch a downgrade being flagged out loud, then reissue the host and user keys as composite **Ed25519+ML-DSA-44** and authenticate both ends post-quantum. |
+| **[SSH](ssh/README.md)** | Watch a real OpenSSH handshake negotiate hybrid **ML-KEM** with zero config, prove it in the cleartext bytes and measure its size cost, catch a downgrade being flagged out loud, then reissue the host and user keys as composite **Ed25519+ML-DSA-44** and authenticate both ends post-quantum. |
 
 Both pillars live in one SSH handshake with one tool (OpenSSH), so this is one combined lab, like MACsec, but this time the key exchange is the easy, on-by-default half and the authentication is the frontier.
 
