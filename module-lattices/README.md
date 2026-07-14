@@ -23,7 +23,7 @@ Ready to meet the math a quantum computer can't crack? Let's dig in.
 9. [Why a quantum computer can't break it](#why-a-quantum-computer-cant-break-it)
 10. [Let's get our hands dirty: the lab](#lets-get-our-hands-dirty-the-lab)
 11. [Configuration reference](#configuration-reference)
-12. [Appendix](#appendix)
+12. [Appendix: why only Alice can decapsulate](#appendix-why-only-alice-can-decapsulate)
 
 ---
 
@@ -79,8 +79,6 @@ With a **bad** basis, that rounding trick collapses. Since `(15,8)` and `(13,7)`
 
 And a public key, it turns out, is essentially a **bad basis**: it pins an attacker to the hard version of these problems, while the matching secret lets the legitimate owner sidestep them. The whole field rests on this asymmetry. You'll see it directly in [Exercise 1](#exercise-1-build-a-lattice-good-vs-bad-bases).
 
-> **The dimension is everything.** "Dimension" simply means how many coordinates each vector has (equivalently, the number of basis vectors). Our toy example is 2-dimensional, and in 2-D you can solve SVP by eye. But the difficulty grows *exponentially* with the dimension, and real schemes use hundreds: at that size, a bad basis leaves no efficient solution, for classical or quantum computers alike.
-
 ---
 
 ## The hard problem that matters: LWE
@@ -101,16 +99,16 @@ With that settled, what does `b` actually look like? Take `A` to be an `m × n` 
 
 **So where's the lattice from the previous section?** Right here. Take every point you can build as `A·s` (mod `q`) as `s` ranges over all integer vectors; together with the wrap-around multiples of `q`, those points form a lattice, and `A` is a basis for it, just as `(15,8)` and `(13,7)` were a basis for their grid. Watch the roles carefully, because this is where it's easy to get tangled up: `A` is the *basis*, and `s` is the list of *integer coefficients* that selects one particular lattice point. The product `A·s` is "basis times coefficients", i.e. one specific point of the lattice. The equation `b = A·s + e` then says `b` sits just a tiny step `e` off that lattice point. So "recover `s`" becomes "find the lattice point nearest to `b`, then read off its coefficients", which is precisely the **closest-vector problem (CVP)** from before. And the public key hands the attacker only `A`, a *bad* basis for that lattice, which is exactly what makes the CVP hard.
 
-> **Then where's the *good* basis, and is it `s`?** No, and this is the subtle bit worth pausing on. `s` is not a basis at all; it's the secret *coordinates*. And the legitimate key holder does **not** secretly own a good basis that it uses to solve CVP. It never solves a lattice problem in the first place: it *generated* `s` itself, so it simply knows the answer. The good-versus-bad-basis story is really about the **attacker**, who is handed the bad basis `A` and no shortcut, and is therefore stuck with a hard CVP. (ML-KEM and ML-DSA keep the small secret `s`, and never publish anything that would need a good basis to undo.) So nothing here is "good basis times bad basis": there's one basis, `A` (bad, public), one coefficient vector, `s` (secret), and one small error, `e`.
+> **Then where's the *good* basis, and is it `s`?** No, `s` is not a basis at all; it's the secret *coordinates*. And the legitimate key holder does **not** secretly own a good basis that it uses to solve CVP. It never solves a lattice problem in the first place: it *generated* `s` itself, so it simply knows the answer. The good-versus-bad-basis story is really about the **attacker**, who is handed the bad basis `A` and no shortcut, and is therefore stuck with a hard CVP. (ML-KEM and ML-DSA keep the small secret `s`, and never publish anything that would need a good basis to undo.) So nothing here is "good basis times bad basis": there's one basis, `A` (bad, public), one coefficient vector, `s` (secret), and one small error, `e`.
 
-Now here's the entire point, in one sentence: **without the noise it's trivial, with the noise it's intractable.**
+So the point in one sentence is: **without the noise it's trivial, with the noise it's intractable.**
 
 - **No noise (`e = 0`):** `b = A·s` is just a system of linear equations. Any schoolchild with [Gaussian elimination](https://en.wikipedia.org/wiki/Gaussian_elimination) (the standard, fast method for solving such systems exactly) recovers `s`. Zero security.
 - **With noise:** every equation is *slightly* wrong, by an unknown small amount, so Gaussian elimination just amplifies those errors into garbage. The only known way forward is the CVP attack above: run **[lattice reduction](https://en.wikipedia.org/wiki/Lattice_reduction)**, the family of algorithms that slowly grind a bad basis toward a good one until the nearest lattice point to `b` becomes findable. The catch is cost. Producing a basis good *enough* takes time that grows **exponentially with the dimension** (the number of coordinates in `s`): doubling the dimension does not double the work, it squares it and worse. At a handful of dimensions it is instant; at the hundreds real schemes use, it is hopeless, for classical and quantum machines alike. You'll watch this curve bend out of reach in [Exercise 4](#exercise-4-run-a-real-attack-and-watch-it-stall).
 
 That single addition of `e` is the difference between "homework" and "post-quantum cryptography." You'll break the noise-free version and watch the noisy version defeat the same code in [Exercise 2](#exercise-2-the-magic-of-noise-lwe).
 
-> **Why noise is safe to add.** It seems reckless to base encryption on deliberately *wrong* equations. Here's the trick. To hide a message, a scheme buries it under a term like `A·s` that looks like uniform random junk to anyone without the secret: a one-time **mask**. The legitimate user holds a trapdoor (the secret `s`) that lets them recompute that exact masking term and *subtract it back off* ("cancel the mask"), leaving just the message plus the small noise, which then rounds away cleanly, provided the noise stays within a **budget** (below `q/4` in the toy encryption you'll build in [Exercise 2](#exercise-2-the-magic-of-noise-lwe)). Too much noise and even the legitimate user gets the wrong answer (a "decryption failure"). Real ML-KEM tunes its parameters so this budget is essentially never exceeded.
+> **Why noise is safe to add.** It might sound strange to you to base encryption on deliberately *wrong* equations. Here's the trick. To hide a message, a scheme buries it under a term like `A·s` that looks like uniform random junk to anyone without the secret: a one-time **mask**. The legitimate user holds a trapdoor (the secret `s`) that lets them recompute that exact masking term and *subtract it back off* ("cancel the mask"), leaving just the message plus the small noise, which then rounds away cleanly, provided the noise stays within a **budget** (below `q/4` in the toy encryption you'll build in [Exercise 2](#exercise-2-the-magic-of-noise-lwe)). Too much noise and even the legitimate user gets the wrong answer (a "decryption failure"). Real ML-KEM tunes its parameters so this budget is essentially never exceeded.
 
 ---
 
@@ -148,7 +146,7 @@ Plain LWE works, but it's heavy: `A` is a big `n×n` matrix of independent rando
 >   ```
 >   That fold-back is what keeps the result a 4-coefficient element instead of growing without bound. (Ordinary "cyclic" rings use `x^n = +1`; the `-1` here is why this flavor is called *negacyclic*. Add and subtract never trigger it; only multiplication can push the degree to `n` or higher.)
 >
-> **Why this is fast.** Done naively, that multiply costs `n²` coefficient products (every term times every term). The Number-Theoretic Transform is an exact, integer-only cousin of the FFT: transform both operands, multiply them **coordinate-wise** (`n` cheap products), then transform back, for a total cost of about `n·log(n)` instead of `n²`. At ML-KEM's `n = 256` that is the difference between ~65,000 and ~2,000 multiplications per ring product, which is why real schemes pick a `q` that makes the NTT available.
+> **Why this is fast.** Done the direct way, that multiply costs `n²` coefficient products (every term times every term). The [Number-Theoretic Transform](https://en.wikipedia.org/wiki/Discrete_Fourier_transform_over_a_ring#Number-theoretic_transform) is an exact, integer-only cousin of the FFT: transform both operands, multiply them **coordinate-wise** (`n` cheap products), then transform back, for a total cost of about `n·log(n)` instead of `n²`. At ML-KEM's `n = 256` that is the difference between ~65,000 and ~2,000 multiplications per ring product, which is why real schemes pick a `q` that makes the NTT available.
 
 **Module-LWE** is what ML-KEM and ML-DSA actually use. Instead of one giant ring element (Ring-LWE) or `n²` lonely integers (LWE), you build small **vectors and matrices whose entries are ring elements**. The "module rank" `k` is how many ring elements you stack. This gives you:
 
@@ -175,26 +173,47 @@ Why introduce it? Because signatures need it. Roughly: **MLWE hides the signing 
 
 ## How ML-KEM uses it
 
-ML-KEM (FIPS 203, the [key-exchange lab](../ipsec/key-exchange/README.md)'s star) is Module-LWE wearing a key-encapsulation costume. Stripped to its skeleton (which you'll build in [Exercise 3](#exercise-3-build-a-baby-ml-kem)):
+ML-KEM (FIPS 203) is Module-LWE dressed up as a **key-encapsulation mechanism (KEM)**: a way for two parties who have never met to agree on a shared secret. Underneath, it's the same mask-and-cancel trick from the LWE section, with the public key doing the masking.
 
-1. **Key generation.** Sample a public matrix `A` (`k×k` ring elements) and *short* secret/error vectors `s`, `e`. Publish `t = A·s + e`. That `t` is a Module-LWE sample: `s` is buried under noise, so the public key leaks nothing usable.
-2. **Encapsulation.** The sender picks fresh short randomness `r`, computes `u = Aᵀ·r + e₁` and `v = tᵀ·r + e₂ + encode(message)`, and sends `(u, v)`.
-3. **Decapsulation.** The holder of `s` computes `v − sᵀ·u`. The `A·r` masking terms cancel through `s`, leaving `encode(message) + (small noise)`, which **rounds back** to the message, provided the noise stayed under budget.
+The whole exchange is a quick round trip between two parties, **Alice** and **Bob**: Alice publishes a public key, Bob uses it to lock a fresh **random value** into a ciphertext and sends that to Alice, and Alice unlocks it with her private key. That value isn't a real message, it's random on purpose: its only job is to leave both ends holding the *same* secret bits, which they then hash into the key they'll use from then on. Here are those three steps in detail, all of which you'll build in [Exercise 3](#exercise-3-build-a-baby-ml-kem):
 
-Wrap a hash around the recovered message and both sides have a shared secret. (Real ML-KEM adds the Fujisaki–Okamoto transform to upgrade this from "secure if nobody cheats" to "secure against active attackers," but the lattice core is exactly the above.) The chunky ML-KEM public keys and ciphertexts that fragment across `IKE_INTERMEDIATE` in the key-exchange lab? Those are these `t`, `u`, and `v` vectors going over the wire.
+1. **Key generation.** Alice publishes a Module-LWE sample as her public key: the random matrix `A` together with a value that hides a short secret `s` under noise (that value is the same `b = A·s + e` shape from before, just renamed `t`). Everyone can see the public key, but only Alice can recover `s`, because digging it back out *is* the hard MLWE problem.
+2. **Encapsulation.** Bob generates a random value he wants to share (the *message*, the cargo) and uses it to create a brand-new Module-LWE sample, built from Alice's public key. He mirrors exactly what Alice did in step 1: he reuses the *same* matrix `A` from her public key, and draws his own short randomness `r` to play the role her secret `s` played, so his sample `A·r + e1` has the identical `A·s + e` shape as `t`. That `r` plus a little fresh noise is the one-time scrambling material of Bob's own, whose only job is to mask the message (the packaging). The result is the *ciphertext*, and that scrambling noise is exactly what protects it: it makes the ciphertext a genuine, hard LWE instance, so on the wire it looks like pure random and the message stays buried, held there by the same LWE hardness that hides `s` in the public key. Bob needs only the public key for all this.
+3. **Decapsulation.** Alice uses `s` to cancel the mask and is left with the message plus a little leftover noise. As long as that noise stays under the `q/4` budget, it rounds away cleanly and the message pops back out. (For exactly why `s` lets Alice do this while an eavesdropper holding the same public key cannot, see the [appendix](#appendix-why-only-alice-can-decapsulate).)
+
+The round trip at a glance:
+
+```mermaid
+sequenceDiagram
+    participant Alice as Alice (key owner)
+    participant Bob as Bob (sender)
+    Note over Alice: 1. Key generation<br/>keep secret s, build t = A·s + e
+    Alice->>Bob: public key (A, t)
+    Note over Bob: 2. Encapsulation<br/>pick random message,<br/>mask it with (A, t) + fresh noise
+    Bob->>Alice: ciphertext (u, v)
+    Note over Alice: 3. Decapsulation<br/>compute v - s·u, recover message
+    Note over Alice,Bob: both hash the shared message into one session key
+```
+
+Those chunky ML-KEM public keys and ciphertexts that fragment across `IKE_INTERMEDIATE` in the IKEv2 key-exchange lab are precisely the public key and ciphertext from steps 1 and 2 going over the wire.
 
 ---
 
 ## How ML-DSA uses it
 
-ML-DSA (FIPS 204, the [authentication lab](../ipsec/authentication/README.md)'s star) is a **Fiat–Shamir signature** built on the same module lattice, and this is where **both** MLWE and MSIS show up:
+ML-DSA (FIPS 204) is a **signature scheme**, so its job is different: let Alice, the key's owner, prove to Bob (or anyone) that a message really came from her, without ever exposing the key. Alice signs; Bob verifies. It uses the same module lattice, but in a *commit, challenge, respond* pattern (the **Fiat–Shamir** recipe), and this is where **both** MLWE and MSIS come in:
 
-1. **Keys.** The public key is (essentially) another MLWE sample `t = A·s₁ + s₂` with short secrets `s₁`, `s₂`. MLWE hardness keeps the secret hidden.
-2. **Signing.** Commit to short randomness `y` via `w = A·y`. Hash the message and `w` into a small challenge `c`. Respond with `z = y + c·s₁`.
-3. **The catch: rejection sampling.** A naive `z` would leak the secret `s₁`. So ML-DSA *rejects and retries* whenever `z` strays outside a safe range ("Fiat–Shamir with aborts"), ensuring signatures reveal nothing about the key.
-4. **Verification.** Check that `A·z − c·t` reproduces the committed `w` *and* that `z` is short.
+1. **Keys.** The public key is, again, a Module-LWE sample hiding a short secret under noise. Same trick, same hardness as ML-KEM's key.
+2. **Signing.** This is the heart of Fiat–Shamir, and it plays out in three moves:
+   - **Commit.** Alice picks a fresh random *masking value* and publishes only a scrambled version of it (the *commitment*). Think of it as sealing a random guess in an envelope: it locks in her choice while giving nothing away about it.
+   - **Challenge.** The message is hashed together with that commitment to produce a small *challenge* value. Since it falls out of a hash of both, Alice can't hand-pick it, and it ties the signature to this exact message: change one byte of the message and the challenge changes.
+   - **Respond.** Alice's *response* combines the masking value with her secret scaled by the challenge (roughly `response = mask + challenge·secret`). The mask is what keeps the secret hidden, while the challenge is what forces the secret to take part, so the response proves she knows the secret without revealing it.
 
-Forging a signature without the key means producing a short `z` satisfying that relation for a fresh challenge, which is an **MSIS** problem. So ML-DSA's unforgeability rests on MSIS, while its key secrecy rests on MLWE. The enormous ML-DSA certificates and signatures that blow `IKE_AUTH` up to six fragments in the authentication lab are these `t` and `z` values.
+   The response can be checked for consistency against the public key and commitment, yet on its own it doesn't hand over the secret.
+3. **The catch: rejection sampling.** A response built the obvious way would still leak a faint trace of the secret. So ML-DSA throws away any response that could leak and retries until it draws a clean one ("Fiat–Shamir with aborts"), so the signature reveals nothing about the key.
+4. **Verification.** This is where Bob comes in: he (or in fact anyone, since the signature is public) takes Alice's public key, recomputes the relation, checks it lines up with the commitment, and confirms the response is *short*. A valid check convinces Bob the message really came from Alice.
+
+The security splits cleanly in two: the secret key stays hidden thanks to **MLWE**, and forging a signature without the key would mean finding a short solution to a random system, which is exactly the **MSIS** problem. The enormous ML-DSA certificates and signatures that blow `IKE_AUTH` up to six fragments in the authentication lab are these public-key and signature values.
 
 > **What we actually build below:** the hands-on exercises take the *KEM* side (ML-KEM / Module-LWE) all the way to a working shared secret, because that's the cleanest way to watch a module lattice do real work. Module-SIS and the full ML-DSA signature stay on paper here. If you want to see ML-DSA actually sign and verify, that's the job of the [IKEv2](../ipsec/authentication/README.md) and [TLS](../tls/authentication/README.md) authentication labs.
 
@@ -242,7 +261,7 @@ Enough theory: let's run it. Everything here runs **locally on your own workstat
 
 ### Prerequisites
 
-Just **Docker**, with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else, Python, `numpy`, and `fpylll`, lives inside the container, so there is nothing to install on your host and nothing to uninstall later. The first `docker compose build` takes a minute or two while it pulls Debian and the lattice library; after that it is instant. No prior crypto-math needed, though if you are comfortable with vectors and "mod q" arithmetic you will move through it faster.
+Just **Docker**, with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else, Python, `numpy`, and `fpylll`, lives inside the container. No prior crypto-math needed, though if you are comfortable with vectors and "mod q" arithmetic you will move through it faster.
 
 ### Build and start
 
@@ -263,15 +282,13 @@ docker compose up -d
 docker compose ps
 ```
 
-The `scripts/` directory is mounted into the container at `/lab`, so you can edit the scripts on your workstation and rerun instantly. Run each exercise with `docker exec`:
+The `scripts/` directory is mounted into the container at `/lab`, so you can edit the scripts on your workstation and rerun instantly. Run each exercise with `docker exec`, like for example:
 
 ```bash
 docker exec lattice-lab python3 lattice_basics.py
 ```
 
 (Prefer an interactive shell? `docker exec -it lattice-lab bash` drops you into `/lab`, where `vim` is available for tinkering.)
-
-> **Why your numbers will match the ones below:** each script pins its random seed, so the vectors, hashes, and noise readings you see are the same ones printed here, run after run. Change a seed (or any parameter) and the numbers move, that's expected, and honestly a good way to convince yourself nothing is faked. The one thing that *will* drift is the wall-clock times in Exercise 4, since those depend on your machine.
 
 ---
 
@@ -292,9 +309,11 @@ Hadamard ratio  good = 1.0000   bad = 0.0631   (closer to 1 is better)
 Shortest basis vector  good = 1.00   bad = 14.76
 ```
 
-Both have determinant 1, so they generate the *identical* grid of points, but the "Hadamard ratio" (an orthogonality measure: 1.0 is perfectly perpendicular, near 0 is badly skewed) screams the difference. The bad basis's shortest vector is ~15× longer than the good one's. A public key hands an attacker exactly this kind of skewed basis.
+Both have determinant 1, so they generate the *identical* grid of points, but the "Hadamard ratio" (a measure of how close to perpendicular the vectors are: 1.0 is perfectly perpendicular, near 0 means they are nearly parallel) makes the difference obvious. The bad basis's shortest vector is ~15× longer than the good one's. A public key hands an attacker exactly this kind of bad basis.
 
-**Part B** runs **LLL lattice reduction** on the bad basis and recovers a good one:
+**LLL** (Lenstra, Lenstra, and Lovász) is the classic **lattice-reduction** algorithm: hand it a long, nearly-parallel basis and it returns a shorter, more perpendicular basis for the *exact same* lattice, and it does so in polynomial (fast) time. It's the workhorse every lattice attack opens with, turning a bad basis into a usable one before anything harder is tried. Its stronger but far slower cousin is **BKZ** (Block Korkine–Zolotarev), which takes over when LLL's result isn't good enough (you'll put both to work in [Exercise 4](#exercise-4-run-a-real-attack-and-watch-it-stall)).
+
+**Part B** runs LLL on the bad basis and recovers a good one:
 
 ```
 LLL-reduced basis : [[-1, 0], [0, -1]]
@@ -302,7 +321,7 @@ Hadamard ratio after LLL = 1.0000
 Shortest vector after LLL = 1.00
 ```
 
-LLL turned the long, skewed basis straight back into the unit vectors (up to sign). In 2-D, reduction is trivial, which is the setup for the bad news in **Part C**:
+LLL turned the long, nearly-parallel basis straight back into the unit vectors (up to sign). In 2-D, reduction is trivial, which is the setup for the bad news in **Part C**:
 
 ```
    dimension d =    2: LLL may be off by up to 2^0.5
@@ -311,7 +330,9 @@ LLL turned the long, skewed basis straight back into the unit vectors (up to sig
    dimension d =  768: LLL may be off by up to 2^383.5
 ```
 
-LLL is fast (polynomial time), but its *quality guarantee* (how close to the true shortest vector it promises to get) degrades exponentially with dimension. At `d = 768` (ML-KEM-768's secret dimension) that guarantee is useless, and closing the gap means BKZ with large blocks. Hold that thought for [Exercise 4](#exercise-4-run-a-real-attack-and-watch-it-stall).
+Each row is LLL's **worst-case approximation factor**, `2^((d-1)/2)`, where `d` is the lattice dimension. Read it as a *length ratio*: the vector LLL promises to hand back can be up to that many times longer than the true shortest vector. At `d = 2` the factor is `2^0.5 ≈ 1.41`, so the vector you get is basically the real shortest one. At `d = 50` it's already `2^24.5` (about 24 million), and at `d = 768` (ML-KEM-768's secret dimension) it grows to `2^383.5`, a number with over a hundred digits, so LLL only guarantees a vector far longer than the one you actually want. The promise has gone from "good enough" to useless.
+
+This is a *worst-case* bound, and LLL often does better in practice, but the guarantee is what breaks down, and past a few dozen dimensions you can no longer count on it. LLL itself stays fast (polynomial time); only its *quality* gives out. Closing that gap, actually finding the short vector, means running BKZ with large block sizes (windows of many basis vectors at once), whose cost is itself exponential in the block size. Hold that thought for [Exercise 4](#exercise-4-run-a-real-attack-and-watch-it-stall).
 
 ---
 
@@ -330,7 +351,7 @@ match             : True
 -> With e = 0, anyone who sees (A, b) just solves for s. No security.
 ```
 
-**Part B**: add a tiny error vector (entries in `{-2,…,2}`) and run the *exact same* Gaussian elimination:
+**Part B**: add a tiny error vector (each entry is a small whole number from -2 to 2, the same noise range real ML-KEM-768 uses, set by its `η = 2` parameter in the [config table](#ml-kem-parameter-sets-fips-203)) and run the *exact same* Gaussian elimination:
 
 ```
 error e added     : [1, -1, 0, -2, 1, 2, 1, -2]
@@ -353,6 +374,27 @@ Now crank the per-ciphertext noise way past the q/4 budget:
    recovered= [1, 0, 1, 0, 0]   correct = False
 ```
 
+Where does that `q/4` cutoff come from? Here is the whole idea, step by step.
+
+Picture the numbers `0, 1, 2, ..., q-1` as positions around a **clock face** with `q = 3329` marks on it (the same "mod q" clock from earlier). To hide one bit, the scheme parks it at one of just two spots on that clock:
+
+- a **0-bit** stays at position `0`,
+- a **1-bit** is placed at the halfway mark, `q/2 = 1664`.
+
+Encryption then sprinkles a little random **noise** on top, so the value you actually send lands *near* `0` or *near* `1664`, but rarely exactly on the mark. Decryption uses the secret `s` to strip away the mask, leaving you with that noisy position: something like "`0` plus a small nudge" or "`1664` plus a small nudge".
+
+To read the bit back, you ask one question: **is this value closer to `0` or closer to `1664`?** The tipping point sits exactly halfway between the two marks, at `q/4 = 832`:
+
+```
+0                    q/4 = 832               q/2 = 1664
+|-----------------------|-----------------------|
+   rounds to 0 (bit 0)      rounds to q/2 (bit 1)
+```
+
+So the **noise budget is `q/4`**. As long as the total noise is smaller than `832`, every value stays on the correct side of that line and the bit decodes perfectly. Push the noise past `832` and a value can jump the line, land closer to the *wrong* mark, and the bit flips. (Why `q/4` and not some other number? The two marks are `q/2` apart, and rounding to the nearer one tolerates up to *half* that distance in either direction. Half of `q/2` is `q/4`.)
+
+That is exactly what the two runs show. In the healthy run the noise is only a few units, tiny next to `832`, so all five bits round-trip. In the overshoot run the noise is cranked past `832`, so one value crosses the boundary and its bit flips (`sent 1`, `recovered 0`).
+
 That tension, *enough* noise to hide the secret but *little enough* to decrypt reliably, is the tightrope every lattice scheme walks. ML-KEM's parameters are chosen so the "decryption failure" probability is astronomically small.
 
 ---
@@ -363,7 +405,7 @@ That tension, *enough* noise to hide the secret but *little enough* to decrypt r
 docker exec lattice-lab python3 baby_kyber.py
 ```
 
-This is the payoff: a working **Module-LWE key encapsulation mechanism** in miniature, over the *same ring* ML-KEM uses (`R_q = Z_q[x]/(x^n+1)` with `q = 3329`), just with toy sizes (`n=16, k=2`).
+A working **Module-LWE key encapsulation mechanism** in miniature, over the *same ring* ML-KEM uses (`R_q = Z_q[x]/(x^n+1)` with `q = 3329`), just with toy sizes (`n=16, k=2`).
 
 **Part A** encrypts and decrypts a message, reporting the actual noise:
 
@@ -396,7 +438,7 @@ And the closing table nails the whole point of "module":
    The ONLY structural difference between ML-KEM-512/768/1024 is k=2/3/4.
 ```
 
-The same ring, the same arithmetic: security level is just the module rank `k`. That's the engineering elegance that made module lattices win.
+Notice `n` appears twice at different values, and it's worth pinning down why. The toy shrinks `n` to `16` purely so everything stays small enough to read and run by hand, while real ML-KEM uses `n = 256`. That shrink is a *toy-versus-real* simplification, not a security setting. The table's bottom line makes the sharper point: across the three shipping sizes (ML-KEM-512, -768, and -1024) the ring never changes at all (`n = 256` and `q = 3329` for all three), and the only thing that moves between those security levels is the module rank `k = 2/3/4`. One ring, one set of arithmetic, security dialed purely by how many ring elements you stack. That's what made module lattices win.
 
 > **Tinker with it.** Open `scripts/baby_kyber.py`, bump `K` to 3 or 4 (the real ML-KEM-768/1024 ranks), or shrink `N`, and rerun. Watch the public key grow with `k` while decryption keeps working.
 
@@ -439,13 +481,6 @@ You just watched, in wall-clock seconds, the thing the theory promised: the cost
 > **Push it further.** Edit `scripts/attack_scaling.py` and add `70` or `80` to the dimension loop, but be ready to wait. Each step up the dimension is a step up the exponential. That impatience you feel is the security.
 
 ---
-
-### Troubleshooting
-
-- **`python3: can't open file '/lab/scripts/...'`** — drop the `scripts/` prefix. The scripts are mounted straight into the container's working directory, so it's just `python3 baby_kyber.py`.
-- **`ModuleNotFoundError: No module named 'numpy'` (or `fpylll`)** — you ran the script on your host by accident. Those libraries only exist inside `lattice-lab`; always go through `docker exec lattice-lab ...`.
-- **`docker exec` says the container isn't running** — start it with `docker compose up -d`, then `docker compose ps` to confirm.
-- **Exercise 4 seems to hang around `n=60`** — it isn't hung, BKZ is just grinding. That pause *is* the lesson. If you added bigger dimensions to the loop, settle in.
 
 ### Cleanup
 
@@ -492,22 +527,45 @@ Here the module dimensions `(k, ℓ)` set both the MLWE key-hiding hardness and 
 
 ---
 
-## Appendix
+## Appendix: why only Alice can decapsulate
 
-- **Module lattices are the practical compromise.** Plain LWE is the most conservative but heavy; Ring-LWE is lean but maximally structured; **Module-LWE** sits between them and lets a single ring (`n=256`) serve every security level by varying the module rank. That engineering win is why both ML-KEM and ML-DSA are module-lattice schemes.
-- **`fpylll`** (used in [Exercise 1](#exercise-1-build-a-lattice-good-vs-bad-bases) and [Exercise 4](#exercise-4-run-a-real-attack-and-watch-it-stall)) is the Python interface to **`fplll`**, the standard open-source lattice-reduction library. The LLL and BKZ you run here are the same algorithms cryptanalysts use to *estimate* the security of real parameter sets, just pointed at toy dimensions so they finish in seconds.
-- **The toy crypto is for intuition only.** `toy_lwe.py` and `baby_kyber.py` use tiny parameters, no constant-time arithmetic, no Number-Theoretic Transform, and no Fujisaki–Okamoto / Fiat–Shamir-with-aborts hardening. Never use them for anything real: they exist to make the structure visible, exactly as this repo's other labs keep their non-subject parts deliberately trivial.
-- **Why no Shor here, in one line:** factoring and discrete log are the *abelian* hidden subgroup problem (period-finding), which the quantum Fourier transform devours; lattice problems aren't, and the nearest fit (the *dihedral* HSP) has no known efficient quantum algorithm.
+A fair question about [step 2](#how-ml-kem-uses-it): Bob builds the ciphertext with nothing but Alice's *public* key, so why can't an eavesdropper holding that same public key just unmask the message the way Alice does? The answer is that Alice holds one extra thing, the secret `s`, and that single value is what makes the mask fall away. Here is the mechanism in full.
 
-### Reference standards and papers
+Write the public key as the matrix `A` and the value `t = A·s + e`, with `s` Alice's short secret and `e` small noise. To encapsulate, Bob draws his own short randomness `r` and small noise `e1`, `e2`, and produces the ciphertext `(u, v)`:
 
-| Reference | Title | Relevance |
-|-----------|-------|-----------|
-| [FIPS&nbsp;203](https://csrc.nist.gov/pubs/fips/203/final) | Module-Lattice-Based Key-Encapsulation Mechanism | Defines ML-KEM (Module-LWE) |
-| [FIPS&nbsp;204](https://csrc.nist.gov/pubs/fips/204/final) | Module-Lattice-Based Digital Signature Standard | Defines ML-DSA (Module-LWE + Module-SIS) |
-| [Regev&nbsp;2005](https://cims.nyu.edu/~regev/papers/qcrypto.pdf) | On Lattices, Learning with Errors, ... | Introduces LWE and its hardness |
-| [Lyubashevsky–Peikert–Regev](https://eprint.iacr.org/2012/230) | On Ideal Lattices and Learning with Errors over Rings | Ring-LWE |
-| [CRYSTALS-Kyber](https://eprint.iacr.org/2017/634) | CRYSTALS-Kyber | The Module-LWE KEM that became ML-KEM |
-| [CRYSTALS-Dilithium](https://eprint.iacr.org/2017/633) | CRYSTALS-Dilithium | The Module-lattice signature that became ML-DSA |
-| [Shor&nbsp;1997](https://arxiv.org/abs/quant-ph/9508027) | Polynomial-Time Algorithms for Factoring ... | Why RSA/ECC fall, and why the abelian HSP is the key |
-| [Becker–Ducas–Gama–Laarhoven](https://eprint.iacr.org/2015/1128) | New directions in nearest neighbor searching ... | The `2^0.292·b` classical sieving exponent |
+```
+u = A·r + e1
+v = t·r + e2 + encode(message)
+```
+
+**Why two pieces, `u` and `v`?** The message lives in `v`, buried under the masking term `t·r`. Removing that mask is the whole game, but it needs `r`, and only Bob knows `r`. If Bob sent `v` alone, Alice would be stuck: `t` is her own public value, yet without `r` she has no way to rebuild `t·r`, so the message would stay buried even for her. Bob can't simply hand over `r` either, because anyone who learns `r` can unmask the message and the noise guarding `u` would be pointless. That is exactly what `u` is for: it carries `r`'s contribution *through the same `A`*, so that Alice's secret `s`, which only ever bites on things multiplied by `A`, can regenerate the mask indirectly. So the two halves have distinct, non-interchangeable jobs: `v` is the payload wearing the mask, and `u` is the one thing that lets `s` recompute that mask. Neither works alone.
+
+**What Alice does.** Alice computes `v - s·u`. Substitute `t = A·s + e` and watch the large term cancel:
+
+```
+v       = t·r + e2 + encode(message)
+        = (A·s + e)·r + e2 + encode(message)
+        = s·A·r + e·r + e2 + encode(message)
+
+s·u     = s·(A·r + e1)
+        = s·A·r + s·e1
+
+v - s·u = encode(message) + (e·r + e2 - s·e1)
+```
+
+The big `s·A·r` term shows up in both `v` and `s·u`, so it subtracts away and vanishes. What's left is `encode(message)` plus a leftover `e·r + e2 - s·e1`. Every piece of that leftover (`e`, `r`, `e1`, `e2`, `s`) is *short*, so the leftover is tiny, well under the `q/4` budget, and it rounds off cleanly. The message pops back out.
+
+The trick is that `s` lets Alice rebuild the exact mask `t·r` straight from the public `u` (because `s·u` is approximately `(A·s)·r`, which is approximately `t·r`), and then cancel it. `s` is the only value that forms this bridge between `A` and `t`.
+
+Seen from a distance this is Diffie–Hellman with noise: both sides quietly converge on the same shared value `(A·s)·r`. Bob reaches it as `t·r` (he holds `r` and multiplies by the public `t`); Alice reaches it as `s·u` (she holds `s` and multiplies by Bob's `u`). Neither party can get there from their own secret alone, which is precisely why the exchange needs one public message travelling each way: `t` (inside Alice's public key) going out, and `u` coming back. That symmetry is the same reason both `u` and `v` have to be sent.
+
+**Why an eavesdropper is stuck.** A man-in-the-middle sees `A`, `t`, `u`, and `v`, everything except `s`. To strip the mask off `v` they would need either:
+
+- **Bob's `r`**, but recovering `r` from `u = A·r + e1` is itself an LWE problem (a noisy sample, recover the secret), or
+- **Alice's `s`**, but recovering `s` from `t = A·s + e` is also an LWE problem.
+
+Both roads are the same hard lattice problem this whole lab is about, and the added noise (`e1` here, `e` in the key) is exactly what blocks the shortcut: try to invert `A` directly and the noise blows up into garbage, the same collapse you watched in [Exercise 2](#exercise-2-the-magic-of-noise-lwe).
+
+So the asymmetry is the point of public-key crypto: the public key is enough to *lock* a message (encapsulate), but only the private key `s` can *unlock* one (decapsulate), and finding `s` from public values is infeasible.
+
+> **A note on the errors.** The noise terms never help anyone decrypt. They are the price of security: they turn `u` and `t` into hard LWE samples, and they survive decapsulation as the small leftover `e·r + e2 - s·e1` that rounds away. The thing that actually opens the ciphertext is `s`, nothing else.
