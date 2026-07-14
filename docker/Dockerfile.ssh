@@ -1,0 +1,71 @@
+# Image for the post-quantum SSH lab (see ssh/README.md).
+#
+# Unlike the strongSwan images (IKEv2), the hostap image (MACsec/EAP-TLS), and
+# the OpenSSL image (TLS), this lab speaks SSH, so the tool is OpenSSH itself.
+# We build it from source for one reason: the post-quantum bits are brand new.
+#
+#   - Hybrid ML-KEM key exchange (mlkem768x25519-sha256) is the negotiated
+#     default since OpenSSH 10.0.
+#   - Composite Ed25519+ML-DSA-44 signatures (key type "mldsa44-ed25519") are
+#     experimental and only landed in OpenSSH 10.4 (released 2026-07-06).
+#
+# Distro packages lag well behind 10.4, and OpenSSH ships its *own*
+# formally-verified ML-KEM and the composite ML-DSA-44 code in-tree, so all we
+# need from the system is a C toolchain, zlib, and OpenSSL 3.5 for the classical
+# primitives (Ed25519, X25519, AES-GCM). No oqs-provider, no patches.
+#
+# Base pinned by digest for reproducible builds (debian:trixie-slim as of this
+# writing), the same OpenSSL 3.5 family the TLS and MACsec labs use.
+FROM debian:trixie-slim@sha256:28de0877c2189802884ccd20f15ee41c203573bd87bb6b883f5f46362d24c5c2
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# tshark dissects the SSH transport (proving mlkem768x25519-sha256 is offered in
+# the cleartext KEXINIT); preseed its debconf prompt so the build stays
+# non-interactive. build-essential + zlib + libssl-dev build OpenSSH; the rest
+# are the lab's runtime tools.
+RUN echo "wireshark-common wireshark-common/install-setuid boolean false" | debconf-set-selections \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        build-essential curl ca-certificates zlib1g-dev libssl-dev \
+        openssl iproute2 iputils-ping tcpdump tshark vim procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pinned OpenSSH release. SHA256 is the base64 digest published in the OpenSSH
+# 10.4 release notes (https://www.openssh.com/txt/release-10.4).
+ARG OPENSSH_VERSION=10.4p1
+ARG OPENSSH_SHA256_B64=72Am3SrqjVYFljjV0yYpAsiSzrqfiDlYNeDQbT+2Mjg=
+
+# Privilege-separation user/dir that sshd(8) drops to; created before the build
+# so `make install-nokeys` can set up the privsep path.
+RUN groupadd -r sshd && useradd -r -g sshd -d /var/empty -s /usr/sbin/nologin sshd
+
+# Build OpenSSH from source against the system OpenSSL 3.5. install-nokeys
+# installs the binaries + default config but leaves host-key generation to us
+# (gen-keys.sh mints them in the chosen algorithm, classical or post-quantum).
+RUN curl -fsSL -o /tmp/openssh.tar.gz \
+        "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-${OPENSSH_VERSION}.tar.gz" \
+    && actual="$(openssl dgst -sha256 -binary /tmp/openssh.tar.gz | openssl base64)" \
+    && if [ "$actual" != "$OPENSSH_SHA256_B64" ]; then \
+           echo "openssh checksum mismatch: got $actual, want $OPENSSH_SHA256_B64" >&2; exit 1; \
+       fi \
+    && tar -xzf /tmp/openssh.tar.gz -C /tmp \
+    && cd "/tmp/openssh-${OPENSSH_VERSION}" \
+    && ./configure --prefix=/usr/local \
+        --with-privsep-path=/var/empty --with-privsep-user=sshd \
+    && make -j"$(nproc)" \
+    && make install-nokeys \
+    && cd / && rm -rf "/tmp/openssh-${OPENSSH_VERSION}" /tmp/openssh.tar.gz
+
+# The unprivileged lab account clients log into with a public key. Its
+# authorized_keys lives in the bind-mounted /cfg (see sshd_config), not the home
+# dir, so all lab material stays together and survives key reissues. The '*'
+# password field disables password login while leaving the account unlocked
+# (sshd refuses locked accounts); there is no usable password, and pubkey is the
+# only enabled method anyway.
+RUN useradd -m -s /bin/bash labuser \
+    && usermod -p '*' labuser
+
+COPY entrypoint-ssh.sh /entrypoint-ssh.sh
+RUN chmod +x /entrypoint-ssh.sh
+
+ENTRYPOINT ["/entrypoint-ssh.sh"]

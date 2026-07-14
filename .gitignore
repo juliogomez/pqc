@@ -22,6 +22,16 @@ tls/authentication/config/*/*.key
 macsec/config/*/*.crt
 macsec/config/*/*.key
 
+# Generated lab credentials for the SSH lab (host key + user key + the derived
+# authorized_keys / known_hosts), produced at runtime by gen-keys.sh into each
+# role's config dir. The *_config files are tracked; only the key material isn't.
+ssh/config/server/ssh_host_key
+ssh/config/server/ssh_host_key.pub
+ssh/config/server/authorized_keys
+ssh/config/client/id_key
+ssh/config/client/id_key.pub
+ssh/config/client/known_hosts
+
 # Python bytecode cache from the module-lattices lab scripts
 __pycache__/
 *.pyc

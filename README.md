@@ -42,6 +42,16 @@ Take MACsec (IEEE 802.1AE) post-quantum, one layer down from IPsec: essentially 
 
 Unlike the IKEv2 and TLS families, both pillars live in a **single** EAP-TLS handshake here, so this is one combined lab, at Layer 2 over a different control plane, a useful contrast for anyone running switching/access infrastructure.
 
+## SSH (secure remote access)
+
+Take SSH post-quantum, the protocol behind remote shells, `git`, CI/CD deploys, and tunnels. SSH is the mirror image of MACsec: its key exchange is post-quantum **by default** (and warns you when a connection isn't), while its authentication is the piece still on the experimental frontier.
+
+| Lab | What you'll do |
+|-----|----------------|
+| **[SSH](ssh/README.md)** | Watch a real OpenSSH handshake negotiate hybrid **ML-KEM** (`mlkem768x25519-sha256`) with zero config, prove it in the cleartext bytes and measure its size cost, catch a downgrade being flagged out loud, then reissue the host and user keys as composite **Ed25519+ML-DSA-44** and authenticate both ends post-quantum. |
+
+Both pillars live in one SSH handshake with one tool (OpenSSH), so this is one combined lab, like MACsec, but this time the key exchange is the easy, on-by-default half and the authentication is the frontier.
+
 ## Module Lattices (bonus: the math foundation)
 
 | Lab | What you'll do |
@@ -54,7 +64,7 @@ An optional deep-dive for when you want to understand the shared module-lattice 
 
 ## Prerequisites
 
-These labs run entirely on **your own local workstation** (laptop or desktop): no cloud, no remote servers, no dedicated hardware. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile strongSwan (or wpa_supplicant and hostapd) from source, so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section, so you can drop straight into whichever one you like.
+These labs run entirely on **your own local workstation** (laptop or desktop): no cloud, no remote servers, no dedicated hardware. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, OpenSSH, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile their star tool from source (strongSwan, wpa_supplicant/hostapd, or OpenSSH), so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section, so you can drop straight into whichever one you like.
 
 ## A note on lab security
 

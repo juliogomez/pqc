@@ -1,0 +1,65 @@
+# Stack for the post-quantum SSH lab (see this directory's README.md). One lab
+# covers both post-quantum pillars in a single SSH transport handshake:
+#   - key exchange:   hybrid ML-KEM (mlkem768x25519-sha256), on by default
+#   - authentication: composite Ed25519+ML-DSA-44 host + user keys (opt-in)
+#
+# Two roles, like the TLS lab's server/client (plain TCP over a Docker bridge,
+# no veth needed):
+#   ssh-server  - runs OpenSSH sshd(8)
+#   ssh-client  - runs OpenSSH ssh(1)
+#
+# Both idle on startup; the reader drives sshd/ssh by hand via `docker exec`
+# (like hostapd/wpa_supplicant in the MACsec lab), so the exercises can capture,
+# edit config, and reconnect freely.
+services:
+  ssh-server:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.ssh
+    container_name: ssh-server
+    # NET_RAW lets tcpdump capture the handshake on the wire.
+    cap_add: [NET_RAW]
+    volumes:
+      - ./config/server:/cfg
+    networks:
+      ssh_net:
+        ipv4_address: 172.23.0.2
+
+  ssh-client:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.ssh
+    container_name: ssh-client
+    cap_add: [NET_RAW]
+    volumes:
+      - ./config/client:/cfg
+    networks:
+      ssh_net:
+        ipv4_address: 172.23.0.3
+    depends_on:
+      - ssh-server
+
+  # One-shot helper that mints the SSH host key + lab user key and installs them
+  # into each role's config dir. Not started by `up` (setup profile):
+  #   docker compose run --rm keygen ed25519           # classical baseline
+  #   docker compose run --rm keygen mldsa44-ed25519   # post-quantum signatures
+  # The key exchange (hybrid ML-KEM) is negotiated by the SSH transport either
+  # way and is independent of the key algorithm.
+  keygen:
+    build:
+      context: ../docker
+      dockerfile: Dockerfile.ssh
+    container_name: ssh-keygen
+    profiles: ["setup"]
+    entrypoint: ["/bin/sh", "/gen-keys.sh"]
+    volumes:
+      - ./gen-keys.sh:/gen-keys.sh:ro
+      - ./config/server:/work/server
+      - ./config/client:/work/client
+
+networks:
+  ssh_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/24

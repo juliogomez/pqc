@@ -1,0 +1,24 @@
+# Post-quantum SSH lab - client (ssh) config. See ssh/README.md.
+#
+# Used from inside the ssh-client container:
+#   ssh -F /cfg/ssh_config ssh-server
+# Add -vv to watch the negotiated algorithms, or -o KexAlgorithms=... to force a
+# particular key exchange (Exercises 2 and 3).
+
+Host ssh-server
+    HostName ssh-server
+    User labuser
+    IdentityFile /cfg/id_key
+    IdentitiesOnly yes
+    # Pin the server's host key via the known_hosts gen-keys.sh wrote, and fail
+    # (don't trust-on-first-use) if it doesn't match, so host-key verification
+    # actually exercises the key.
+    UserKnownHostsFile /cfg/known_hosts
+    GlobalKnownHostsFile /dev/null
+    StrictHostKeyChecking yes
+
+    # --- Exercise 4: post-quantum authentication ----------------------------
+    # Uncomment to require the composite Ed25519+ML-DSA-44 host + user keys.
+    # (List the exact names with: ssh -Q PubkeyAcceptedAlgorithms | grep mldsa)
+    #HostKeyAlgorithms ssh-mldsa44-ed25519@openssh.com
+    #PubkeyAcceptedAlgorithms ssh-mldsa44-ed25519@openssh.com
