@@ -16,6 +16,7 @@ exponent's constant a little. A little off an exponential is still exponential.
 Watch the seconds climb here, then imagine n = 256 * k.
 """
 
+import argparse
 import time
 import numpy as np
 from fpylll import IntegerMatrix, LLL, BKZ
@@ -90,6 +91,25 @@ def attack(n, max_block=40):
     return False, f"BKZ-{max_block} (cap)", time.time() - t0
 
 
+def parse_args():
+    p = argparse.ArgumentParser(
+        description="Run the real lattice attack on toy LWE and time it as the "
+                    "dimension grows. Rerun with larger dimensions to watch the "
+                    "cost explode exponentially.")
+    p.add_argument(
+        "dims", nargs="*", type=int, default=[20, 30, 40, 50, 60],
+        metavar="N",
+        help="LWE dimensions n to attack (default: 20 30 40 50 60). "
+             "Try e.g. '60 70 80' on a second run and compare the times.")
+    p.add_argument(
+        "--max-block", type=int, default=40, metavar="B",
+        help="Highest BKZ block size to escalate to (default: 40). Bigger "
+             "dimensions may need a higher cap to still solve, at steep cost.")
+    return p.parse_args()
+
+
+args = parse_args()
+
 print("=" * 72)
 print("RUNNING THE REAL LATTICE ATTACK ON TOY LWE (ternary secret, q=97)")
 print("=" * 72)
@@ -97,8 +117,8 @@ print(f"{'LWE dim n':>9} | {'lattice dim':>11} | {'solved?':>8} | "
       f"{'effort':>12} | {'time (s)':>9}")
 print("-" * 72)
 
-for n in (20, 30, 40, 50, 60):
-    solved, effort, secs = attack(n)
+for n in args.dims:
+    solved, effort, secs = attack(n, max_block=args.max_block)
     print(f"{n:>9} | {2 * n + 1:>11} | {str(solved):>8} | "
           f"{effort:>12} | {secs:>9.2f}")
 

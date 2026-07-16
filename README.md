@@ -14,7 +14,7 @@ There is no required order: every lab stands on its own, so start wherever your 
 | Secure **switch / access links** (Layer 2) | [MACsec lab](#macsec--8021x-layer-2-link-encryption) |
 | Secure the **web / APIs** (HTTPS) | [TLS labs](#tls-13-the-webs-secure-channel) |
 | Secure **remote access, git, CI/CD** | [SSH lab](#ssh-secure-remote-access) |
-| Understand **why** PQC is quantum-safe | [Module Lattices lab](#module-lattices-bonus-the-math-foundation) |
+| Understand **why** PQC is quantum-safe | [Module Lattices lab](#module-lattices-bonus-lab-the-math-foundation) |
 
 ---
 
