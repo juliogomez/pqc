@@ -98,20 +98,6 @@ Every lab above is about upgrading one of these two pillars. Once you see the pa
 
 These labs run entirely on **your own local workstation** (laptop or desktop): no cloud, no remote servers, no dedicated hardware. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, OpenSSH, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile their star tool from source (strongSwan, wpa_supplicant/hostapd, or OpenSSH), so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section, so you can drop straight into whichever one you like.
 
----
-
-## Glossary
-
-**New to this?** Here are the terms every lab assumes:
-
-- **ML-KEM** (Module-Lattice Key-Encapsulation Mechanism, FIPS 203) — the post-quantum standard for **key exchange**. Formerly known as *Kyber*.
-- **ML-DSA** (Module-Lattice Digital Signature Algorithm, FIPS 204) — the post-quantum standard for **authentication / signatures**. Formerly known as *Dilithium*.
-- **SLH-DSA** (FIPS 205) — a hash-based signature alternative (formerly *SPHINCS+*), used in the IPsec authentication lab.
-- **KEM** — a Key-Encapsulation Mechanism: the modern framing for agreeing on a shared secret (what "key exchange" does).
-- **Hybrid** — running a classical algorithm (e.g. X25519 / Diffie-Hellman) **and** a post-quantum one together, so the connection is safe as long as *either* holds. The default recommendation during migration.
-- **Harvest now, decrypt later** — the attack where traffic is recorded today and decrypted once a quantum computer exists. This is why key exchange is the urgent pillar.
-- **CRQC** — a Cryptographically Relevant Quantum Computer: one large enough to actually break today's crypto. It doesn't exist yet, which is exactly why we prepare now.
-
 **Do I need a quantum computer to run these labs?** No. 🙂 Everything runs on classical hardware in Docker. The labs demonstrate the *defenses* being deployed today against a future CRQC.
 
 ---
