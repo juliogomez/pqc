@@ -200,7 +200,7 @@ Enough theory, let's run it. Here's the plan:
 
 ### Prerequisites
 
-**Docker** with the Compose v2 plugin (the `docker compose` subcommand), and ideally two terminals: one shelled into the initiator, and a spare on your host for things like `docker cp` or `docker logs`. strongSwan, `swanctl`, and `tcpdump` are all compiled into the image, so nothing lands on your host. Heads up that the first `docker compose build` compiles strongSwan from source and takes around five minutes; after that, startup is quick. This lab is a fine starting point for the repo, but if you'd rather see the math under ML-KEM first, the [module-lattices lab](../../module-lattices/README.md) is the prequel.
+**Docker** with the Compose v2 plugin (the `docker compose` subcommand), and ideally two terminals: one shelled into the initiator, and a spare on your host for things like `docker cp` or `docker logs`. strongSwan, `swanctl`, and `tcpdump` are all compiled into the image, so nothing lands on your host. Heads up that the first `docker compose build` compiles strongSwan from source and takes around five minutes; after that, startup is quick. This is the recommended starting point for the repo (it introduces hybrid key exchange, IKE fragmentation, and the key-exchange-vs-authentication split that later labs build on). If you'd rather see the math under ML-KEM first, the [module-lattices lab](../../module-lattices/README.md) is the prequel.
 
 ### Build and start
 

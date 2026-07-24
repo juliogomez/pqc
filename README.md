@@ -1,20 +1,22 @@
 # Hands-on with Post-Quantum Cryptography for Network Infrastructure
 
-Take the security protocols you already run (TLS, IPsec, MACsec, SSH) all the way to **post-quantum**, one piece of the handshake at a time. Spin up containers, capture real packets, and measure the trade-offs with your own eyes. Every secure handshake rests on two pillars a quantum computer threatens: **key exchange** (the shared secret, fixed by **ML-KEM**) and **authentication** (proving identity, fixed by **ML-DSA**). Each lab below takes a real protocol post-quantum.
+Take the security protocols you already run (IPsec, TLS, MACsec, SSH) all the way to **post-quantum**, one piece of the handshake at a time. Spin up containers, capture real packets, and measure the trade-offs with your own eyes. Every secure handshake rests on two pillars a quantum computer threatens: **key exchange** (the shared secret, fixed by **ML-KEM**) and **authentication** (proving identity, fixed by **ML-DSA**). Each lab below takes a real protocol post-quantum.
 
 ---
 
-## Pick your path
+## Recommended order
 
-There is no required order: every lab stands on its own, so start wherever your interest is.
+The labs build on each other: concepts introduced early (fragmentation, hybrid key exchange, the key-exchange-vs-authentication split) are assumed in later labs. Follow this progression:
 
-| I want to... | Go to |
-|--------------|-------|
-| Secure a **VPN** (Layer 3) | [IPsec labs](#ipsec--ikev2-layer-3-vpns) |
-| Secure **switch / access links** (Layer 2) | [MACsec lab](#macsec--8021x-layer-2-link-encryption) |
-| Secure the **web / APIs** (HTTPS) | [TLS labs](#tls-13-the-webs-secure-channel) |
-| Secure **remote access, git, CI/CD** | [SSH lab](#ssh-secure-remote-access) |
-| Understand **why** PQC is quantum-safe | [Module Lattices lab](#module-lattices-bonus-lab-the-math-foundation) |
+| # | Protocol | Layer | What you learn |
+|---|----------|-------|----------------|
+| 1 | [**IPsec / IKEv2**](#ipsec--ikev2-layer-3-vpns) | 3 (VPN) | Hybrid key exchange, IKE fragmentation, ML-DSA auth (the fullest intro) |
+| 2 | [**TLS 1.3**](#tls-13-the-webs-secure-channel) | 7 (HTTPS) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
+| 3 | [**MACsec / 802.1X**](#macsec--8021x-layer-2-link-encryption) | 2 (switching) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
+| 4 | [**SSH**](#ssh-secure-remote-access) | 7 (remote access) | PQ key exchange on by default; **loud** downgrade (contrast MACsec); composite ML-DSA auth |
+| — | [Module Lattices](#module-lattices-bonus-lab-the-math-foundation) | — | Optional deep-dive into the math under ML-KEM and ML-DSA |
+
+Each lab *can* be run standalone if you already know the earlier material, but if you're going through the repo for the first time, the order above gives the smoothest ramp.
 
 ---
 
@@ -32,15 +34,6 @@ Take a real IKEv2/IPsec VPN tunnel post-quantum.
 
 *Start with Key Exchange: it introduces the containers, strongSwan, and the hybrid handshake that the Authentication lab builds on.*
 
-### MACsec / 802.1X (Layer 2 link encryption)
-
-Take MACsec post-quantum. Its entire quantum exposure lives in an EAP-TLS handshake.
-
-- **[MACsec](macsec/README.md)** (50 min, intermediate):
-  Trace MACsec's key hierarchy, run a real EAP-TLS handshake and prove in the captured bytes that it negotiates hybrid **DH + ML-KEM**; watch how easily it silently downgrades to classical TLS 1.2; then swap the certificates from classical ECDSA to post-quantum **ML-DSA** and measure the size cost as EAP fragments the handshake across 3-4x more EAPOL frames.
-
-*Both pillars live in a **single** EAP-TLS handshake here, so this is one combined lab, at Layer 2 over a different control plane, a useful contrast for anyone running switching/access infrastructure.*
-
 ### TLS 1.3 (the web's secure channel)
 
 Take TLS post-quantum, the protocol behind HTTPS and most application traffic.
@@ -52,6 +45,15 @@ Take TLS post-quantum, the protocol behind HTTPS and most application traffic.
   Generate **ML-DSA** keys and certificates, weigh the size difference against classical **ECDSA**, then mutually authenticate a real TLS connection: ECDSA first, then post-quantum ML-DSA, and measure what the bigger certificates do to the handshake.
 
 *Same two pillars as the IPsec family, this time at the application layer.*
+
+### MACsec / 802.1X (Layer 2 link encryption)
+
+Take MACsec post-quantum. Its entire quantum exposure lives in an EAP-TLS handshake.
+
+- **[MACsec](macsec/README.md)** (50 min, intermediate):
+  Trace MACsec's key hierarchy, run a real EAP-TLS handshake and prove in the captured bytes that it negotiates hybrid **DH + ML-KEM**; watch how easily it silently downgrades to classical TLS 1.2; then swap the certificates from classical ECDSA to post-quantum **ML-DSA** and measure the size cost as EAP fragments the handshake across 3-4x more EAPOL frames.
+
+*Both pillars live in a **single** EAP-TLS handshake here, so this is one combined lab, at Layer 2 over a different control plane, a useful contrast for anyone running switching/access infrastructure.*
 
 ### SSH (secure remote access)
 
@@ -96,7 +98,7 @@ Every lab above is about upgrading one of these two pillars. Once you see the pa
 
 ## Prerequisites
 
-These labs run entirely on **your own local workstation** (laptop or desktop): no cloud, no remote servers, no dedicated hardware. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, OpenSSH, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile their star tool from source (strongSwan, wpa_supplicant/hostapd, or OpenSSH), so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section, so you can drop straight into whichever one you like.
+These labs run entirely on **your own local workstation** (laptop or desktop): no cloud, no remote servers, no dedicated hardware. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, OpenSSH, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile their star tool from source (strongSwan, wpa_supplicant/hostapd, or OpenSSH), so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section.
 
 **Do I need a quantum computer to run these labs?** No. 🙂 Everything runs on classical hardware in Docker. The labs demonstrate the *defenses* being deployed today against a future CRQC.
 
