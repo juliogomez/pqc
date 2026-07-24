@@ -8,13 +8,13 @@ Take the security protocols you already run (IPsec, TLS, MACsec, SSH) all the wa
 
 The labs build on each other: concepts introduced early (fragmentation, hybrid key exchange, the key-exchange-vs-authentication split) are assumed in later labs. Follow this progression:
 
-| # | Protocol | Layer | What you learn |
-|---|----------|-------|----------------|
-| 1 | [**IPsec / IKEv2**](#ipsec--ikev2-layer-3-vpns) | 3 (VPN) | Hybrid key exchange, IKE fragmentation, ML-DSA auth (the fullest intro) |
-| 2 | [**TLS 1.3**](#tls-13-the-webs-secure-channel) | 7 (HTTPS) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
-| 3 | [**MACsec / 802.1X**](#macsec--8021x-layer-2-link-encryption) | 2 (switching) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
-| 4 | [**SSH**](#ssh-secure-remote-access) | 7 (remote access) | PQ key exchange on by default; **loud** downgrade (contrast MACsec); composite ML-DSA auth |
-| — | [Module Lattices](#module-lattices-bonus-lab-the-math-foundation) | — | Optional deep-dive into the math under ML-KEM and ML-DSA |
+| Protocol | Layer | What you learn |
+|----------|-------|----------------|
+| [**IPsec / IKEv2 (Layer 3 VPNs)**](#ipsec--ikev2-layer-3-vpns) | 3 | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
+| [**TLS 1.3 (the web's secure channel)**](#tls-13-the-webs-secure-channel) | 7 | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
+| [**MACsec / 802.1X (Layer 2 link encryption)**](#macsec--8021x-layer-2-link-encryption) | 2 | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
+| [**SSH (secure remote access)**](#ssh-secure-remote-access) | 7 | PQ key exchange on by default; **loud** downgrade; composite ML-DSA auth |
+| [Module Lattices (bonus)](#module-lattices-bonus-lab-the-math-foundation) | — | Optional deep-dive into the math under ML-KEM and ML-DSA |
 
 Each lab *can* be run standalone if you already know the earlier material, but if you're going through the repo for the first time, the order above gives the smoothest ramp.
 
