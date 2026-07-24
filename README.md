@@ -10,11 +10,11 @@ The labs build on each other: concepts introduced early (fragmentation, hybrid k
 
 | Protocol | What you learn |
 |----------|----------------|
-| [**IPsec / IKEv2 (Layer 3 VPNs)**](#ipsec--ikev2-layer-3-vpns) | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
-| [**TLS 1.3 (the web's secure channel)**](#tls-13-the-webs-secure-channel) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
-| [**MACsec / 802.1X (Layer 2 link encryption)**](#macsec--8021x-layer-2-link-encryption) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
-| [**SSH (secure remote access)**](#ssh-secure-remote-access) | PQ key exchange on by default; **loud** downgrade; composite ML-DSA auth |
-| [Module Lattices (bonus)](#module-lattices-bonus-lab-the-math-foundation) | Optional deep-dive into the math under ML-KEM and ML-DSA |
+| [**IPsec / IKEv2**](#ipsec--ikev2-layer-3-vpns) | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
+| [**TLS 1.3**](#tls-13-the-webs-secure-channel) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
+| [**MACsec / 802.1X**](#macsec--8021x-layer-2-link-encryption) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
+| [**SSH**](#ssh-secure-remote-access) | PQ key exchange on by default; **loud** downgrade; composite ML-DSA auth |
+| [Module Lattices](#module-lattices-bonus-lab-the-math-foundation) | Optional deep-dive into the math under ML-KEM and ML-DSA |
 
 Each lab *can* be run standalone if you already know the earlier material, but if you're going through the repo for the first time, the order above gives the smoothest ramp.
 
