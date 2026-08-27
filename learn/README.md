@@ -1,0 +1,112 @@
+# Stage 1: learn the protocols in containers
+
+Take the security protocols you already run (IPsec, TLS, MACsec, SSH) all the way to
+**post-quantum**, one piece of the handshake at a time. Spin up containers, capture real
+packets, and measure the trade-offs with your own eyes.
+
+Every secure handshake rests on two pillars a quantum computer threatens: **key exchange**
+(the shared secret, fixed by **ML-KEM**) and **authentication** (proving identity, fixed by
+**ML-DSA**). Each lab below takes a real protocol post-quantum along one or both of those
+axes. If that framing is new, read
+[the challenge](../README.md#the-challenge-two-pillars-two-deadlines) first.
+
+Nothing here needs hardware. Everything runs in throwaway Docker containers on your laptop,
+so you can break a lab and rerun it as many times as you like.
+
+## Recommended order
+
+The labs build on each other: concepts introduced early (fragmentation, hybrid key
+exchange, the key-exchange-vs-authentication split) are assumed in later labs. Follow this
+progression:
+
+| Protocol | What you learn |
+|----------|----------------|
+| [**IPsec / IKEv2**](#ipsec--ikev2-layer-3-vpns) | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
+| [**TLS 1.3**](#tls-13-the-webs-secure-channel) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
+| [**MACsec / 802.1X**](#macsec--8021x-layer-2-link-encryption) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
+| [**SSH**](#ssh-secure-remote-access) | PQ key exchange on by default; **loud** downgrade; composite ML-DSA auth |
+
+Each lab *can* be run standalone if you already know the earlier material, but if you're
+going through the repo for the first time, the order above gives the smoothest ramp.
+
+**Bonus:** [Module Lattices](#module-lattices-bonus-lab-the-math-foundation) is an optional
+deep-dive into the math behind ML-KEM and ML-DSA. It's not a protocol lab, but if you want
+to understand *why* lattice problems are hard (and attack one yourself), that's where to look.
+
+---
+
+## The labs
+
+### IPsec / IKEv2 (Layer 3 VPNs)
+
+Take a real IKEv2/IPsec VPN tunnel post-quantum.
+
+- **[Key Exchange](ipsec/key-exchange/README.md)** (45 min, beginner):
+  Negotiate a hybrid **DH + ML-KEM** key exchange over a real IKEv2 handshake, capture it, compare classical vs hybrid, reach quantum safety a different way with post-quantum preshared keys.
+
+- **[Authentication](ipsec/authentication/README.md)** (45 min, intermediate):
+  Generate **ML-DSA / SLH-DSA** keys and certificates, weigh the size explosion, then mutually authenticate an IKEv2 tunnel: classical ECDSA first, then post-quantum ML-DSA.
+
+*Start with Key Exchange: it introduces the containers, strongSwan, and the hybrid handshake that the Authentication lab builds on.*
+
+**On Cisco hardware:** [IPsec on IOS XE](../deploy/ios-xe/ipsec.md). ML-KEM and PPK both
+ship today, ML-DSA authentication lands in 26.2.
+
+### TLS 1.3 (the web's secure channel)
+
+Take TLS post-quantum, the protocol behind HTTPS and most application traffic.
+
+- **[Key Exchange](tls/key-exchange/README.md)** (30 min, beginner):
+  Run a real TLS 1.3 handshake that negotiates a hybrid **DH + ML-KEM** key exchange, capture it, and compare it to classical DH byte for byte. See why TLS needs **no extra round trip** for ML-KEM, unlike IKEv2.
+
+- **[Authentication](tls/authentication/README.md)** (40 min, intermediate):
+  Generate **ML-DSA** keys and certificates, weigh the size difference against classical **ECDSA**, then mutually authenticate a real TLS connection: ECDSA first, then post-quantum ML-DSA, and measure what the bigger certificates do to the handshake.
+
+*Same two pillars as the IPsec family, this time at the application layer.*
+
+**On Cisco hardware:** [TLS on IOS XE](../deploy/ios-xe/tls.md). The shortest doc in the
+set, because the router's management HTTPS server is still classical-only.
+
+### MACsec / 802.1X (Layer 2 link encryption)
+
+Take MACsec post-quantum. Its entire quantum exposure lives in an EAP-TLS handshake.
+
+- **[MACsec](macsec/README.md)** (50 min, intermediate):
+  Trace MACsec's key hierarchy, run a real EAP-TLS handshake and prove in the captured bytes that it negotiates hybrid **DH + ML-KEM**; watch how easily it silently downgrades to classical TLS 1.2; then swap the certificates from classical ECDSA to post-quantum **ML-DSA** and measure the size cost as EAP fragments the handshake across 3-4x more EAPOL frames.
+
+*Both pillars live in a **single** EAP-TLS handshake here, so this is one combined lab, at Layer 2 over a different control plane, a useful contrast for anyone running switching/access infrastructure.*
+
+**On Cisco hardware:** [MACsec on IOS XE](../deploy/ios-xe/macsec.md). The PQ path is a
+supported feature, and the write-up covers both the working PSK mechanics and exactly which
+platform restriction blocked the EAP-TLS leg.
+
+### SSH (secure remote access)
+
+Take SSH post-quantum, the protocol behind remote shells, git, CI/CD deploys, and tunnels. Its key exchange is post-quantum **by default**, while its authentication is the piece still on the experimental frontier.
+
+- **[SSH](ssh/README.md)** (45 min, intermediate):
+  Watch a real SSH handshake negotiate hybrid **ML-KEM** with zero config, prove it in the cleartext bytes and measure its size cost, catch a downgrade being flagged out loud, then reissue the host and user keys as composite **Ed25519+ML-DSA-44** and authenticate both ends post-quantum.
+
+*Both pillars live in one SSH handshake, so this is one combined lab where the key exchange is the easy, on-by-default half, and the authentication is the frontier.*
+
+**On Cisco hardware:** [SSH on IOS XE](../deploy/ios-xe/ssh.md). The hybrid KEX is one
+config line; the composite ML-DSA keys are not there yet.
+
+### Module Lattices (bonus lab: the math foundation)
+
+- **[Module Lattices](module-lattices/README.md)** (60 min, beginner, no crypto-math required):
+  Build a lattice from scratch, watch noise turn easy algebra into hard **LWE**, implement a baby **ML-KEM** over the real ring, then run a real lattice attack and watch its cost explode: the concrete reason a quantum computer can't break **ML-KEM or ML-DSA**.
+
+*An optional deep-dive for when you want to understand the shared module-lattice foundation under both ML-KEM and ML-DSA, and why neither is breakable by a quantum computer.*
+
+---
+
+## Prerequisites
+
+These labs run entirely on **your own local workstation** (laptop or desktop): no cloud, no remote servers, no dedicated hardware. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, OpenSSH, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile their star tool from source (strongSwan, wpa_supplicant/hostapd, or OpenSSH), so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section.
+
+All the Dockerfiles and entrypoints live in [`docker/`](docker/); the compose files in each
+lab reference them, so run `docker compose` from the lab directory rather than from here.
+
+**Do I need a quantum computer to run these labs?** No. 🙂 Everything runs on classical hardware in Docker. The labs demonstrate the *defenses* being deployed today against a future CRQC.
+

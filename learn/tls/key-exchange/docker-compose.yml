@@ -7,6 +7,7 @@
 # Both use the same OpenSSL 3.5 image. The server certificate is generated
 # inside the server container during Exercise 1 (the key exchange does not
 # depend on it), so this lab needs no certgen helper and no shared volumes.
+name: pqc-tls-kex
 services:
   tls-server:
     build:

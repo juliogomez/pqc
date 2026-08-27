@@ -1,0 +1,133 @@
+! Working PQ MACsec (EAP-TLS + ML-KEM) config, verified on IOS XE 26.1.1 / C8235-G2
+! MKA Secured, GCM-AES-256, CKN derived from the EAP-TLS MSK
+! R2 hosts the local CA (CA_Server) that issues both routers' identity certs
+!
+! Deltas vs the EFT guide's appendix, both required (see macsec.md):
+!   - "10 authenticate using dot1x both"   (guide has it; easy to drop the 'both')
+!   - "macsec network-link" not "macsec"   (guide says 'macsec', which never encrypts here)
+!
+version 26.1
+service timestamps debug datetime msec
+service timestamps log datetime msec
+platform qfp utilization monitor load 80
+platform resource service-plane-heavy
+!
+hostname bfl-cpoc-d14-8235-02
+!
+boot-start-marker
+boot system bootflash:c8kg2be-universalk9.26.01.01.SPA.conf
+boot-end-marker
+!
+vrf definition Mgmt-intf
+ address-family ipv4
+ exit-address-family
+ address-family ipv6
+ exit-address-family
+!
+aaa new-model
+aaa local authentication default authorization default
+!
+aaa authentication login default local
+aaa authentication dot1x default local
+aaa authorization exec default local 
+aaa authorization network default local 
+aaa authorization credential-download default local 
+!
+aaa attribute list LINKSEC_POLICY
+ attribute type linksec-policy must-secure
+!
+aaa session-id common
+!
+ip domain name lab.local
+!
+login on-success log
+!
+subscriber templating
+!
+eap profile EAP-PROFILE
+ method tls
+ pki-trustpoint CA_TP
+!
+access-session mac-move deny
+access-session tls-version 1.3
+access-session pqc-type hybrid
+!
+crypto pki server CA_Server
+ no database archive
+ grant auto
+ eku server-auth client-auth 
+!
+crypto pki trustpoint CA_Server
+ revocation-check crl
+ rsakeypair CA_Server
+ hash sha512
+!
+crypto pki trustpoint CA_TP
+ enrollment url http://10.0.12.2:80
+ fingerprint C26AD7815B245A847FDD0E64CF835C24
+ subject-name CN=R2
+ revocation-check none
+ rsakeypair CA_TP 2048
+ hash sha512
+!
+license udi pid C8235-G2 sn FGL2950L4DL
+license boot level advantage
+!
+dot1x system-auth-control
+dot1x credentials DOT1X-CREDS
+ username R2
+ pki-trustpoint CA_TP
+!
+service-template DEFAULT_LINKSEC_POLICY_MUST_SECURE
+ linksec policy must-secure
+!
+mka policy PQ-MACSEC-MKA
+ macsec-cipher-suite gcm-aes-256
+!
+username admin privilege 15 secret 9 <REDACTED-TYPE9-HASH>
+username R2 aaa attribute list LINKSEC_POLICY
+!
+redundancy
+ mode none
+!
+policy-map type control subscriber PQ-MACSEC-POLICY
+ event session-started match-all
+  10 class always do-until-failure
+   10 authenticate using dot1x both
+ event authentication-success match-all
+  10 class always do-until-failure
+   10 activate service-template DEFAULT_LINKSEC_POLICY_MUST_SECURE
+!
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 12
+ switchport mode access
+ macsec network-link
+ authentication periodic
+ authentication timer reauthenticate 1800
+ access-session host-mode multi-host
+ access-session closed
+ access-session port-control auto
+ dot1x pae both
+ dot1x authenticator eap profile EAP-PROFILE
+ dot1x credentials DOT1X-CREDS
+ dot1x supplicant eap profile EAP-PROFILE
+ mka policy PQ-MACSEC-MKA
+ service-policy type control subscriber PQ-MACSEC-POLICY
+!
+interface GigabitEthernet0
+ vrf forwarding Mgmt-intf
+ ip address 198.18.154.203 255.255.192.0
+ negotiation auto
+!
+interface Vlan12
+ ip address 10.0.12.2 255.255.255.252
+!
+ip route vrf Mgmt-intf 0.0.0.0 0.0.0.0 198.18.128.1
+ip http server
+ip http secure-server
+ip ssh bulk-mode 131072
+!
+line vty 0 14
+ transport input ssh
+!
+end

@@ -273,10 +273,10 @@ Just **Docker**, with the Compose v2 plugin (the `docker compose` subcommand, no
 
 ### Build and start
 
-Run all commands in this lab from the `module-lattices/` directory:
+Run all commands in this lab from the `learn/module-lattices/` directory:
 
 ```bash
-cd module-lattices
+cd learn/module-lattices
 ```
 
 ```bash
@@ -596,3 +596,10 @@ Both roads are the same hard lattice problem this whole lab is about, and the ad
 So the asymmetry is the point of public-key crypto: the public key is enough to *lock* a message (encapsulate), but only the private key `s` can *unlock* one (decapsulate), and finding `s` from public values is infeasible.
 
 > **A note on the errors.** The noise terms never help anyone decrypt. They are the price of security: they turn `u` and `t` into hard LWE samples, and they survive decapsulation as the small leftover `e·r + e2 - s·e1` that rounds away. The thing that actually opens the ciphertext is `s`, nothing else.
+
+---
+
+**Where this shows up in production:** every `pqc mlkem768` line and every
+`mlkem768x25519-sha256` algorithm name in [Stage 2](../../deploy/README.md) is the math on
+this page, running on shipping hardware. The parameter sets you built by hand are the ones
+the vendors implement.

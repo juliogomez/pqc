@@ -4,6 +4,7 @@
 # Stage 1 (classical ECDSA cert auth) runs as-is from this file.
 # Stage 2 (post-quantum ML-DSA cert auth) layers the override on top:
 #   docker compose -f docker-compose.yml -f docker-compose.mldsa.yml ...
+name: pqc-ipsec-auth
 services:
   auth-responder:
     build:

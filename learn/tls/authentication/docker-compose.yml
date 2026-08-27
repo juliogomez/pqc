@@ -6,6 +6,7 @@
 #
 # A one-shot certgen helper mints the lab CA + server/client certs (ECDSA or
 # ML-DSA) and installs them into each role's config dir.
+name: pqc-tls-auth
 services:
   tls-auth-server:
     build:

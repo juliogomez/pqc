@@ -20,7 +20,7 @@ Ready? Let's start.
 1. [What are we trying to figure out?](#what-are-we-trying-to-figure-out)
 2. [Why should you care? MACsec and Layer 2](#why-should-you-care-macsec-and-layer-2)
 3. [Where does MACsec get its keys? MKA, CAK, and the key hierarchy](#where-does-macsec-get-its-keys-mka-cak-and-the-key-hierarchy)
-4. [Where's the quantum risk? (Not where you'd think)](#wheres-the-quantum-risk-not-where-youd-think)
+4. [Where's the quantum risk?](#wheres-the-quantum-risk)
 5. [The post-quantum pieces: ML-KEM and ML-DSA in EAP-TLS](#the-post-quantum-pieces-ml-kem-and-ml-dsa-in-eap-tls)
 6. [Our tools of choice: wpa_supplicant, hostapd, and OpenSSL 3.5](#our-tools-of-choice-wpa_supplicant-hostapd-and-openssl-35)
 7. [Let's get our hands dirty: the lab](#lets-get-our-hands-dirty-the-lab)
@@ -52,6 +52,22 @@ Where does it show up in real infrastructure?
 - **Enterprise access:** a laptop authenticating to a switch port with 802.1X, then encrypting everything on that port.
 - **Data-center and campus fabrics:** switch-to-switch links encrypted so a tap in the wiring closet sees only ciphertext.
 - **Service-provider and 5G transport:** MACsec is widely used to protect fronthaul/backhaul and Carrier Ethernet links.
+
+Those use cases split along two independent axes: the **interface mode** (who the peers are) and the **key source** (how they agree on the master key):
+
+| | Interface mode | |
+|-|---|---|
+| | **Access** (host ↔ switch port) | **Network-link** (router ↔ router, switch ↔ switch) |
+| **Real-world use** | Campus access ports, endpoint admission, wireless AP uplinks | DC interconnects (leaf ↔ spine), L2VPN / Carrier Ethernet, WAN router-to-router, 5G fronthaul/backhaul |
+
+| | Key source | |
+|-|---|---|
+| | **PSK** (static, configured on both ends) | **EAP-TLS** (dynamic, via RADIUS/ISE) |
+| **PQ story** | Symmetric by nature (no key agreement to break), but no forward secrecy | Hybrid ML-KEM inside TLS 1.3 makes the key chain quantum-safe with forward secrecy |
+
+EAP-TLS works with *either* interface mode: a laptop authenticating to a campus switch (access) or two routers authenticating to each other via ISE (network-link). The post-quantum upgrade (ML-KEM + ML-DSA) lives inside the EAP-TLS handshake regardless of which mode the interface is in.
+
+This lab exercises EAP-TLS key establishment between a supplicant and an authenticator (access mode), which is where both the key exchange (ML-KEM) and authentication (ML-DSA) happen. The [IOS XE MACsec doc](../../deploy/ios-xe/macsec.md) covers the complementary case: **network-link mode** (router-to-router) with both PSK and EAP-TLS key sources. The EAP-TLS handshake and the ML-KEM/ML-DSA mechanics are identical regardless of interface mode; what changes is only who the peers are.
 
 MACsec is interesting for a post-quantum discussion for one reason: it splits cleanly into two planes.
 
@@ -87,7 +103,7 @@ Everything from the CAK down is symmetric-key derivation (AES-CMAC based KDFs), 
 
 ---
 
-## Where's the quantum risk? (Not where you'd think)
+## Where's the quantum risk?
 
 Now we can answer the question precisely. Go through the chain step by step and ask, at each step, "does a quantum computer break this?"
 
@@ -220,10 +236,10 @@ They are joined by a **veth pair** (a virtual Ethernet "cable"): `aut` on the au
 
 ### Build and start
 
-Everything runs **locally on your workstation**. Clone the repo and run all commands from the `macsec/` directory:
+Everything runs **locally on your workstation**. Clone the repo and run all commands from the `learn/macsec/` directory:
 
 ```bash
-cd macsec
+cd learn/macsec
 ```
 
 ```bash
@@ -567,11 +583,11 @@ grep tls_flags /cfg/hostapd.conf   # confirm it's back to: tls_flags=[ENABLE-TLS
 
 The key exchange is done. Now the other half: the *identity* proof. So far the certificates have been classical **ECDSA**, exactly what Shor's algorithm forges. Switch the *same lab* to post-quantum certificates by reissuing them as **ML-DSA**. No rebuild, no config change.
 
-`docker compose` is a **host** command, so run it in a **third terminal** on the host, from the same `macsec/` directory you started the lab in (that is where `docker-compose.yml` lives; running it elsewhere gives `no configuration file provided: not found`). Keep terminal 1 (authenticator) and terminal 2 (supplicant) open.
+`docker compose` is a **host** command, so run it in a **third terminal** on the host, from the same `learn/macsec/` directory you started the lab in (that is where `docker-compose.yml` lives; running it elsewhere gives `no configuration file provided: not found`). Keep terminal 1 (authenticator) and terminal 2 (supplicant) open.
 
 ```bash
-# third terminal, on the host, from the macsec/ directory
-cd macsec   # if you're not already there
+# third terminal, on the host, from the learn/macsec/ directory
+cd learn/macsec   # if you're not already there
 docker compose run --rm certgen ml-dsa-44
 ```
 
@@ -689,7 +705,7 @@ grep -ac "more fragments will follow" /tmp/w.log
 >
 > On top of that there is a fixed block of overhead frames (identity exchange, TLS-start, the closing Finished / `EAP-Success`) that does not change with certificate size. So the total frame count and the client-fragment count measure different parts of the handshake and grow at different rates.
 
-**Step 3 (optional): use a larger certificate.** ML-DSA-65 raises the security level, and the size, again. As in Step 1, `docker compose run` is a **host** command, so run it in the **third terminal** on the host from the `macsec/` directory, *not* in the authenticator or supplicant shells (those are inside the containers). Then re-run the handshake in terminals 1 and 2 as before.
+**Step 3 (optional): use a larger certificate.** ML-DSA-65 raises the security level, and the size, again. As in Step 1, `docker compose run` is a **host** command, so run it in the **third terminal** on the host from the `learn/macsec/` directory, *not* in the authenticator or supplicant shells (those are inside the containers). Then re-run the handshake in terminals 1 and 2 as before.
 
 ```bash
 # third terminal, on the host, from the macsec/ directory
@@ -755,3 +771,8 @@ MACsec is the one protocol family in this repo that puts *both* post-quantum pil
 | Data-plane cipher | MACsec AES-GCM | ESP AES-GCM | AES-GCM record layer |
 
 Put the labs together and you have seen the full post-quantum picture for network infrastructure: **ML-KEM** secures the key exchange against harvest-now-decrypt-later, **ML-DSA** secures authentication against future forgery, and both run inside the *same* protocols you already use (TLS 1.3 under EAP-TLS, IKEv2), just with bigger payloads and a few configuration gates to get right.
+
+---
+
+**On real hardware:** [MACsec on Cisco IOS XE](../../deploy/ios-xe/macsec.md) covers
+PSK-based MKA and the full EAP-TLS config for PQ MACsec with ML-KEM on real routers.

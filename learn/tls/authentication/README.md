@@ -124,10 +124,10 @@ Both trust one small **CA** we spin up just for the lab. The CA signs a server c
 
 ### Build and start
 
-Everything runs **locally on your workstation**. Run all commands from the `tls/authentication/` directory:
+Everything runs **locally on your workstation**. Run all commands from the `learn/tls/authentication/` directory:
 
 ```bash
-cd tls/authentication
+cd learn/tls/authentication
 ```
 
 ```bash
@@ -253,7 +253,7 @@ Same handshake, post-quantum certificates this time. The lesson is in **how litt
 
 **Step 1: Reissue the certificates as ML-DSA**
 
-From a third terminal window, go to the TLS authentication folder (`tls/authentication`) and run:
+From a third terminal window, go to the TLS authentication folder (`learn/tls/authentication`) and run:
 
 ```bash
 docker compose run --rm --build certgen ml-dsa-65
@@ -335,3 +335,11 @@ That's a wrap! You generated post-quantum certificates, measured the size jump, 
 - **The TLS code points are still settling.** The signature scheme identifiers that let TLS negotiate ML-DSA are recent and still moving through the IETF TLS working group. OpenSSL implements them, but expect details to shift before everything is final. One practical quirk: if a server offers both a classical and an ML-DSA certificate, OpenSSL often prefers the classical one, so you may need `-sigalgs mldsa65` to force the post-quantum choice. (In this lab the server holds *only* an ML-DSA certificate, so it is always chosen.)
 
 So just like the IKEv2 story, the building blocks are here and worth getting hands-on with now, even though the wider ecosystem (public CAs, browsers, every server) still has a long way to go.
+
+---
+
+**On real hardware:**
+[IOS XE 26.1](../../../deploy/ios-xe/tls.md#tls-authentication-not-covered) has neither half
+of PQ TLS on its management plane (no ML-KEM key exchange, so no ML-DSA certificates
+either. Where TLS *does* go post-quantum on that platform is inside EAP-TLS, which the
+[MACsec lab](../../macsec/README.md) covers.

@@ -359,7 +359,7 @@ We'll do it twice, and the progression is the whole point:
 - **First, classical auth with ECDSA (today's posture).** Each peer authenticates with an **ECDSA** certificate. Rock-solid, runs on stable strongSwan. And here's the neat part: we keep the **ML-KEM hybrid key exchange** switched on, so the tunnel is already *post-quantum for key exchange*, just classical for the signature. That's exactly the posture real deployments, like 5G fronthauls, ship right now.
 - **Then, post-quantum auth with ML-DSA (the new stuff).** We swap the ECDSA certs for **ML-DSA** ones and rebuild strongSwan from its experimental `ml-dsa` branch. Now *both* halves of the handshake are quantum-safe: ML-KEM for the key exchange, ML-DSA for the signature. Fair warning: this is the frontier, and it behaves like the frontier. We'll be honest about the rough edges.
 
-> **Heads up:** this part uses its own little stack (`ipsec/authentication/docker-compose.yml`) on its own network, completely separate from the key-exchange lab. Nothing here touches that lab's PSK setup. You'll need Docker, and the first build compiles strongSwan from source, same as before.
+> **Heads up:** this part uses its own little stack (`learn/ipsec/authentication/docker-compose.yml`) on its own network, completely separate from the key-exchange lab. Nothing here touches that lab's PSK setup. You'll need Docker, and the first build compiles strongSwan from source, same as before.
 
 ### How the trust works
 
@@ -371,10 +371,10 @@ A small script (`gen-certs.sh`) does all the minting and drops the files into ea
 
 **Step 1: Bring up the two peers**
 
-All commands in this live-fire section run from the `ipsec/authentication/` directory, so hop in first:
+All commands in this live-fire section run from the `learn/ipsec/authentication/` directory, so hop in first:
 
 ```bash
-cd ipsec/authentication
+cd learn/ipsec/authentication
 ```
 
 ```bash
@@ -592,3 +592,11 @@ And that's a wrap. You generated post-quantum certificates, measured them, signe
 - **The IKEv2 wire format is still standardising.** The IPSECME working group has a draft, [`draft-ietf-ipsecme-ikev2-pqc-auth`](https://datatracker.ietf.org/doc/draft-ietf-ipsecme-ikev2-pqc-auth/) (at `-08` as of this writing), that carries ML-DSA and SLH-DSA in IKEv2 by identifying them with their DER-encoded `AlgorithmIdentifier` OIDs and the "Identity" hash (value 5, since these are pure signature schemes). An earlier individual draft, [`draft-sfluhrer-ipsecme-ikev2-mldsa`](https://datatracker.ietf.org/doc/html/draft-sfluhrer-ipsecme-ikev2-mldsa-00), also exists, and strongSwan's implementation differs from both in places (the context-string and prehash-vs-pure questions are still being worked out). Expect the details to shift before this stabilises, which is why the ML-DSA run is bleeding-edge even though ML-DSA-44 comes up cleanly today.
 
 So unlike the key-exchange story (where ML-KEM ships in stable strongSwan 6.0.x and just works), **post-quantum *authentication* in IKEv2 is still emerging.** That's not a gap in this lab; it's the honest state of the world, and it's exactly *why* getting hands-on with the building blocks now (the keys, certs, and signatures you made, plus the experimental tunnel you just stood up) is the most useful thing you can do. When the IKE plumbing lands in a stable release, you'll already get it, and you'll have run it before most people knew it was possible.
+
+---
+
+**On real hardware:** the same story holds on Cisco gear, one release later.
+[IOS XE 26.1](../../../deploy/ios-xe/ipsec.md#authentication-the-ml-dsa-roadmap) authenticates
+IKEv2 peers with PSK or classical certificates, with ML-DSA certificate authentication
+planned for 26.2. Until then the mitigation is the PPK you met in the
+[key-exchange lab](../key-exchange/README.md#exercise-3-an-alternate-path-to-quantum-safety-rfc-8784-ppk).

@@ -13,6 +13,12 @@
 # address (01:80:c2:00:00:03), which Linux bridges filter by default, so a
 # point-to-point veth is used instead of a Docker bridge. This keeps the lab
 # running on plain Docker with no host-side configuration.
+#
+# The Docker bridge below (macsec_net) carries none of the EAPOL traffic — it
+# only exists so this stack's default network has a pinned, non-overlapping
+# subnet instead of Docker auto-assigning one that could collide with the
+# other labs' pinned subnets (172.20.0.0/24 through 172.24.0.0/24).
+name: pqc-macsec
 services:
   macsec-authenticator:
     build:
@@ -25,6 +31,9 @@ services:
       MACSEC_ROLE: authenticator
     volumes:
       - ./config/authenticator:/cfg
+    networks:
+      macsec_net:
+        ipv4_address: 172.25.0.2
     healthcheck:
       test: ["CMD", "ip", "link", "show", "sup"]
       interval: 2s
@@ -65,3 +74,10 @@ services:
       - ./gen-certs.sh:/gen-certs.sh:ro
       - ./config/authenticator:/work/authenticator
       - ./config/supplicant:/work/supplicant
+
+networks:
+  macsec_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/24

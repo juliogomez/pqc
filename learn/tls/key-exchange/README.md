@@ -159,10 +159,10 @@ Two containers on a private Docker network:
 
 ### Build and start
 
-Everything runs **locally on your workstation**. Run all commands from the `tls/key-exchange/` directory:
+Everything runs **locally on your workstation**. Run all commands from the `learn/tls/key-exchange/` directory:
 
 ```bash
-cd tls/key-exchange
+cd learn/tls/key-exchange
 ```
 
 ```bash
@@ -363,3 +363,10 @@ docker compose down
 `docker compose down` stops and removes the containers and the `tls_net` network. The built image is kept, so the next `docker compose up -d` starts right away. The certificate and captures lived in the container's `/tmp`, so they vanish with the containers, nothing is left on your host.
 
 That's a wrap! You ran a real post-quantum TLS handshake, confirmed the hybrid group, and measured its exact cost on the wire. Next, the [authentication lab](../authentication/README.md) takes care of the other half of the handshake: proving who the server (and client) really is, with post-quantum certificates.
+
+---
+
+**On real hardware:** [TLS on Cisco IOS XE](../../../deploy/ios-xe/tls.md) is the shortest
+doc in Stage 2, and that says something. The same `X25519MLKEM768` you just negotiated in two
+containers is refused by the router's own HTTPS management server, which still only offers
+classical curves. A general-purpose TLS library versus a purpose-built embedded one.

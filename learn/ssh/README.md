@@ -95,7 +95,7 @@ SSH negotiates its key exchange as a **named algorithm** in the cleartext `KEXIN
 - **ML-KEM-768** ([FIPS 203](https://csrc.nist.gov/pubs/fips/203/final)) has no known quantum attack but is newer.
 - **`mlkem768x25519-sha256`** combines them. If either holds, the session is safe.
 
-There is a useful contrast with IKEv2. IKEv2 needed a whole extra round trip (`IKE_INTERMEDIATE`, RFC 9370) to carry ML-KEM's big payloads. SSH does not: the client's X25519 public key **and** its ML-KEM-768 encapsulation key ride together in the *same* init msg, and the server's reply carries its X25519 key **and** the ML-KEM ciphertext in one reply. Same two messages a classical handshake uses, just bigger, exactly like TLS. You will measure that in [Exercise 2](#exercise-2-prove-it-on-the-wire-then-watch-a-downgrade).
+There is a useful contrast with IKEv2. IKEv2 needed a whole extra round trip (`IKE_INTERMEDIATE`, RFC 9370) to carry ML-KEM's big payloads. SSH does not: the client's X25519 public key **and** its ML-KEM-768 encapsulation key ride together in the *same* init msg, and the server's reply carries its X25519 key **and** the ML-KEM ciphertext in one reply. Same two messages a classical handshake uses, just bigger, exactly like TLS. You will measure that in [Exercise 2](#exercise-2-on-the-wire).
 
 | | X25519 | ML-KEM-768 | contribution to the SSH message |
 |-|--------|-----------|---------------------------------|
@@ -116,7 +116,7 @@ ML-DSA ([FIPS 204](https://csrc.nist.gov/pubs/fips/204/final)) is a lattice-base
 | Public-key blob (SSH wire) | 51 B | 1383 B | ~27x |
 | Host-key signature (SSH wire) | 83 B | 2523 B | ~30x |
 
-That is the whole trade you will see in [Exercise 3](#exercise-3-post-quantum-authentication-composite-ml-dsa): a few dozen bytes become a few kilobytes.
+That is the whole trade you will see in [Exercise 3](#exercise-3-post-quantum-authentication): a few dozen bytes become a few kilobytes.
 
 > **This one is genuinely on the frontier.** The composite type is **experimental** in OpenSSH 10.4, **off by default**, and tracks an *individual* Internet-Draft (`draft-miller-sshm-mldsa44-ed25519-composite-sigs`), not a ratified standard. Competing drafts propose *pure* ML-DSA (`ssh-mldsa44/65/87`, `draft-sfluhrer`/`draft-rpe`) and other composites (`draft-sun`, `draft-josefsson`); which wins is not settled. The older [OQS-OpenSSH](https://openquantumsafe.org/applications/ssh.html) fork (Dilithium/Falcon/SPHINCS+) is archived and research-only. So this is a *hands-on preview*, not a production recommendation, exactly the "the crypto is ready, the protocol plumbing is still settling" caveat you saw in the IKEv2 and MACsec labs.
 
@@ -145,9 +145,9 @@ Here is the plan: we run one SSH handshake and look at its two independent halve
 
 So:
 
-- **[Exercise 1](#exercise-1-post-quantum-key-exchange-on-by-default)**: connect and see hybrid `mlkem768x25519-sha256` negotiated with zero config.
-- **[Exercise 2](#exercise-2-prove-it-on-the-wire-then-watch-a-downgrade)**: capture the handshake, prove the key exchange in the cleartext bytes and measure ML-KEM's size cost, then connect to a classical-only server and watch SSH downgrade *and warn you*.
-- **[Exercise 3](#exercise-3-post-quantum-authentication-composite-ml-dsa)**: reissue the host and user keys as composite **`mldsa44-ed25519`**, prove both ends authenticate with a post-quantum signature, and measure the size cost on the wire.
+- **[Exercise 1](#exercise-1-post-quantum-key-exchange)**: connect and see hybrid `mlkem768x25519-sha256` negotiated with zero config.
+- **[Exercise 2](#exercise-2-on-the-wire)**: capture the handshake, prove the key exchange in the cleartext bytes and measure ML-KEM's size cost, then connect to a classical-only server and watch SSH downgrade *and warn you*.
+- **[Exercise 3](#exercise-3-post-quantum-authentication)**: reissue the host and user keys as composite **`mldsa44-ed25519`**, prove both ends authenticate with a post-quantum signature, and measure the size cost on the wire.
 
 ### Topology
 
@@ -164,10 +164,10 @@ Both idle on startup; you drive `sshd` and `ssh` by hand via `docker exec` (like
 
 ### Build and start
 
-Everything runs **locally on your workstation**. Clone the repo and run all commands from the `ssh/` directory:
+Everything runs **locally on your workstation**. Clone the repo and run all commands from the `learn/ssh/` directory:
 
 ```bash
-cd ssh
+cd learn/ssh
 ```
 
 ```bash
@@ -191,7 +191,7 @@ ssh-server   Up
 ssh-client   Up
 ```
 
-The `keygen` step mints two key pairs and installs them: an **Ed25519 host key** for the server plus a **user key** whose public half becomes the server's sole `authorized_keys` entry, and a `known_hosts` on the client that **pins** the server's host key (so host verification actually checks the key rather than trusting on first use). We start with classical **Ed25519** so the *authentication* half has a clean classical baseline; [Exercise 3](#exercise-3-post-quantum-authentication-composite-ml-dsa) reissues these as composite `mldsa44-ed25519` with a single command.
+The `keygen` step mints two key pairs and installs them: an **Ed25519 host key** for the server plus a **user key** whose public half becomes the server's sole `authorized_keys` entry, and a `known_hosts` on the client that **pins** the server's host key (so host verification actually checks the key rather than trusting on first use). We start with classical **Ed25519** so the *authentication* half has a clean classical baseline; [Exercise 3](#exercise-3-post-quantum-authentication) reissues these as composite `mldsa44-ed25519` with a single command.
 
 ---
 
@@ -225,7 +225,7 @@ debug1: kex: host key algorithm: ssh-ed25519
 debug1: kex: server->client cipher: chacha20-poly1305@openssh.com MAC: <implicit> compression: none
 debug1: Server host key: ssh-ed25519 SHA256:...
 debug1: Host 'ssh-server' is known and matches the ED25519 host key.
-Authenticated to ssh-server ([172.23.0.2]:22) using "publickey".
+Authenticated to ssh-server ([172.24.0.2]:22) using "publickey".
 AUTH_OK
 ```
 
@@ -392,7 +392,7 @@ The key exchange is done, and it was the easy half. Now the *identity* proof. So
 
 **Step 1: Reissue the keys as composite ML-DSA-44**
 
-`docker compose` is a **host** command, so run this in a **third terminal** on the host, from the `ssh/` directory. It reruns the same `keygen` helper, this time asking for the composite type:
+`docker compose` is a **host** command, so run this in a **third terminal** on the host, from the `learn/ssh/` directory. It reruns the same `keygen` helper, this time asking for the composite type:
 
 ```bash
 # third terminal, on the host, from the ssh/ directory
@@ -450,7 +450,7 @@ ssh -F /cfg/ssh_config -o HostKeyAlgorithms=$ALG -o PubkeyAcceptedAlgorithms=$AL
 debug1: kex: algorithm: mlkem768x25519-sha256
 debug1: kex: host key algorithm: ssh-mldsa44-ed25519@openssh.com
 debug1: Server accepts key: /cfg/id_key MLDSA44-ED25519 SHA256:... explicit
-Authenticated to ssh-server ([172.23.0.2]:22) using "publickey".
+Authenticated to ssh-server ([172.24.0.2]:22) using "publickey".
 PQ_AUTH_OK
 ```
 
@@ -502,7 +502,7 @@ There is the composite host key (**1383 B**) and its signature (**2523 B**) sitt
 
 ### Cleanup
 
-`docker compose` is a **host** command, so run this from the **third terminal** on the host, from the `ssh/` directory:
+`docker compose` is a **host** command, so run this from the **third terminal** on the host, from the `learn/ssh/` directory:
 
 ```bash
 docker compose down
@@ -514,3 +514,11 @@ rm -f config/server/ssh_host_key config/server/ssh_host_key.pub config/server/au
 ---
 
 That is it. You watched a real SSH handshake negotiate hybrid ML-KEM key exchange with **zero configuration**, proved it in the cleartext bytes and measured its exact size cost, saw a downgrade get caught **out loud**, and then turned on a brand-new composite ML-DSA-44 signature to make **both** the server and yourself authenticate post-quantum. Key exchange on by default, authentication on the frontier: that split is the whole state of post-quantum SSH today. Well done!
+
+---
+
+**On real hardware:** [SSH on Cisco IOS XE](../../deploy/ios-xe/ssh.md) shows that same
+split with the dial turned one notch back. The hybrid KEX is one config line and you can
+prove it from your own laptop, but the composite ML-DSA keys you just generated have no
+counterpart on the router. The Internet-Draft behind them is not an RFC, and no vendor
+ships it.

@@ -11,6 +11,7 @@
 # Both idle on startup; the reader drives sshd/ssh by hand via `docker exec`
 # (like hostapd/wpa_supplicant in the MACsec lab), so the exercises can capture,
 # edit config, and reconnect freely.
+name: pqc-ssh
 services:
   ssh-server:
     build:
@@ -23,7 +24,7 @@ services:
       - ./config/server:/cfg
     networks:
       ssh_net:
-        ipv4_address: 172.23.0.2
+        ipv4_address: 172.24.0.2
 
   ssh-client:
     build:
@@ -35,7 +36,7 @@ services:
       - ./config/client:/cfg
     networks:
       ssh_net:
-        ipv4_address: 172.23.0.3
+        ipv4_address: 172.24.0.3
     depends_on:
       - ssh-server
 
@@ -62,4 +63,4 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.23.0.0/24
+        - subnet: 172.24.0.0/24

@@ -1,40 +1,49 @@
 # Superseded original key-exchange writeup, kept locally but not published
 README.legacy.md
 
+# Presenter-only material (slide deck build tooling, speaker notes, runbook) and
+# the demo notebook — not part of the published two-stage journey
+presentation/
+notebook/
+
 # Packet captures generated during lab exercises
 *.pcap
 *.pcapng
 
+# --- Stage 1: learn (container labs) ---
+
 # Generated lab credentials (CA + leaf keys/certs) for the IKEv2 mutual-auth lab.
 # Never commit private keys; these are produced at runtime by gen-certs.sh.
-ipsec/authentication/config/*/private/
-ipsec/authentication/config/*/x509/
-ipsec/authentication/config/*/x509ca/
+learn/ipsec/authentication/config/*/private/
+learn/ipsec/authentication/config/*/x509/
+learn/ipsec/authentication/config/*/x509ca/
 
 # Generated lab credentials for the TLS authentication lab (CA + server/client
 # keys/certs), produced at runtime by gen-certs.sh. Never commit private keys.
-tls/authentication/config/*/*.crt
-tls/authentication/config/*/*.key
+learn/tls/authentication/config/*/*.crt
+learn/tls/authentication/config/*/*.key
 
 # Generated lab credentials for the MACsec EAP-TLS lab (CA + server/client
 # certs and keys), produced at runtime by gen-certs.sh into each role's config
 # dir. The .conf and eap_user files are tracked; only the crypto material isn't.
-macsec/config/*/*.crt
-macsec/config/*/*.key
+learn/macsec/config/*/*.crt
+learn/macsec/config/*/*.key
 
 # Generated lab credentials for the SSH lab (host key + user key + the derived
 # authorized_keys / known_hosts), produced at runtime by gen-keys.sh into each
 # role's config dir. The *_config files are tracked; only the key material isn't.
-ssh/config/server/ssh_host_key
-ssh/config/server/ssh_host_key.pub
-ssh/config/server/authorized_keys
-ssh/config/client/id_key
-ssh/config/client/id_key.pub
-ssh/config/client/known_hosts
+learn/ssh/config/server/ssh_host_key
+learn/ssh/config/server/ssh_host_key.pub
+learn/ssh/config/server/authorized_keys
+learn/ssh/config/client/id_key
+learn/ssh/config/client/id_key.pub
+learn/ssh/config/client/known_hosts
 
 # Python bytecode cache from the module-lattices lab scripts
 __pycache__/
 *.pyc
+
+# --- Stage 2: deploy (real hardware) ---
 
 # Editor / OS cruft
 .cursor/

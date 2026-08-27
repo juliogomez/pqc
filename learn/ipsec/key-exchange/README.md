@@ -204,10 +204,10 @@ Enough theory, let's run it. Here's the plan:
 
 ### Build and start
 
-Everything in this lab runs **locally on your own workstation**. The two VPN peers are just Docker containers on your machine talking to each other over a private Docker bridge network; there's no cloud, no remote server, and no special hardware involved. If you have Docker installed, you have everything you need. Clone the repo, and run all commands in this lab from the `ipsec/key-exchange/` directory, so hop in first:
+Everything in this lab runs **locally on your own workstation**. The two VPN peers are just Docker containers on your machine talking to each other over a private Docker bridge network; there's no cloud, no remote server, and no special hardware involved. If you have Docker installed, you have everything you need. Clone the repo, and run all commands in this lab from the `learn/ipsec/key-exchange/` directory, so hop in first:
 
 ```bash
-cd ipsec/key-exchange
+cd learn/ipsec/key-exchange
 ```
 
 ```bash
@@ -835,7 +835,7 @@ This time it fails: the mismatched PPK changes `SK_pi`/`SK_pr`, so the responder
 initiate failed: establishing CHILD_SA 'pqc-child' failed
 ```
 
-One bit of housekeeping: because `config/` is bind-mounted into the containers (see `docker-compose.yml`), the edits you made with `vi` were written straight to your cloned repo files (not just the container), so they persist after teardown. No need to un-edit them by hand, though: since those files are tracked by git, one command snaps both peers' `swanctl.conf` back to the shipped state. First `exit` any container shells you're still in, then run this from your **host**, in the `ipsec/key-exchange/` directory (not inside a container, there's no git there):
+One bit of housekeeping: because `config/` is bind-mounted into the containers (see `docker-compose.yml`), the edits you made with `vi` were written straight to your cloned repo files (not just the container), so they persist after teardown. No need to un-edit them by hand, though: since those files are tracked by git, one command snaps both peers' `swanctl.conf` back to the shipped state. First `exit` any container shells you're still in, then run this from your **host**, in the `learn/ipsec/key-exchange/` directory (not inside a container, there's no git there):
 
 ```bash
 exit          # leave the container shell if you're still in one
@@ -866,4 +866,11 @@ docker compose down
 `docker compose down` stops and removes the containers and the `pqc_net` bridge network. The built images are kept, so the next `docker compose up -d` starts immediately without rebuilding.
 
 And that's it. You stood up a hybrid post-quantum VPN tunnel, captured it, and showed, with your own packets, that quantum-safe IKEv2 is both practical and cheap. From here, go explore your own integrations and use cases.
+
+---
+
+**On real hardware:** [IPsec on Cisco IOS XE](../../../deploy/ios-xe/ipsec.md) runs this
+same progression on three C8000 routers. Both the ML-KEM hybrid and the RFC 8784 PPK you
+just used ship today, and the doc adds a phased hub-and-spoke migration you can't stage
+with two containers. Next lab: [IPsec authentication](../authentication/README.md).
 
