@@ -12,9 +12,9 @@ platform can do, and which `show` command tells you the truth when two of them d
 
 ### IOS XE on Cisco 8000 Secure Routers
 
-Start with the [IOS XE platform guide](ios-xe/README.md). It has the lab topology,
-the per-protocol lab links, and a summary table showing exactly which PQ features work
-today and which are roadmap. Read that first to understand the scope,
+Start with the [topology, feature status, and reading order](ios-xe/README.md). It has
+the lab topology, the per-protocol lab links, and a summary table showing exactly which
+PQ features work today and which are roadmap. Read that first to understand the scope,
 then dive into whichever protocol you care about:
 [IPsec](ios-xe/ipsec.md) · [SSH](ios-xe/ssh.md) · [MACsec](ios-xe/macsec.md) · [TLS](ios-xe/tls.md).
 

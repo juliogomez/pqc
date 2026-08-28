@@ -10,7 +10,7 @@ the same RFCs meet Cisco's CLI, licensing, and platform capabilities.
 
 Two stages, in order:
 
-- **[Stage 1 - Learn](learn/README.md)**: five hands-on labs with containers and real packet captures. No hardware required, nothing to loose, break and rerun as often as you like.
+- **[Stage 1 - Learn](learn/README.md)**: hands-on labs with containers and real packet captures. No hardware required, nothing to loose, break and rerun as often as you like.
 - **[Stage 2 - Deploy](deploy/README.md)**: the same protocols on Cisco routers.
 
 ---
@@ -57,11 +57,10 @@ See [the full lab guide](learn/README.md) for the recommended order, timing, and
 
 ## Stage 2 - Deploy on Cisco hardware
 
-Same protocols, same RFCs, on Cisco devices you use in your network. Currently covered:
-Cisco 8000 Series Secure Routers on IOS XE 26.1 (IPsec, SSH, MACsec, TLS).
+Same protocols, same RFCs, on Cisco devices you use in your network.
 
-See [the deploy guide](deploy/ios-xe/README.md) for the platform overview, topology, and
-per-protocol status.
+See [the deploy guide](deploy/README.md) for the platforms covered and how to navigate the
+docs without hardware.
 
 ## What changes when you leave the lab
 
