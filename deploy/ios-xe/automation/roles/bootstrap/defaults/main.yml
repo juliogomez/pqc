@@ -14,11 +14,10 @@
 bootstrap_netconf_wait_seconds: 300
 bootstrap_netconf_poll_seconds: 15
 
-# Whether to enable RESTCONF alongside NETCONF. Nothing in this layer drives
-# RESTCONF, but it costs one line and it is the other half of the standards story
-# (RFC 8040 over the same YANG), so it is on by default.
+# Whether to enable RESTCONF alongside NETCONF. Nothing in this layer uses
+# RESTCONF; leave this false unless you want it for your own tooling.
 #
 # Worth recording because the 26.1 research said otherwise: neither netconf-yang
 # nor restconf needs "system mode insecure" on 26.2. Verified on a box that has
 # no such line.
-bootstrap_enable_restconf: true
+bootstrap_enable_restconf: false

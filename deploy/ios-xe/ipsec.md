@@ -351,13 +351,40 @@ The name for the keys will be: PROBE-MLDSA65
 So 26.2 will happily mint you an ML-DSA-44, 65 or 87 key on the box, non-exportable by
 default, and `crypto key zeroize mldsa <label>` removes it again.
 
-The certificate that wraps this key comes from outside the router. You build the CA on your
-workstation with OpenSSL 3.5+ and import the result as a
-[PKCS#12 bundle](https://www.rfc-editor.org/rfc/rfc7292), a single password-encrypted file
-that carries the private key, its certificate and the issuing CA chain together. That's the
-path verified end to end on this hardware.
-[automation/DESIGN.md](automation/DESIGN.md#q1-the-ml-dsa-certificate-path) has the full
-experiment written up.
+Full syntax: `crypto key generate mldsa param {44|65|87} [label WORD] [exportable]`.
+
+### Two paths from "key exists" to "ML-DSA tunnel is up"
+
+Having a key is not the same as having a certificate. This repo uses **two different
+enrollment paths** to get from "ML-DSA works on the box" to "ML-DSA IKEv2 tunnel is up".
+They end in the same place on the wire; they do not use the same private key.
+
+| | This exercise | [Automation lab](automation/README.md) |
+|---|---|---|
+| **Identity private key born** | On your workstation | On the router |
+| **How the cert arrives** | PKCS#12 import (`crypto pki import`) | On-box CSR, signed by an external OpenSSL ML-DSA CA (your laptop) |
+| **Why this path** | Fewest steps at three consoles; keeps the exercise focused on tunnels and handshake size | Repeatable and idempotent, private key never leaves the router |
+| **Trade-off** | The bundle carries a key that was not born on the router | CA private key lives on your laptop / CA (`.lab-ca/`) |
+
+The probe key above (`PROBE-MLDSA65`) is there to show the platform capability. **This
+exercise does not enroll that key.** It imports a separate identity from
+[`gen-mldsa-certs.sh`](mldsa-certs/gen-mldsa-certs.sh). The [automation role](automation/README.md)
+generates a fresh on-box key per router and runs the CSR path documented in
+[`automation/DESIGN.md`](automation/DESIGN.md#q1-the-ml-dsa-certificate-path).
+
+#### This exercise: PKCS#12 import
+
+[gen-mldsa-certs.sh](mldsa-certs/gen-mldsa-certs.sh) defines a root CA per parameter set on
+your laptop, an identity certificate for each router, and a PKCS#12 bundle to import in one
+shot. It's the quickest way to get three routers holding ML-DSA identities on this hardware.
+
+#### Automation: on-box key + external ML-DSA CA
+
+The Ansible playbook (`ipsec-pq-mldsa.yml`) does not import PKCS#12. Each router generates
+its own ML-DSA key, issues a PKCS#10 CSR, and the playbook signs it with an OpenSSL ML-DSA
+CA on your laptop. Only public material crosses the wire. See
+[DESIGN.md](automation/DESIGN.md#two-workable-paths-and-why-the-external-ca-won) for why that
+beat the alternative (a local IOS CA, which can only sign the leaf with RSA).
 
 ### Build the PKI
 

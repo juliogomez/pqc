@@ -125,19 +125,18 @@ interests you.
 
 | Doc | What you do |
 |-----|-------------|
-| [**IPsec**](ipsec.md) | Classical baseline, RFC 8784 PPK, native ML-KEM-768 hybrid, a phased hub-and-spoke migration, then ML-DSA certificate authentication and what it costs on the wire |
+| [**IPsec**](ipsec.md) | Classical baseline, PPK, native ML-KEM hybrid, a phased hub-and-spoke migration, then ML-DSA certificate authentication and what it costs on the wire |
 | [**SSH**](ssh.md) | Enable a PQ hybrid KEX on the SSH server and prove it from your laptop |
 | [**MACsec**](macsec.md) | PSK-based MKA end to end, then EAP-TLS with ML-KEM on a local CA (no RADIUS needed) |
 | [**TLS**](tls.md) | Prove the management HTTPS server is already negotiating hybrid PQ key exchange, and steer it |
 
-Everything in those docs was run and verified on real hardware.
+Everything in these docs has been run and verified on real hardware.
 
 ## Automation
 
 The same four protocols exist as Ansible playbooks over NETCONF. Start with
-[`automation/README.md`](automation/README.md) for what to install, what to run, and what
-goes wrong; [`automation/DESIGN.md`](automation/DESIGN.md) if you want the YANG-vs-CLI
-accounting. Do the CLI docs first so a failed assertion makes sense when you see it.
+[`automation/README.md`](automation/README.md) for what to install and how to run it;
+[`automation/DESIGN.md`](automation/DESIGN.md) if you want the YANG-vs-CLI reasons.
 
 ## Support summary
 
@@ -155,46 +154,12 @@ accounting. Do the CLI docs first so a failed assertion makes sense when you see
 | TLS | Key exchange | ML-KEM-768 hybrid for mgmt HTTPS | Working |
 | TLS | Authentication | ML-DSA certificate auth | Not available |
 
-### Where ML-DSA keys come from
+### ML-DSA keys and certificates
 
-The router generates them itself. That's a genuine security improvement over minting the key on a workstation and importing it. IOS XE 26.2 supports `crypto key generate mldsa` with `crypto key generate` as an *exec-mode* command (not _config-mode_):
-
-```
-R1# crypto key generate ?
-  ec     Generate EC keys for ECDSA
-  mldsa  Generate ML-DSA keys
-  rsa    Generate RSA keys
-```
-
-For example:
-
-```
-R1# crypto key generate mldsa param 65 label PROBE-MLDSA65
-The name for the keys will be: PROBE-MLDSA65
-% Generating MLDSA-65 keys, keys will be non-exportable...[OK] (elapsed time was 0 seconds)
-
-R1# show crypto key mypubkey all
-Key name: PROBE-MLDSA65
-Key type: ML-DSA-65 KEYS
-```
-
-Full syntax is `crypto key generate mldsa param {44|65|87} [label WORD] [exportable]`, and
-`crypto key zeroize mldsa <label>` takes it back out. Keys are non-exportable unless you ask,
-which is the right default for an identity key.
-
-
-### Getting the certificate onto the router
-
-Having the key is not the same as having a certificate. The key lives on the router; the
-certificate wrapping it comes from an external CA you build on your workstation with
-OpenSSL 3.5+.
-
-[gen-mldsa-certs.sh](mldsa-certs/gen-mldsa-certs.sh) is the script the
-[ML-DSA exercise](ipsec.md#exercise-5-ml-dsa-certificate-authentication) walks
-through: a root CA per parameter set, an identity certificate for each router, and a PKCS#12
-bundle to import. It's the quickest way to get three routers holding ML-DSA identities,
-and the path verified end to end on this hardware. The trade-off is clear: that
-bundle carries a private key that was born on your workstation, not on the router.
+ML-DSA authentication is live for IPsec/IKEv2 only on 26.2. The
+[IPsec doc](ipsec.md#two-paths-from-key-exists-to-ml-dsa-tunnel-is-up) covers platform
+keygen, 2 different enrollment paths (PKCS#12 import for the IPsec lab,
+on-box CSR for the IPsec automation lab), and what the signatures cost on the wire.
 
 ## The configs
 
@@ -242,11 +207,11 @@ Not everything should be reverted.
 
 `ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256` is the pin that stops the ECDSA
 lockout described in [ssh.md](ssh.md#watch-out-importing-an-ec-keypair-can-lock-you-out). If
-you remove it while an ECDSA trustpoint still exists you can lock yourself out again, so
+you remove it while an ECDSA trustpoint still exists you can lock yourself out, so
 drop the trustpoints first, or just leave the pin in place. It costs nothing.
 
 `ip ssh server algorithm kex mlkem768x25519-sha256 ...` is the whole point of the SSH doc,
-and hybrid ML-KEM KEX is strictly better than what the box shipped with. Keep it. If you
+and hybrid ML-KEM KEX is a perfectly fine config. Keep it. If you
 want the default back anyway, `no ip ssh server algorithm kex`.
 
 ### Confirm everything's clean
@@ -259,14 +224,6 @@ show access-session                     ! expect no sessions
 show crypto pki trustpoints | include Trustpoint
 show run | include pqc-type|monitor capture
 ```
-
-### Troubleshooting
-
-**`mldsakeypair` won't parse.** On some early 26.2.x images the ML-DSA trustpoint CLI is
-gated behind `service internal`. That gate should disappear at GA. See
-[Things that will bite you](ipsec.md#things-that-will-bite-you) in the IPsec doc for the
-symptom and the one-session workaround. If you enabled it during a lab run, take it back
-out with `no service internal` before you walk away.
 
 ### On your workstation
 

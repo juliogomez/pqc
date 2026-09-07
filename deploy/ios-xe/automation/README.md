@@ -4,8 +4,7 @@ Everything in the four protocol docs ([IPsec](../ipsec.md), [SSH](../ssh.md),
 [MACsec](../macsec.md), [TLS](../tls.md)), pushed as structured data over NETCONF instead of
 typed at three consoles.
 
-This is the operator guide: what to install, what to fill in, what to run in what order, and
-what goes wrong. If you want to know *why* it's built this way, and where it stops being
+This is the operator guide: what to install, what to fill in, and what to run in what order. If you want to know *why* it's built this way, and where it stops being
 standards-based, read [DESIGN.md](DESIGN.md) instead.
 
 **Do the CLI docs first.** These playbooks are for after you understand what the commands do,
@@ -13,9 +12,8 @@ not instead of understanding them. A failed assertion here is a lot easier to re
 seen the `show` output it's checking.
 
 **No hardware? No worries.** [`captured/`](captured/) is the real output of running all of this on three
-C8235-G2s: every unit applied, asserted, re-run for `changed=0` and torn down, plus the
-operational evidence and the things that went wrong.
-[`captured/README.md`](captured/README.md) indexes it. Credentials are scrubbed.
+C8235-G2s: every unit applied, asserted, re-run for idempotency and torn down.
+
 
 ## Prerequisites
 
@@ -30,9 +28,7 @@ Checking which tier you're on is easy with `show license summary`, or
 **Basic connectivity is a requirement and it is not automated.** VLANs, SVIs, addresses and
 routing have to exist before you run anything here. Build them from
 [Set up the underlay](../README.md#set-up-the-underlay) or from
-[`device-configs/`](../device-configs/). Nothing in this directory configures an SVI, an
-access VLAN or a static route, on purpose: automating the underlay would mean owning the
-thing you'd need working in order to fix a mistake.
+[`device-configs/`](../device-configs/). 
 
 Verify it yourself before going further:
 
@@ -42,10 +38,9 @@ R1# traceroute 10.0.23.2
   2 10.0.23.2 4 msec 0 msec *
 ```
 
-You also want SSH reachability from wherever you run `ansible-playbook` to all three
+You also want SSH reachability from wherever you run Ansible to all three
 management addresses, and an authoritative clock on every router. The PKI units refuse to run
-without the clock, and they're right to: a CA whose clock was never set takes your passphrase
-and then refuses to start.
+without the clock, and they're right to: a CA whose clock was never set does not start.
 
 ```
 R1# show clock
@@ -79,7 +74,7 @@ Two extra things, only if you're running specific units:
 
 ## Fill in `lab.yml`
 
-The inventory goes in a file you create:
+The inventory goes in a template file you need to fill:
 
 ```bash
 cp group_vars/all/lab.yml.example group_vars/all/lab.yml
@@ -92,10 +87,9 @@ example template.
 What you need to put in there: the three management addresses, the device login and enable password, the
 IKEv2 pre-shared key, the RFC 8784 PPK as hex, the MACsec CAK as 64 hex characters, and the
 passphrase for the local IOS CA. Every value shipped in the example is a throwaway lab value,
-exactly like the ones printed in the protocol docs. Generate your own with
-`openssl rand -hex 32` and don't reuse any of them anywhere you care about.
+exactly like the ones printed in the protocol docs. Generate your own and don't reuse any of them anywhere you care about.
 
-The other three files in `group_vars/all/` are tracked and you probably won't touch them:
+The other three files in `group_vars/all/` are tracked and you probably won't need to touch them:
 
 | File | What it holds |
 |---|---|
@@ -109,8 +103,9 @@ The other three files in `group_vars/all/` are tracked and you probably won't to
 ansible-playbook bootstrap.yml
 ```
 
-This is the only unit that runs over SSH CLI, and it has to be because it's turning on NETCONF. You can't configure the transport over the transport...  :)  
-So it uses `cisco.ios.ios_config` to push "netconf-yang" (and "restconf" because it costs nothing), then waits, then
+This is the only unit that runs over SSH CLI, and it has to because it's turning on NETCONF. You can't configure the transport over the transport...  :)  
+
+So it uses `cisco.ios.ios_config` to push `netconf-yang`, then waits, then
 opens a real NETCONF session and fetches the IKEv2 config subtree to prove the subsystem
 actually answers.
 
@@ -127,9 +122,6 @@ If you ever wanna disable it:
 ansible-playbook bootstrap.yml -e state=absent
 ```
 
-That removes the transport every other playbook here needs, so re-run `bootstrap.yml` before
-anything else.
-
 ## How the lab is organized
 
 Two big tracks, **no dependency between them**:
@@ -137,7 +129,7 @@ Two big tracks, **no dependency between them**:
 | Track | Where it runs | Jump to |
 |---|---|---|
 | **IPsec** | Hub-and-spoke overlay tunnels (r1, r2, r3) | [IPsec playbooks](#ipsec) |
-| **MACsec** | R1↔R2 physical link (`Tw0/0/0` / Vlan12) | [MACsec playbooks](#macsec) |
+| **MACsec** | R1-R2 physical link | [MACsec playbooks](#macsec) |
 
 You only need `bootstrap.yml` and `lab.yml` for either track. IPsec needs the full underlay
 between all three routers; MACsec needs the R1–R2 link up. No IPsec playbook is required
@@ -156,12 +148,12 @@ The MACsec chain mirrors the IPsec PQ fork, but the mechanisms are not identical
 strength in a secret you distribute out of band. The difference is how much negotiation still
 happens:
 
-- **PPK:** IKE still runs classical DH, and the PPK is **mixed with** the exchanged key. An attacker with the recording of that handshake cannot decrypt traffic without the PPK.
+- **IPsec PPK:** IKE still runs classical DH, and the PPK is **mixed with** the exchanged key. An attacker with the recording of that handshake cannot decrypt traffic without the PPK.
 - **MACsec PSK:** there is **no handshake** on this path. Both ends already hold the CAK;
   MKA derives MACsec keys from it. Nothing negotiated can be recorded and used by an attacker.
 
 **Path B:** classical ECDHE in the handshake, then ML-KEM layered on top. EAP-TLS also
-carries certificate identity in that handshake; IPsec keeps authentication as a separate
+carries certificate identity in that handshake. IPsec keeps authentication as a separate
 fork (PSK → ML-DSA).
 
 ## The 9 units

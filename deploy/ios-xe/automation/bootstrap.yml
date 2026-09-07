@@ -1,5 +1,5 @@
 ---
-# Enable NETCONF (RFC 6241) and RESTCONF (RFC 8040) on all three routers.
+# Enable NETCONF (RFC 6241) on all three routers.
 #
 # Run this once, first. Everything else in this directory assumes port 830
 # answers.

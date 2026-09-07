@@ -26,9 +26,8 @@ doesn't, discovered after troubleshooting a week later.
 ## What do I mean by "standards-based"
 
 The **transport** is standard. NETCONF ([RFC 6241](https://www.rfc-editor.org/rfc/rfc6241))
-over SSH on port 830, and RESTCONF ([RFC 8040](https://www.rfc-editor.org/rfc/rfc8040)) over
-HTTPS, both carrying YANG-modelled data. `bootstrap.yml` turns both on. Every configuration
-change in the layer is an `<edit-config>` against the running datastore, with
+over SSH on port 830, carrying YANG-modelled data. `bootstrap.yml` turns that on. Every
+configuration change in the layer is an `<edit-config>` against the running datastore, with
 `:rollback-on-error` so a payload that fails half way leaves the box as it was.
 
 The **content** is native `Cisco-IOS-XE-*` YANG. Not OpenConfig, not any other

@@ -288,7 +288,7 @@ file looks like it is missing something, it is missing a blob, not a finding.
 
 Stated plainly, because a gap you know about is worth more than one you find later.
 
-- **No `bootstrap.yml` log.** Running it means pushing `netconf-yang` and `restconf`, and
+- **No `bootstrap.yml` log.** Running it means pushing `netconf-yang`, and
   the transport was off limits during the close-out run. The unit is proven elsewhere:
   every NETCONF task in every log here only works because bootstrap already ran.
 - **No `ipsec-baseline` build log**, as covered above.

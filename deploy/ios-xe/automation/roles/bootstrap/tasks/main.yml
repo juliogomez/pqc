@@ -13,7 +13,7 @@
   when: state == 'present'
   block:
 
-    - name: Enable netconf-yang and restconf
+    - name: Enable netconf-yang{{ bootstrap_enable_restconf | bool | ternary(' and restconf', '') }}
       cisco.ios.ios_config:
         lines: "{{ ['netconf-yang'] + (bootstrap_enable_restconf | bool | ternary(['restconf'], [])) }}"
       register: bootstrap_transport
@@ -84,7 +84,7 @@
           Every other playbook here needs NETCONF, so re-run bootstrap.yml before
           you run anything else.
 
-    - name: Disable netconf-yang and restconf
+    - name: Disable netconf-yang{{ bootstrap_enable_restconf | bool | ternary(' and restconf', '') }}
       cisco.ios.ios_config:
         lines: "{{ ['no netconf-yang'] + (bootstrap_enable_restconf | bool | ternary(['no restconf'], [])) }}"
 
