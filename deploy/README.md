@@ -17,7 +17,7 @@ Start with the [topology, feature status, and reading order](ios-xe/README.md). 
 the lab topology, the per-protocol lab links, and a summary table showing exactly which
 PQ features work on 26.2 and which don't. Read that first to understand the scope,
 then dive into whichever protocol you care about:
-[IPsec](ios-xe/ipsec.md) · [TLS](ios-xe/tls.md) · [MACsec / 802.1X](ios-xe/macsec.md) · [SSH](ios-xe/ssh.md).
+[IPsec](ios-xe/ipsec.md) · [SSH](ios-xe/ssh.md) · [MACsec](ios-xe/macsec.md) · [TLS](ios-xe/tls.md).
 
 ## Reading these docs without the hardware
 

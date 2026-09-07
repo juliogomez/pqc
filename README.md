@@ -2,7 +2,7 @@
 
 **Learn it in containers. Deploy it on real gear.**
 
-The security protocols you already run (IPsec, TLS, MACsec / 802.1X, SSH) all need to go
+The security protocols you already run (IPsec, TLS, MACsec, SSH) all need to go
 post-quantum, and that migration is happening now, one piece of the handshake at a time.
 This repo takes you through it twice: first in throwaway containers on your laptop, where
 you can capture the packets and break things for free, then on real Cisco routers, where
@@ -50,17 +50,10 @@ pillars. Once you see the pattern in one protocol, the others click fast.
 ## Stage 1 - Learn
 
 Spin up containers, capture real packets, measure the trade-offs with your own eyes. Four
-protocol families (IPsec, TLS, MACsec / 802.1X, SSH), each taken post-quantum one pillar at a time,
+protocol families (IPsec, TLS, MACsec, SSH), each taken post-quantum one pillar at a time,
 plus an optional deep-dive into the lattice math behind it all.
 
-| Protocol | What you learn |
-|----------|----------------|
-| [**IPsec**](learn/README.md#ipsec-layer-3-vpns) | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
-| [**TLS 1.3**](learn/README.md#tls-13-the-webs-secure-channel) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
-| [**MACsec / 802.1X**](learn/README.md#macsec--8021x-layer-2-link-encryption) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
-| [**SSH**](learn/README.md#ssh-secure-remote-access) | PQ key exchange on by default; **loud** downgrade; composite ML-DSA auth |
-
-See [the full lab guide](learn/README.md) for timing, prerequisites, and details.
+See [the full lab guide](learn/README.md) for the recommended order, timing, and details.
 
 ## Stage 2 - Deploy on Cisco hardware
 

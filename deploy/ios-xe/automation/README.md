@@ -1,7 +1,7 @@
 # Automation for Post-quantum IOS XE
 
 Everything in the four protocol docs ([IPsec](../ipsec.md), [SSH](../ssh.md),
-[MACsec / 802.1X](../macsec.md), [TLS](../tls.md)), pushed as structured data over NETCONF instead of
+[MACsec](../macsec.md), [TLS](../tls.md)), pushed as structured data over NETCONF instead of
 typed at three consoles.
 
 This is the operator guide: what to install, what to fill in, what to run in what order, and
