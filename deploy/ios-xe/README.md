@@ -117,18 +117,16 @@ Two hops. R2 is forwarding. You're ready for whichever protocol doc you want.
 
 ## The docs
 
-Once the underlay is in place, pick any doc. They don't depend on each other: IPsec, SSH,
-MACsec, and TLS each stand alone. The order here isn't the same as
-[Stage 1's](../../learn/README.md#recommended-order), and that's fine. In containers each
-lab builds its own world; on hardware you build the underlay once and then run whatever
-interests you.
+Once the underlay is in place, pick any doc. They don't depend on each other. The table
+below follows the same order as [Stage 1's recommended order](../../learn/README.md#recommended-order);
+on hardware you build the underlay once and then run whatever interests you.
 
 | Doc | What you do |
 |-----|-------------|
 | [**IPsec**](ipsec.md) | Classical baseline, RFC 8784 PPK, native ML-KEM-768 hybrid, a phased hub-and-spoke migration, then ML-DSA certificate authentication and what it costs on the wire |
-| [**SSH**](ssh.md) | Enable a PQ hybrid KEX on the SSH server and prove it from your laptop |
-| [**MACsec / 802.1X**](macsec.md) | PSK-based MKA end to end, then EAP-TLS with ML-KEM on a local CA (no RADIUS needed) |
 | [**TLS**](tls.md) | Prove the management HTTPS server is already negotiating hybrid PQ key exchange, and steer it |
+| [**MACsec / 802.1X**](macsec.md) | PSK-based MKA end to end, then EAP-TLS with ML-KEM on a local CA (no RADIUS needed) |
+| [**SSH**](ssh.md) | Enable a PQ hybrid KEX on the SSH server and prove it from your laptop |
 
 Everything in those docs was run and verified on real hardware.
 
