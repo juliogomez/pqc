@@ -1,0 +1,23 @@
+{#
+  Remove one trustpoint, by name, and nothing else.
+
+  /native/crypto/pki/trustpoint[id]
+
+  Separate from the shared pki-trustpoint template on purpose. That one builds; this
+  one destroys, and a destructive payload should be short enough to read in full at a
+  glance. The list key is the only thing in it, so there is no way for this to remove
+  a sibling trustpoint by accident, and the caller has already checked the name
+  against the protected-object patterns.
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <pki xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <trustpoint nc:operation="remove">
+          <id>{{ pki_names.mldsa_trustpoint }}</id>
+        </trustpoint>
+      </pki>
+    </crypto>
+  </native>
+</config>

@@ -14,7 +14,7 @@
 # point-to-point veth is used instead of a Docker bridge. This keeps the lab
 # running on plain Docker with no host-side configuration.
 #
-# The Docker bridge below (macsec_net) carries none of the EAPOL traffic — it
+# The Docker bridge below (macsec_net) carries none of the EAPOL traffic. It
 # only exists so this stack's default network has a pinned, non-overlapping
 # subnet instead of Docker auto-assigning one that could collide with the
 # other labs' pinned subnets (172.20.0.0/24 through 172.24.0.0/24).

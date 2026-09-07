@@ -1,0 +1,171 @@
+---
+# Classical baseline algorithms and object names.
+#
+# Deliberately separate from pqc.yml. This file is the part that is *not* the
+# point: the ordinary IKEv2/IPsec choices you would make on any tunnel in 2026.
+# Keeping it apart means pqc.yml stays readable as a statement of post-quantum
+# intent rather than a pile of crypto config.
+#
+# The algorithm values are YANG leaf names or enum values, not CLI words, because
+# they go straight into the NETCONF payload. Where the two differ the CLI form is
+# in the comment.
+
+# --- IKEv2 proposal ---------------------------------------------------------
+
+# "encryption aes-cbc-256". Leaf of type empty under the proposal's encryption
+# container, so the value is the leaf name.
+ike_encryption: aes-cbc-256
+
+# "integrity sha512". Same shape.
+ike_integrity: sha512
+
+# "group 20" (ECDH P-384). The YANG models DH groups as spelled-out leaf names,
+# so group 20 is the leaf "twenty". Valid: one, two, five, fourteen, fifteen,
+# sixteen, nineteen, twenty, twenty-one, twenty-four.
+#
+# This classical group stays even with ML-KEM enabled. ML-KEM is an *additional*
+# key exchange (RFC 9370), not a replacement, which is what makes the result
+# hybrid.
+ike_dh_group: twenty
+
+# --- IKEv2 profile ----------------------------------------------------------
+
+# "dpd 30 5 periodic". All three are required together: the YANG "must"
+# statements chain interval -> retry -> query.
+ike_dpd_interval: 30
+ike_dpd_retry: 5
+ike_dpd_query: periodic
+
+# Netmask used for "match identity remote address <peer> 255.255.255.255", i.e.
+# match exactly one peer address.
+ike_peer_match_mask: 255.255.255.255
+
+# --- IPsec ------------------------------------------------------------------
+
+# "esp-gcm 256", an AEAD transform, so there is no separate esp-hmac. The YANG
+# splits it into the esp enum plus a key-bit enum.
+ipsec_esp: esp-gcm
+ipsec_key_bits: 256
+
+# "mode tunnel". Modelled as a choice; the tunnel case is a single empty leaf
+# called tunnel-choice.
+ipsec_mode_leaf: tunnel-choice
+
+# --- Object names -----------------------------------------------------------
+#
+# One place to rename everything. The per-peer names are built from the peer name
+# in topology.yml, which is how the hub ends up with PQAUTO-SPOKE-R1 /
+# PQAUTO-IPSEC-R1 and PQAUTO-SPOKE-R3 / PQAUTO-IPSEC-R3 without anyone typing
+# them twice.
+#
+# THE PQAUTO- PREFIX IS A SAFETY MECHANISM, NOT A STYLE CHOICE.
+#
+# Every name in this file is something "-e state=absent" will delete. These same
+# routers carry the objects the hand-driven exercises in ../ipsec.md and
+# ../macsec.md leave behind, and the device configs in ../device-configs/ show
+# exactly what those are. Any name shared between the two means a teardown here
+# destroys the reader's own work.
+#
+# The per-peer IKEv2 and IPsec profiles were the worst case: the hub's hand-built
+# profiles in device-configs/R2-mldsa-hub.txt are called SPOKE-R1, SPOKE-R3,
+# IPSEC-R1 and IPSEC-R3, which is character for character what the old prefixes
+# produced on R2. A build overwrote them and a teardown deleted them.
+#
+# LAB-PROPOSAL, LAB-POLICY, LAB-KEYRING and LAB-TS are left alone: the hand-driven
+# exercises use CLASSICAL-* and HUB-*, so there is nothing to collide with.
+crypto_names:
+  ike_proposal: LAB-PROPOSAL
+  ike_policy: LAB-POLICY
+  ike_keyring: LAB-KEYRING
+  transform_set: LAB-TS
+  # Suffixed with the peer name in upper case, e.g. PQAUTO-SPOKE-R1.
+  ike_profile_prefix: PQAUTO-SPOKE-
+  ipsec_profile_prefix: PQAUTO-IPSEC-
+
+# --- PKI --------------------------------------------------------------------
+
+pki_names:
+  # ML-DSA identity. Trustpoint and on-box key label track the parameter set from
+  # pqc.yml, so switching 65 -> 87 gives you a separate trustpoint and key rather
+  # than silently reusing the old one.
+  #
+  # The PQAUTO- prefix is load-bearing, not decoration. Teardown zeroizes keys and
+  # deletes trustpoints, and it must be able to tell "an object this automation
+  # created" from "an object that was already on the box". These routers are also
+  # used for the hand-driven exercises in ../ipsec.md, which leave TP-MLDSA44/65/87
+  # behind; without a distinct prefix a teardown here would destroy those.
+  mldsa_trustpoint: "PQAUTO-MLDSA{{ pq_signature_param_set }}"
+  mldsa_key_label: "PQAUTO-MLDSA{{ pq_signature_param_set }}"
+  # EAP-TLS identity, enrolled over SCEP against the local CA on the hub. Same
+  # PQAUTO- reasoning as above: macsec.md walks the reader through building a
+  # trustpoint called CA_TP by hand, and device-configs/R1-macsec.txt and
+  # R2-macsec.txt both still carry it. "-e macsec_eaptls_remove_trustpoint=true"
+  # used to delete that one along with its certificate.
+  eaptls_trustpoint: PQAUTO-CA-TP
+  # The local IOS certificate server itself, on the hub.
+  #
+  # NOT prefixed, deliberately, and it is the one name here that overlaps the
+  # hand-driven exercises on purpose. IOS XE runs a single certificate server per
+  # box and "crypto pki server <name>" is bound to a trustpoint of the same name,
+  # so a second differently-named CA is not a thing you can have. Nothing in this
+  # layer ever removes it: roles/common/tasks/ios-ca.yml is only ever included
+  # under "when: state == 'present'". A build merges "grant auto" and the two EKUs
+  # into whatever CA_Server is already there, which is additive and is what the
+  # doc configures anyway.
+  ca_server: CA_Server
+
+# Trustpoint hash. Not the signature algorithm; ML-DSA-65 signs with ML-DSA-65
+# whatever this says.
+pki_hash: sha512
+
+# Lab certificates have no CRL distribution point, and the trustpoint default is
+# "revocation-check crl", so the router would try to fetch a CRL it can never
+# find and stall the handshake. none is a lab answer, not a production one.
+pki_revocation_check: none
+
+# --- MACsec / MKA -----------------------------------------------------------
+
+# Same PQAUTO- rule as the PKI names, and this block needed it most: every single
+# name here used to be the name macsec.md tells the reader to type, and all of them
+# are still sitting in device-configs/R1-macsec.txt, R2-macsec.txt and
+# R2-mldsa-hub.txt. "macsec-eaptls.yml -e state=absent" issues "no eap profile
+# EAP-PROFILE", "no policy-map type control subscriber PQ-MACSEC-POLICY" and
+# "no aaa attribute list LINKSEC_POLICY", so a teardown of the automation used to
+# dismantle the reader's hand-built Exercise 2 as well.
+#
+# MKA policy names are capped at 16 characters by the YANG (mka:policy/name,
+# length "1..16"), which is why the two MKA policies get abbreviated names rather
+# than a straight PQAUTO- prefix on the old ones.
+macsec_names:
+  # PSK path (Exercise 1 in macsec.md). Standalone dead end.
+  psk_mka_policy: PQAUTO-MKA-PSK
+  psk_key_chain: PQAUTO-MACSEC-KC
+  # EAP-TLS path (Exercise 2), which the PQ overlay stacks on.
+  eaptls_mka_policy: PQAUTO-MKA-EAP
+  eap_profile: PQAUTO-EAP
+  dot1x_credentials: PQAUTO-DOT1X
+  control_policy: PQAUTO-MACSEC-POLICY
+  linksec_attribute_list: PQAUTO-LINKSEC
+  # Shipped-in service template, not created by us. Referenced by the control
+  # policy's authentication-success event.
+  linksec_template: DEFAULT_LINKSEC_POLICY_MUST_SECURE
+
+# "macsec-cipher-suite gcm-aes-256". Without this the default MKA policy gives
+# you GCM-AES-128 on the wire.
+macsec_cipher_suite: gcm-aes-256
+
+# PSK path only. Sets the MKA (key-wrap) cipher directly, which is how the PSK
+# session ends up with a matched AES-256-CMAC / GCM-AES-256 pair while the
+# EAP-TLS session is stuck at AES-128-CMAC because its CAK comes from a 128-bit
+# MSK. That mismatch is expected and logged; it is not a misconfiguration.
+macsec_key_algorithm: aes-256-cmac
+
+# MACsec key ID. This becomes the CKN verbatim, which is how you tell a PSK
+# session from an EAP-derived one at a glance: "01" here, 32 hex characters
+# there. Must be an even-length non-zero hex string.
+macsec_key_id: "01"
+
+# Re-authentication interval in seconds. Every re-auth is a fresh EAP-TLS
+# handshake, so this is what actually rotates the post-quantum keying material.
+# A SAK rekey does not: it keeps the same CAK and CKN.
+macsec_reauth_seconds: 1800

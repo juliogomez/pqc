@@ -1,0 +1,320 @@
+### TAG=phaseC1-ppk-run1
+### CMD=ansible-playbook ipsec-pq-ppk.yml
+### START=2026-09-01T09:58:50Z
+
+PLAY [Mix a post-quantum pre-shared key into the IKEv2 key schedule] ***********
+
+TASK [ipsec_pq_ppk : PPK | sanity] *********************************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Probe for an existing ML-KEM proposal] ***********************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | probe for an existing ML-KEM proposal] ************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [ipsec_pq_ppk : Abort if ML-KEM is configured] ****************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [ipsec_pq_ppk : Render PPK] ***********************************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Push PPK] ****************************************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF edit-config | PPK PPK-LAB toward r1, r3] ****************
+changed: [r2]
+changed: [r1]
+changed: [r3]
+
+TASK [Force renegotiation so the new key schedule is used] *********************
+included: common for r2, r1, r3
+[WARNING]: ansible-pylibssh not installed, falling back to paramiko
+
+TASK [common : Clear IKEv2 SAs] ************************************************
+changed: [r1]
+changed: [r3]
+changed: [r2]
+FAILED - RETRYING: [r3]: common : Re-trigger the tunnel so a new SA is negotiated (5 retries left).
+FAILED - RETRYING: [r1]: common : Re-trigger the tunnel so a new SA is negotiated (5 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (5 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (4 retries left).
+FAILED - RETRYING: [r1]: common : Re-trigger the tunnel so a new SA is negotiated (4 retries left).
+FAILED - RETRYING: [r3]: common : Re-trigger the tunnel so a new SA is negotiated (4 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (3 retries left).
+FAILED - RETRYING: [r1]: common : Re-trigger the tunnel so a new SA is negotiated (3 retries left).
+FAILED - RETRYING: [r3]: common : Re-trigger the tunnel so a new SA is negotiated (3 retries left).
+
+TASK [common : Re-trigger the tunnel so a new SA is negotiated] ****************
+ok: [r2] => (item=Tunnel101 to r1)
+ok: [r1] => (item=Tunnel101 to r2)
+ok: [r3] => (item=Tunnel102 to r2)
+ok: [r2] => (item=Tunnel102 to r3)
+
+TASK [Save] ********************************************************************
+included: common for r2, r1, r3
+
+PLAY [Report the post-quantum posture] *****************************************
+
+TASK [Verify | negotiated ML-KEM group per IKEv2 SA] ***************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 SA operational data] ************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [verify : Verify | record the negotiated groups] **************************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [Verify | PPK quantum-resistance counters] ********************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 statistics] *********************************
+ok: [r3]
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | record the PPK counters as YANG reports them] **********
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [verify : Verify | IKEv2 signature algorithm and PPK counters (show parsing, see comment)] ***
+ok: [r2]
+ok: [r3]
+ok: [r1]
+
+TASK [verify : Verify | record the signature algorithms] ***********************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [verify : Verify | record the PPK counters as the CLI reports them] *******
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | SSH key exchange algorithms] ************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip ssh server algorithm kex] **********************
+ok: [r3]
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | record the SSH posture] ********************************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [Verify | HTTPS PQC type] *************************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip http secure-pqc-type] **************************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [verify : Verify | record the HTTPS posture] ******************************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [Verify | access-session PQ settings] *************************************
+included: common for r2, r1
+
+TASK [common : NETCONF get | access-session pqc-type / tls-version] ************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the access-session settings] ********************
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | MKA and MACsec state (show parsing, see comment)] ******
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the MACsec state] *******************************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | PQ posture] ********************************************
+ok: [r2] => {
+    "msg": {
+        "host": "r2",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": true,
+            "ike_sa_count": 2,
+            "negotiated_pqc_group": [
+                "pqc-gt-none",
+                "pqc-gt-none"
+            ],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "2",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "2"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [
+                "Manual",
+                "Manual"
+            ],
+            "signature_algorithm": [
+                "PSK",
+                "PSK"
+            ]
+        },
+        "macsec": {
+            "cipher": "(none)",
+            "ckn": "(none)",
+            "mka_secured_sessions": "0",
+            "out_pkts_encrypted": "0",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": false
+        },
+        "ssh": {
+            "hostkey": [],
+            "kex_offer_order": []
+        }
+    }
+}
+ok: [r1] => {
+    "msg": {
+        "host": "r1",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": true,
+            "ike_sa_count": 1,
+            "negotiated_pqc_group": [
+                "pqc-gt-none"
+            ],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "1",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "1"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [
+                "Manual"
+            ],
+            "signature_algorithm": [
+                "PSK"
+            ]
+        },
+        "macsec": {
+            "cipher": "(none)",
+            "ckn": "(none)",
+            "mka_secured_sessions": "0",
+            "out_pkts_encrypted": "0",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": false
+        },
+        "ssh": {
+            "hostkey": [
+                "rsa-sha2-512",
+                "rsa-sha2-256"
+            ],
+            "kex_offer_order": [
+                "mlkem768x25519-sha256",
+                "mlkem768nistp256-sha256",
+                "curve25519-sha256",
+                "ecdh-sha2-nistp256"
+            ]
+        }
+    }
+}
+ok: [r3] => {
+    "msg": {
+        "host": "r3",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": true,
+            "ike_sa_count": 1,
+            "negotiated_pqc_group": [
+                "pqc-gt-none"
+            ],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "1",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "1"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [
+                "Manual"
+            ],
+            "signature_algorithm": [
+                "PSK"
+            ]
+        },
+        "macsec": "not on the MACsec link",
+        "ssh": {
+            "hostkey": [
+                "rsa-sha2-512",
+                "rsa-sha2-256"
+            ],
+            "kex_offer_order": []
+        }
+    }
+}
+
+PLAY RECAP *********************************************************************
+r1                         : ok=32   changed=2    unreachable=0    failed=0    skipped=10   rescued=0    ignored=0   
+r2                         : ok=32   changed=2    unreachable=0    failed=0    skipped=10   rescued=0    ignored=0   
+r3                         : ok=27   changed=2    unreachable=0    failed=0    skipped=14   rescued=0    ignored=0   
+
+### END=2026-09-01T10:00:09Z
+### RC=0

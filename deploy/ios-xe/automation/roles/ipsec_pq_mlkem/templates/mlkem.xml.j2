@@ -1,0 +1,43 @@
+{#
+  RFC 9370 additional key exchange, carrying ML-KEM.
+
+  /native/crypto/ikev2/proposal[name]/pqc/mlkem768
+  /native/crypto/ikev2/proposal[name]/pqc/optional
+
+  Two leaves. That is the entire configuration change, and it is why this file is
+  eleven lines of XML rather than a template you have to read.
+
+  The parameter set is the ELEMENT NAME, not a value: the YANG models mlkem512,
+  mlkem768 and mlkem1024 as sibling leaves of type empty. So pq_key_exchange in
+  pqc.yml has to be spelled the way the schema spells it, and changing it there
+  changes the element here.
+
+  "optional" is guarded by when '(../mlkem512) or (../mlkem768) or (../mlkem1024)',
+  so it cannot exist on its own. It is also the leaf that decides whether you fail
+  closed or silently fall back to classical DH against a peer that cannot do
+  ML-KEM.
+
+  The classical group stays. ML-KEM is an ADDITIONAL exchange, not a replacement,
+  which is what makes the result hybrid: an attacker has to break both.
+-#}
+{% set op = ' nc:operation="remove"' if state == 'absent' else '' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <ikev2 xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <proposal>
+          <name>{{ crypto_names.ike_proposal }}</name>
+          <pqc{{ op }}>
+{% if state == 'present' %}
+            <{{ pq_key_exchange }}/>
+{% if pq_key_exchange_optional | bool %}
+            <optional/>
+{% endif %}
+{% endif %}
+          </pqc>
+        </proposal>
+      </ikev2>
+    </crypto>
+  </native>
+</config>

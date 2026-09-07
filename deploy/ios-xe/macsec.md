@@ -2,6 +2,10 @@
 
 > **Pre-req:** this doc assumes you have gone through the container [MACsec lab](../../learn/macsec/README.md), where an 802.1X/EAP-TLS handshake carried ML-KEM and ML-DSA at Layer 2.
 
+Every command and every piece of output below was run end to end on IOS XE 26.2 on a pair
+of C8235-G2 routers, including the failure experiments, which were reproduced by breaking a
+working setup and putting it back.
+
 ## Interface mode vs key source
 
 MACsec on IOS XE has two independent dimensions:
@@ -65,6 +69,19 @@ For the tunnelled case R2 strips MACsec on ingress, forwards the ESP packet on i
 without being able to read into it, and the R2→R3 hop carries ESP alone because there is no
 MACsec configured there.
 
+You don't have to take that on faith. With MACsec secured and Tunnel0 up, send 100 pings
+down each path and watch both counter sets move independently. ESP comes from
+`show crypto ipsec sa peer 10.0.23.2`, MACsec from `show macsec statistics interface Tw0/0/0`:
+
+| 100 pings, 1000 bytes | ESP encaps / decaps | MACsec out / in |
+|---|---|---|
+| `ping 192.168.100.2 source Tunnel0` | **+100 / +100** | **+102 / +102** |
+| `ping 10.0.12.2 source Vlan12` | +0 / +0 | +101 / +100 |
+
+Tunnel traffic increments both, which is the double encryption. SVI traffic increments only
+MACsec and never touches the IPsec SA. The couple of extra MACsec frames are MKA control
+traffic, which keeps ticking in the background whatever you do.
+
 Double-encrypting tunnel traffic buys you very little, since ESP already protects it end to
 end. MACsec's value on this link is everything IPsec doesn't cover: the SVI-to-SVI traffic,
 ARP, routing protocol hellos, CDP/LLDP, and the Layer 2 headers themselves. Watch the MTU
@@ -117,6 +134,19 @@ interface TwoGigabitEthernet0/0/0
 Generate the key-string with something like `openssl rand -hex 32`, and don't commit it
 anywhere. It *is* the CAK.
 
+26.2 will tell you as much, both at the prompt and in the log, the moment you paste it in:
+
+```
+%SYS-4-INSECURE_WARNING: Module: MACSEC - Command: key-string * - Reason: Sensitive
+information like passwords and keys are stored using weak or no protection -
+Remediation: Please consider migrating to a secure alternative such as Type-6 or Type-9
+```
+
+It's a fair complaint. A plaintext `key-string` sits readable in the running config, so
+anyone who can `show run` has your CAK. Type-6 encryption (which needs a primary key
+configured) is the production answer. For a lab on a link you're about to tear down it
+doesn't matter, so this doc leaves it plaintext and takes the warning.
+
 ### Verification
 
 ```
@@ -139,24 +169,29 @@ R1# show macsec status interface Tw0/0/0 | include Cipher:|Transmitting
 The CKN is `01`, straight from the key ID you typed. Remember that: it's how you tell a
 PSK session from an EAP-derived one at a glance.
 
-Now prove the frames are actually encrypted, don't just trust the "Secured" status:
+Now prove the frames are actually encrypted, don't just trust the "Secured" status.
+
+Read the counters *before* and *after* the traffic, not just after. MKA sends control frames
+(MKPDUs) every couple of seconds from the moment the session secures, and those go through
+the same MACsec engine, so any single snapshot is really telling you how long you waited
+before typing the command. The delta is the number that means something:
 
 ```
+R1# show macsec statistics interface Tw0/0/0
+  Out Pkts Encrypted:       27
+  In Pkts OK:               27
+
 R1# ping 10.0.12.2 source Vlan12 repeat 20 size 1400
-Success rate is 95 percent (19/20), round-trip min/avg/max = 1/1/4 ms
+Success rate is 100 percent (20/20), round-trip min/avg/max = 1/1/4 ms
 
 R1# show macsec statistics interface Tw0/0/0
-  Ingress Decrypted Octets: 30342
-  Egress Encrypted Octets:  30182
- Transmit SA Counters (AN 0)
-  Out Pkts Encrypted:       30
- Receive SA Counters (AN 0)
-  In Pkts OK:               30
+  Out Pkts Encrypted:       47
+  In Pkts OK:               47
   In Pkts Invalid:          0
 ```
 
-Thirty frames out encrypted, thirty in validated, zero invalid. (The first ping always
-drops while ARP resolves.)
+Exactly 20 out encrypted, 20 in validated, zero invalid. Every ping went through the
+crypto engine and every one came back verified.
 
 ### What this gives you (and what it doesn't)
 
@@ -196,7 +231,7 @@ produce the per-frame encryption key (SAK). The entire key chain
 
 ### Two routers and a cable
 
-IOS XE 26.1 does **local** EAP-TLS: one of the routers runs a small CA, both routers
+IOS XE does **local** EAP-TLS: one of the routers runs a small CA, both routers
 enrol against it, and each router's own session manager (`smd`) acts as the EAP server
 for its authenticator role.
 
@@ -260,9 +295,29 @@ seconds after `% Certificate Server enabled.` for the CA certificate to generate
 same certificate for both. A cert with only `client-auth` will authenticate one direction
 and fail the other.
 
-One more thing before you enrol: check `show clock` on both routers. Certificate validity
-is absolute time, so clocks that disagree produce "certificate not yet valid" failures
-during EAP-TLS, long after enrolment appeared to succeed.
+**Set the clock first, or the CA won't start at all.** On a router whose clock was never
+set authoritatively, `no shutdown` takes your passphrase and then refuses:
+
+```
+% Time has not been set. Cannot start the Certificate server
+```
+
+`show crypto pki server` then reports `Status: disabled, Time has not been set` and
+`State: check failed`. The tell is in `show clock`: a leading `*` means the time is not
+authoritative.
+
+```
+R2# show clock
+*16:56:05.692 UTC Sat Aug 29 2026      <<< the asterisk is the problem
+```
+
+Fix it on both routers with `clock set <hh:mm:ss> <day> <month> <year>` (or point them at
+NTP, which is what you'd do for real), then `shut` / `no shutdown` the server to retry. It
+won't ask for the passphrase again, it kept the one you already gave it.
+
+Do both routers, not just the CA. Certificate validity is absolute time, so clocks that
+disagree produce "certificate not yet valid" failures during EAP-TLS, long after enrolment
+appeared to succeed.
 
 **On both routers** (the `subject-name` differs):
 
@@ -280,21 +335,40 @@ Without it, IOS XE rejects the CA cert ("Trustpoint fingerprint must be supplied
 
 ```
 R2# show crypto pki server | include fingerprint
-    CA cert fingerprint: F8D08B55 B0F56D37 57E3BA63 D05BFAB9
+    CA cert fingerprint: 4E5658EA 99350A9A 5AFF2EB9 C8114485
 ```
 
-Add it (your fingerprint will differ):
+Add it, with the spaces stripped (your fingerprint will differ):
 
 ```
 crypto pki trustpoint CA_TP
- fingerprint F8D08B55B0F56D3757E3BA63D05BFAB9
+ fingerprint 4E5658EA99350A9A5AFF2EB9C8114485
 ```
 
-Then enrol, answering the prompts:
+Then enrol:
 
 ```
 crypto pki authenticate CA_TP       ! accept the CA fingerprint
-crypto pki enroll CA_TP             ! challenge password (Return for none), then confirm
+crypto pki enroll CA_TP
+```
+
+`authenticate` checks the fingerprint you pinned against the one the CA presents and says so:
+
+```
+Trustpoint Fingerprint: 4E5658EA 99350A9A 5AFF2EB9 C8114485
+Certificate validated - fingerprints matched.
+Trustpoint CA certificate accepted.
+```
+
+`enroll` on 26.2 is quieter than you might expect. With `grant auto` on the CA it asks
+nothing at all, no challenge password, no serial number or IP address questions, no final
+confirmation. It just goes:
+
+```
+% Start certificate enrollment ..
+% The subject name in the certificate will include: CN=R1
+% The subject name in the certificate will include: bfl-cpoc-d14-8235-01
+% Certificate request sent to Certificate Authority
 ```
 
 Check what you got. The CN is the identity EAP will present, so it has to match the
@@ -304,18 +378,30 @@ Check what you got. The CN is the identity EAP will present, so it has to match 
 R2# show crypto pki certificates CA_TP
 Certificate
   Status: Available
+  Certificate Serial Number (hex): 02
   Issuer:
     cn=CA_Server
   Subject:
     Name: bfl-cpoc-d14-8235-02.lab.local
+    unstructuredname=bfl-cpoc-d14-8235-02.lab.local
     cn=R2
   Validity Date:
-    start date: 23:26:53 UTC Aug 26 2026
-    end   date: 23:26:53 UTC Aug 26 2027
+    start date: 16:58:04 UTC Aug 29 2026
+    end   date: 16:58:04 UTC Aug 29 2027
 ```
 
-Authentication is still RSA-2048 here. ML-DSA certificates aren't available on IOS XE
-26.1; see [what about authentication](#what-about-authentication-ml-dsa) below.
+Worth confirming the EKU landed, since it's the one CA setting you can't fix after the fact
+without re-issuing. `show crypto pki certificates verbose CA_TP` spells it out:
+
+```
+    Extended Key Usage:
+        Client Auth
+        Server Auth
+```
+
+Authentication is still RSA-2048 here, and it stays that way on 26.2. See
+[what about authentication](#what-about-authentication-ml-dsa) below for what changed and
+what didn't.
 
 ### Step 2: AAA, EAP and the subscriber control policy
 
@@ -390,6 +476,15 @@ interface TwoGigabitEthernet0/0/0
 `dot1x pae both` means each router is simultaneously supplicant and authenticator, so the
 config stays symmetric and you don't have to decide who initiates.
 
+**Give the first bring-up a couple of minutes before you believe it's broken.** Because both
+ends come up at once and each is trying to authenticate the other, the very first
+negotiation churns: it secures, Auth-Mgr tears it down, it starts again with a fresh CKN,
+sometimes hits a session timeout. Checking after 45 seconds showed `Total MKA Sessions 0`
+and a session sitting at `Unauthorized` with *both* methods already reporting
+`Authc Success`, which looks like a policy bug and isn't one. It settled on its own about
+two minutes in and stayed up. Later flaps re-secure in about 5 seconds; it's only the cold
+start that thrashes.
+
 The full running configs are in [`device-configs/`](device-configs/) if you want to diff
 yours against a known-good state.
 
@@ -420,20 +515,29 @@ other independently and derives its own MSK, so the two ends never agree on a si
 CAK/CKN. Watch the syslog and you see a fresh random CKN every cycle, forever:
 
 ```
-10:27:04.401: %MKA-5-SESSION_START: (Tw0/0/0 : 2) MKA Session started ... CKN D307972257A96A0E350E86C2E465EE9A
-10:27:12.401: %MKA-4-KEEPALIVE_TIMEOUT: (Tw0/0/0 : 2) Peer has stopped sending MKPDUs ...
-10:27:12.401: %MKA-4-SESSION_UNSECURED: (Tw0/0/0 : 2) MKA Session was stopped by MKA and not secured ...
-10:28:12.477: %MKA-5-SESSION_START: (Tw0/0/0 : 2) MKA Session started ... CKN 81CEA2B225F4C2720F57E4EC7C7F3218
-10:28:20.477: %MKA-4-KEEPALIVE_TIMEOUT: (Tw0/0/0 : 2) Peer has stopped sending MKPDUs ...
-10:29:20.558: %MKA-5-SESSION_START: (Tw0/0/0 : 2) MKA Session started ... CKN D9495FF426BFE0D15C2DB41A6C09B90D
+17:33:42: %MKA-5-SESSION_START: (Tw0/0/0 : 2) MKA Session started ... CKN FABDD261881F3C4799118AE194BC737A
+17:33:50: %MKA-4-KEEPALIVE_TIMEOUT: (Tw0/0/0 : 2) Peer has stopped sending MKPDUs ...
+17:33:50: %MKA-4-SESSION_UNSECURED: (Tw0/0/0 : 2) MKA Session was stopped by MKA and not secured ...
+17:34:50: %MKA-5-SESSION_START: (Tw0/0/0 : 2) MKA Session started ... CKN 79AE42EF42FFE10385126CDDDCC73532
+17:34:58: %MKA-4-KEEPALIVE_TIMEOUT: (Tw0/0/0 : 2) Peer has stopped sending MKPDUs ...
+17:35:58: %MKA-5-SESSION_START: (Tw0/0/0 : 2) MKA Session started ... CKN BABF64D0380ABBCCFB45E981DB038ED5
+17:36:06: %MKA-4-KEEPALIVE_TIMEOUT: (Tw0/0/0 : 2) Peer has stopped sending MKPDUs ...
+17:37:07: %MKA-5-SESSION_START: (Tw0/0/0 : 2) MKA Session started ... CKN 554217B1B91741322B42DCA00E651DD1
+17:37:15: %MKA-4-KEEPALIVE_TIMEOUT: (Tw0/0/0 : 2) Peer has stopped sending MKPDUs ...
 ```
 
 Eight seconds to keepalive timeout, sixty seconds until the next attempt, a different CKN
-every time. Note there are no ICV or validation failures logged: each side discards the
-peer's MKPDUs before validation because they belong to a CA it doesn't know.
+every time, and it will do that forever. Note there are no ICV or validation failures
+logged: each side discards the peer's MKPDUs before validation because they belong to a CA
+it doesn't know.
 
-Put the `both` back and `dot1xSup` reappears, one CKN is agreed, and it secures in about
-5 secs.
+Put the `both` back and `dot1xSup` reappears, one CKN is agreed, and it secures in six
+seconds:
+
+```
+17:37:58: %MKA-5-SESSION_START: (Tw0/0/0 : 2) MKA Session started ...
+17:38:04: %MKA-5-SESSION_SECURED: (Tw0/0/0 : 2) MKA Session was secured ... CKN ED2809ABE379BAA98ABF38779EDC41C4
+```
 
 **2. `dot1x authenticator eap profile EAP-PROFILE` on *both* routers**
 
@@ -453,6 +557,20 @@ R2# show access-session interface Tw0/0/0 details | include Status:|dot1x
      dot1xSup           Authc Success
 ```
 
+Check the *other* router too, because that's where you'd probably start looking. R1 is
+configured correctly and still can't come up, and its method list tells you why:
+
+```
+R1# show access-session interface Tw0/0/0 details | include Status:|dot1x
+               Status:  Unauthorized
+        dot1x           Authc Success
+     dot1xSup           Running
+```
+
+`dot1xSup` stuck at `Running` means R1's supplicant is waiting for an EAP server that is
+never going to answer. A supplicant parked at `Running` on a healthy router is a good hint
+to go look at the peer's authenticator config.
+
 **3. `macsec network-link`, not `macsec`**
 
 This is the nastiest one, because status commands might not be clear enough. With `macsec` on a router-to-router switchport, MKA secures, the
@@ -471,20 +589,21 @@ Looks perfect. Then you send traffic and read the counters on R2, before and aft
 ```
                                   before ping    after 300 pings
 R2# show interfaces Tw0/0/0
-  packets input                       77787          78092      <<< +305, traffic crossed
+  packets input                       59583          59899      <<< +316, traffic crossed
 R2# show macsec statistics interface Tw0/0/0
-  Ingress Decrypted Octets:               0             48
-  Egress Encrypted Octets:                0              0      <<< nothing encrypted
-  Out Pkts Encrypted:                     0              0
-  In Pkts OK:                             0              1
+  Ingress Decrypted Octets:               0              0
+  Egress Encrypted Octets:               48             48      <<< nothing encrypted
+  Out Pkts Encrypted:                     1              1
+  In Pkts OK:                             0              0
   Ingress Untag Pkts:                     0              0
   Ingress No Tag Pkts:                    0              0
 ```
 
-305 packets crossed the wire and exactly one of them went through the MACsec engine.
-Nothing was encrypted on egress at all. And notice `Ingress Untag Pkts` and `Ingress No Tag
-Pkts` both stay at zero: the SecY isn't even *inspecting* the arriving frames, let alone
-rejecting them. A `must-secure` policy reporting `Link Secured` is protecting nothing here.
+The pings all succeeded, 300 for 300. And 316 packets crossed the wire without a single one
+going through the MACsec engine: every crypto counter has a delta of exactly zero. Notice
+`Ingress Untag Pkts` and `Ingress No Tag Pkts` stay at zero too, so the SecY isn't even
+*inspecting* the arriving frames, let alone rejecting them. A `must-secure` policy reporting
+`Link Secured` is protecting nothing here.
 
 **Never accept `show mka sessions` as proof of encryption. Always check `show macsec
 statistics`.**
@@ -506,7 +625,7 @@ Interface       Local-TxSCI          Policy-Name       Inherited          Key-Se
 Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN
 ============================================================================================
 Tw0/0/0         2481.3b87.54e0/0002  PQ-MACSEC-MKA     NO                 NO
-2               2481.3b87.5060/0002  1                 Secured            CCAEAE11446EE3C67A8E32847D74A8B4
+2               2481.3b87.5060/0002  1                 Secured            99CDD89B62A61759656F9C8430FB9C9E
 ```
 
 That CKN is the tell. Compare with Exercise 1:
@@ -529,7 +648,7 @@ R1# show access-session interface Tw0/0/0 details
                Domain:  DATA
        Oper host mode:  multi-host
      Oper control dir:  both
-      Session timeout:  1800s (local), Remaining: 1765s
+      Session timeout:  1800s (local), Remaining: 1759s
        Timeout action:  Reauthenticate
        Current Policy:  PQ-MACSEC-POLICY
 
@@ -545,7 +664,37 @@ Method status list:
 ```
 
 Both method roles succeeded, and the `must-secure` template was applied by the
-authentication-success event. To make sure it's working fine always check the method status list and `macsec statistics` instead.
+authentication-success event.
+
+If you want to see the two PAE roles as separate machines rather than two rows in a list,
+`show dot1x` breaks them out:
+
+```
+R1# show dot1x interface Tw0/0/0 detail
+PAE                       = BOTH
+QuietPeriod               = 60
+SuppTimeout               = 30
+TxPeriod                  = 30
+EAP profile               = EAP-PROFILE
+Dot1x Info for
+--------------------------------------------
+PAE                       = SUPPLICANT
+StartPeriod               = 30
+HeldPeriod                = 60
+MaxStart                  = 3
+Credentials profile       = DOT1X-CREDS
+
+Dot1x Authenticator Client List
+-------------------------------
+EAP Method                = TLS
+Supplicant                = 2481.3b87.5060
+    Auth SM State         = AUTHENTICATED
+```
+
+`PAE = BOTH` up top, then a separate supplicant block with its own timers, then the
+authenticator's client list showing the peer it authenticated and the method it used. This
+is the view that makes failure experiment 1 obvious: without `both`, the supplicant block
+and one of these lists simply aren't there.
 
 And the data plane, which is the part that actually matters:
 
@@ -555,22 +704,26 @@ R1# show macsec status interface Tw0/0/0 | include Cipher:|Transmitting|Receivin
   Transmitting:             TRUE
   Receiving:                TRUE
 
+R1# show macsec statistics interface Tw0/0/0
+  Out Pkts Encrypted:       22
+  In Pkts OK:               25
+
 R1# ping 10.0.12.2 source Vlan12 repeat 300 size 1400
-Success rate is 99 percent (299/300), round-trip min/avg/max = 1/1/4 ms
+Success rate is 100 percent (300/300), round-trip min/avg/max = 1/1/4 ms
 
 R1# show macsec statistics interface Tw0/0/0
   Ingress Untag Pkts:       0
   Ingress No Tag Pkts:      0
   Ingress Bad Tag Pkts:     0
-  Ingress Decrypted Octets: 422902
   Egress Untag Pkts:        0
-  Egress Encrypted Octets:  423167
-  Out Pkts Encrypted:       311
-  In Pkts OK:               310
+  Out Pkts Encrypted:       325
+  In Pkts OK:               328
   In Pkts Invalid:          0
   In Pkts Not Valid:        0
 ```
 
+Same before-and-after read as Exercise 1, and the same reason for it. 303 out and 303 in
+for 300 pings, the extra three being MKPDUs that happened to land inside the window.
 Encrypted out, validated in, nothing untagged, nothing invalid. That's a real MACsec link
 keyed by a post-quantum handshake.
 
@@ -624,12 +777,73 @@ set *and* you keep a classical X448 exchange mixed in, which means a flaw in eit
 component alone doesn't sink the session. There is no CLI to select the ML-KEM parameter
 set directly.
 
-`all` behaves like `hybrid` when both ends are IOS XE 26.1. It exists for mixed
-environments where a peer might not support ML-KEM at all, so treat it as "hybrid, with a
-silent classical fallback". If you want a guarantee that the session is post-quantum, pin
-`hybrid` and let the handshake fail loudly instead.
+`all` behaves like `hybrid` when both ends are IOS XE, which makes it look like a safe
+default. It isn't, and it's easy to demonstrate why. Leave R1 on `all`, set R2 to
+`non-pqc`, flap the link, and read the trace:
+
+| R1 | R2 | Negotiated group | MKA |
+|---|---|---|---|
+| `all` | `non-pqc` | `secp521r1` | **Secured** |
+| `hybrid` | `non-pqc` | none | **0 secured sessions** |
+
+With `all`, R1 quietly dropped to a classical P-521 exchange and brought the link up
+looking exactly like a healthy session: `Secured`, `Link Secured`, GCM-AES-256 on the wire.
+Nothing in the syslog says you just lost your post-quantum protection. You only find out by
+reading the negotiated group out of the `smd` trace, which nobody does routinely.
+
+With `hybrid`, the handshake simply fails. No group is negotiated, MKA never secures, and
+the port stays unauthorized. That's the behaviour you want: **pin `hybrid`** and a peer that
+can't do ML-KEM gets refused instead of silently downgraded. Use `all` only if you have a
+mixed estate and you have consciously decided that a link coming up matters more than that
+link being post-quantum.
 
 Use `non-pqc` only as a troubleshooting tool, to confirm a failure isn't PQ-related.
+
+### Rotating the SAK
+
+Nothing above rotates the per-frame key. MKA will replace the SAK when the packet number
+space runs out, but at anything short of line rate that's effectively never, so a
+long-lived session keeps encrypting with the same SAK until the next re-authentication.
+
+If you want time-based rotation, the MKA policy has an interval, off by default:
+
+```
+mka policy PQ-MACSEC-MKA
+ sak-rekey interval 60          ! <30-65535> seconds, default 0 = never
+```
+
+Sixty seconds is a lab value; pick something sane for production. Changing the policy clears
+active sessions on any interface using it, so expect a flap. Once it settles, the rotations
+show up in the log:
+
+```
+17:26:51: %MKA-6-SAK_REKEY_SUCCESS: ... (new Latest AN/KN 1/2, Old AN/KN 0/1) ... CKN 8EFA96B09E4D8C58492CCB494D214566
+17:27:53: %MKA-6-SAK_REKEY_SUCCESS: ... (new Latest AN/KN 2/3, Old AN/KN 1/2) ... CKN 8EFA96B09E4D8C58492CCB494D214566
+17:28:55: %MKA-6-SAK_REKEY_SUCCESS: ... (new Latest AN/KN 3/4, Old AN/KN 2/3) ... CKN 8EFA96B09E4D8C58492CCB494D214566
+```
+
+Two things in there are worth noticing.
+
+**The CKN doesn't change.** Same value across all three rotations. A SAK rekey is not a
+re-authentication: the CAK (and the CKN that names it) survives, and only the per-frame key
+is replaced, with the association number and key number stepping up each time. Fresh keying
+material from a new ML-KEM handshake is what re-authentication gives you, and that's the
+`authentication timer reauthenticate 1800` in the interface config.
+
+**It's hitless.** 20,000 pings at 1400 bytes over 53 seconds, spanning a rotation
+(`Latest SAK AN` went 2 to 3), came back `Success rate is 100 percent (20000/20000)`. The
+old SAK stays installed for receive while the new one takes over transmit, so nothing is
+dropped in the changeover.
+
+One gotcha: don't look for confirmation in the session detail, because it lies.
+
+```
+R1# show mka sessions interface Tw0/0/0 detail | include SAK Rekey Time
+SAK Rekey Time........... 0s (SAK Rekey interval not applicable)
+```
+
+That's the output *while* rotation is happening every 60 seconds. Read `Latest SAK AN` and
+`Latest SAK KI (KN)` instead, or just watch the syslog.
 
 ### One wrinkle: the key hierarchy is weaker than the data cipher
 
@@ -637,7 +851,7 @@ Every successful session logged this warning, and it turns out to be telling the
 
 ```
 %MKA-4-MKA_MACSEC_CIPHER_MISMATCH: (Tw0/0/0 : 2) Lower strength MKA-cipher than
-macsec-cipher for RxSCI 2481.3b87.5060/0002 ... CKN DA2E0FCBD5B4E5BFF8CF5676785A07AF
+macsec-cipher for RxSCI 2481.3b87.5060/0002 ... CKN 99CDD89B62A61759656F9C8430FB9C9E
 ```
 
 The session detail shows what it means:
@@ -651,9 +865,23 @@ SAK Cipher Suite......... 0080C20001000002 (GCM-AES-256)
 
 Frames on the wire get GCM-AES-256, which is what you asked for. But the MKA layer that
 distributes and protects those 256-bit SAKs runs AES-128-CMAC, because the CAK derived from
-the EAP-TLS MSK is 128 bits. In the PSK exercise you control this directly with
-`cryptographic-algorithm aes-256-cmac` in the key chain; with EAP-TLS the CAK length comes
-from the MSK and there's no knob for it on this release.
+the EAP-TLS MSK is 128 bits. With EAP-TLS the CAK length comes from the MSK and there's no
+knob for it on this release.
+
+Exercise 1 is the control that proves this is about the key source and not the platform. Go
+back and look at the PSK session, where `cryptographic-algorithm aes-256-cmac` in the key
+chain sets the MKA cipher directly:
+
+```
+R1# show mka sessions interface Tw0/0/0 detail | include Cipher Suite|EAP Role
+EAP Role................. NA
+MKA Cipher Suite......... AES-256-CMAC          <<< matches the data cipher
+SAK Cipher Suite......... 0080C20001000002 (GCM-AES-256)
+```
+
+Matched ciphers, and no `CIPHER_MISMATCH` warning anywhere in the log. So PSK gets you a
+256-bit key hierarchy and EAP-TLS doesn't. That's a genuine trade-off against the freshness
+and forward secrecy EAP-TLS buys you, not a reason to prefer one over the other.
 
 So the effective security of the key hierarchy is 128-bit, not 256-bit. That's still well
 beyond reach classically, and Grover's algorithm only reduces AES-128 to roughly 64-bit
@@ -665,14 +893,120 @@ key wrap is 128-bit.
 
 The EAP-TLS handshake has two halves, just like everywhere else: key exchange and
 authentication. `access-session pqc-type` covers *only* the key exchange. The
-authentication half (the certificates that prove identity during EAP-TLS) remains
-classical RSA on IOS XE 26.1, which is why `rsakeypair CA_TP 2048` is in the config above.
+authentication half (the certificates that prove identity during EAP-TLS) is still
+classical RSA, which is why `rsakeypair CA_TP 2048` is in the config above.
 
-Same pattern as IPsec: ML-KEM protects the key derivation from harvest-now-decrypt-later
-today, while ML-DSA for certificate authentication is not yet available. The threat model
-is also the same: forging an RSA signature requires a quantum computer *during the live
-session* (no retroactive damage), so the urgency is lower than for key exchange.
+IKEv2 got ML-DSA on 26.2 ([ipsec.md](ipsec.md#exercise-5-ml-dsa-certificate-authentication)),
+and the EAP profile happily takes an ML-DSA trustpoint:
+
+```
+R1(config)# eap profile EAP-PROFILE
+R1(config-eap-profile)# method tls
+R1(config-eap-profile)# pki-trustpoint TP-MLDSA65
+R1(config-eap-profile)#
+```
+
+Don't read anything into that. `pki-trustpoint` accepts any trustpoint name, and the same
+command accepts a classical RSA trustpoint identically. The parser proves nothing about
+whether the TLS stack inside `smd` can sign with an ML-DSA key.
+
+So I tested it. **It doesn't work.**
+
+**Running the test without taking your link down.** The obvious version of this experiment
+kills the port. You don't need MACsec to answer the signature question, though, so leave it
+out: configure plain EAP-TLS in *open* mode, with no `access-session closed` and no
+`macsec network-link`. Authentication runs, the port forwards regardless of the result, and
+your IPsec underlay survives a failed handshake.
+
+Import `mldsa65-r1.p12` and `mldsa65-r2.p12` as `TP-MLDSA65` on both ends
+([gen-mldsa-certs.sh](mldsa-certs/gen-mldsa-certs.sh) builds them), point both
+`eap profile` and `dot1x credentials` at that trustpoint, pin `access-session tls-version 1.3`,
+then flap the link from the far end and read the trace. Run a classical trustpoint through
+the same procedure first, because the interesting part is the *difference* between the two.
+
+**What the trace shows.** `smd` accepts the ML-DSA trustpoint and gets as far as building
+the SSL context:
+
+```
+TLS:Setting up TLS SSL context
+CRYPTO_OPSSL: OQS provider loaded.
+TLS:Using PQC type: hybrid
+TLS:Setting default PKI trustpoint to TP-MLDSA65
+TLS:Using Hybrid type
+```
+
+Then it stops. `smd` asks IOSd for the certificate chain and never gets an answer. With a
+classical trustpoint the same request returns immediately and the handshake proceeds:
+
+```
+! RSA trustpoint
+[tps-client] (note): Received IOS certchain response. seqnum 21, status 0, no of certs 2 key_name TP-RSA
+TLS:SSL context created and initialised
+TLS:tls_send: 1453 byte send requested by TLS library
+
+! ML-DSA trustpoint
+(nothing)
+```
+
+Counting markers across the two traces puts the cut point exactly:
+
+| Trace marker | RSA-2048 | ML-DSA-65 |
+|---|---|---|
+| `Setting default PKI trustpoint` | 2 | 2 |
+| `OQS provider loaded` | 2 | 2 |
+| `certchain response` | 2 | **0** |
+| `SSL context created and initialised` | 2 | **0** |
+| `tls_send` | 7 | **0** |
+
+Not one TLS byte reaches the wire. The session hangs rather than failing: `show
+access-session` reports `dot1x Running`, and 30 seconds later `smd` retransmits its EAP
+packet. IOSd logs nothing at all for the chain request, so this is a silent stall in the
+certificate-retrieval path `smd` uses, not a policy rejection you can configure around.
+
+Watch out for one red herring in that output. `CRYPTO_OPSSL: OQS provider loaded` appears
+in **both** runs. That's ML-KEM for key exchange, which Exercise 2 already proved works.
+It says nothing about ML-DSA.
+
+**Verified status: not supported.** The trace is the primary evidence, and the control run
+closes the loop on it. Exercise 2 above is that control: a clean SCEP-enrolled RSA-2048
+certificate from the local CA completes EAP-TLS on 26.2, secures MKA, and passes encrypted
+traffic. Same `smd`, same `eap profile`, same interface config, one difference. RSA gets its
+certificate chain and finishes; ML-DSA never gets a chain at all.
+
+The other thing that corroborates it: the enrolment model this exercise uses can't produce an
+ML-DSA certificate in the first place. The router *can* generate an ML-DSA key on the box
+(`crypto key generate mldsa`, exec mode, see
+[ipsec.md](ipsec.md#the-router-can-make-the-keys-ask-it-in-the-right-mode)), but SCEP
+enrolment of the resulting request fails with `%PKI-2-CERT_ENROLL_FAIL`, and the local
+`crypto pki server` has no key-type option so it can only ever be RSA-keyed. Every trustpoint
+in this exercise is enrolled over SCEP against that CA. So even with the `smd` stall fixed
+you'd still be importing certificates minted somewhere else, which is a strong hint that
+EAP-TLS wasn't in scope for ML-DSA on this release.
+
+The threat model argument is the same as everywhere else in this repo: ML-KEM protects the
+key derivation from harvest-now-decrypt-later today, while forging an RSA signature
+requires a quantum computer *during the live session* with no retroactive damage. Lower
+urgency, not zero.
 
 The [container lab](../../learn/macsec/README.md#exercise-3-make-authentication-post-quantum-ml-dsa)
-demonstrates the full ML-DSA path with wpa_supplicant/hostapd. When IOS XE gains ML-DSA
-certificate support the config here won't change; only the certificates get reissued.
+demonstrates the full ML-DSA path with wpa_supplicant/hostapd, so you can see what a
+working answer looks like before you go hunting for one on the router.
+
+## The automated version
+
+All three exercises above exist as playbooks in [`automation/`](automation/README.md), split
+the same way: PSK, then EAP-TLS, then the two-leaf PQ overlay on top. Reach for it after
+you've built this by hand, because the ordering traps are the whole reason the automation is
+shaped the way it is. The role enrols and verifies certificates *before* it touches the
+interface, and it refuses outright to apply `access-session closed` to a router with no
+certificate, which is exactly the deadlock warned about in
+[Step 3](#step-3-the-interface).
+
+---
+
+**Cleanup:** this is the doc that leaves the most behind, because 802.1X touches the
+interface, AAA, the EAP profile, a control policy and a local CA. If you raised the `smd`
+trace levels to read the ML-KEM evidence, put them back to `notice`.
+[Putting the routers back](README.md#the-surgical-way) removes it all in the right order,
+which matters here: strip the interface before the objects it references, and do it over the
+management interface rather than the link you're unsecuring. Next: [TLS](tls.md).

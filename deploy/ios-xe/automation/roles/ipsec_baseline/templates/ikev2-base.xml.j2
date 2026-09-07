@@ -1,0 +1,77 @@
+{#
+  Global IKEv2: one proposal, one policy, one keyring holding every peer.
+
+  /native/crypto/ikev2/proposal[name]/{encryption,integrity,group}
+  /native/crypto/ikev2/policy[name]/proposal[proposals]
+  /native/crypto/ikev2/keyring[name]/peer[name]/{address,pre-shared-key}
+  /native/crypto/ikev2/fragmentation/mtu
+
+  Every algorithm below is a variable. The reason encryption looks like
+  <aes-cbc-256/> rather than a value is that the YANG models each choice as a
+  leaf of type empty, so the CHOICE is the element NAME. That is why crypto.yml
+  carries YANG spellings like "twenty" for DH group 20.
+
+  IKE fragmentation is in here rather than in the PQ roles on purpose. ML-KEM and
+  ML-DSA both need it: 1,184 bytes of encapsulation key in IKE_INTERMEDIATE, and
+  roughly 20 KB of IKE_AUTH across 16 frames. Without it the handshake never
+  finishes. But if each PQ role owned the setting, tearing down ML-KEM would pull
+  the fragmentation that ML-DSA still needs, and the ML-DSA tunnel would die for a
+  reason with nothing to do with ML-DSA. So the baseline provisions it: it costs
+  nothing on a classical tunnel and it keeps the PQ units independent of each
+  other, which is the point.
+-#}
+{% set op = ' nc:operation="remove"' if state == 'absent' else '' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <ikev2 xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <proposal{{ op }}>
+          <name>{{ crypto_names.ike_proposal }}</name>
+{% if state == 'present' %}
+          <encryption>
+            <{{ ike_encryption }}/>
+          </encryption>
+          <integrity>
+            <{{ ike_integrity }}/>
+          </integrity>
+          <group>
+            <{{ ike_dh_group }}/>
+          </group>
+{% endif %}
+        </proposal>
+        <policy{{ op }}>
+          <name>{{ crypto_names.ike_policy }}</name>
+{% if state == 'present' %}
+          <proposal>
+            <proposals>{{ crypto_names.ike_proposal }}</proposals>
+          </proposal>
+{% endif %}
+        </policy>
+        <keyring{{ op }}>
+          <name>{{ crypto_names.ike_keyring }}</name>
+{% if state == 'present' %}
+{% for peer in my_peers %}
+          <peer>
+            <name>{{ peer.name | upper }}</name>
+            <address>
+              <ipv4>
+                <ipv4-address>{{ peer.remote_address }}</ipv4-address>
+              </ipv4>
+            </address>
+            <pre-shared-key>
+              <key>{{ lab_ikev2_psk }}</key>
+            </pre-shared-key>
+          </peer>
+{% endfor %}
+{% endif %}
+        </keyring>
+        <fragmentation{{ op }}>
+{% if state == 'present' %}
+          <mtu>{{ pq_ike_fragmentation_mtu }}</mtu>
+{% endif %}
+        </fragmentation>
+      </ikev2>
+    </crypto>
+  </native>
+</config>

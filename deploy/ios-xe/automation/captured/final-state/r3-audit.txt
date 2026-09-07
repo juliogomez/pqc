@@ -1,0 +1,74 @@
+
+============================================================
+  R3 (198.18.154.204)
+============================================================
+
+--- show running-config | include PQAUTO ---
+
+
+--- show running-config | include ^service internal|^ip ssh server algorithm|secure-pqc-type|^interface Tunnel|^crypto |^mka |^key chain|^dot1x |^aaa new-model|^netconf-yang|^restconf|^ip http ---
+aaa new-model
+crypto pki trustpoint TP-self-signed-4006297798
+crypto pki trustpoint SLA-TrustPoint
+crypto pki certificate chain TP-self-signed-4006297798
+crypto pki certificate chain SLA-TrustPoint
+ip http server
+ip http secure-server
+ip http secure-trustpoint TP-self-signed-4006297798
+netconf-yang
+restconf
+
+--- show running-config | include ^crypto pki trustpoint ---
+crypto pki trustpoint TP-self-signed-4006297798
+crypto pki trustpoint SLA-TrustPoint
+
+--- show crypto key mypubkey all ---
+% Key pair was generated at: 15:46:59 UTC Aug 18 2026
+Key name: TP-self-signed-4006297798
+Key type: RSA KEYS      2048 bits
+ Storage Device: private-config
+ Usage: General Purpose Key
+ Key is not exportable. Redundancy enabled.
+ Key Data:
+  <public key data elided by the capture scrubber>
+% Key pair was generated at: 15:47:38 UTC Aug 18 2026
+Key name: SLA-KeyPair
+Key type: RSA KEYS      2048 bits
+ Storage Device: private-config
+ Usage: General Purpose Key
+ Key is exportable. Redundancy enabled.
+ Key Data:
+  <public key data elided by the capture scrubber>
+% Key pair was generated at: 15:52:10 UTC Aug 18 2026
+Key name: NETCONF_SSH_RSA_KEY
+Key type: RSA KEYS      2048 bits
+ Storage Device: private-config
+ Usage: General Purpose Key
+ Key is not exportable. Redundancy enabled.
+ Key Data:
+  <public key data elided by the capture scrubber>
+% Key pair was generated at: 09:29:06 UTC Aug 28 2026
+Key name: CISCO_IDEVID_SUDI
+Key type: RSA KEYS      2048 bits
+ On Cryptographic Device: act2 (label=act2, key index=24)
+ Usage: General Purpose Key
+ Key is not exportable.
+ Key Data:
+  <public key data elided by the capture scrubber>
+
+--- show crypto ikev2 sa ---
+
+
+--- show version | include register ---
+Configuration register is 0x2102
+
+--- show running-config interface TwoGigabitEthernet0/0/0 ---
+Building configuration...
+
+Current configuration : 92 bytes
+!
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 23
+ switchport mode access
+end
+

@@ -1,0 +1,8 @@
+# macsec-eaptls-interface-r1.diff
+#
+# macsec-eaptls.yml teardown, after the two missing 'no' lines were added. An empty diff is the pass.
+#
+# command: show running-config | section interface TwoGigabitEthernet0/0/0
+# router:  r1
+
+(no differences)

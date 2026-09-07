@@ -1,0 +1,15 @@
+---
+# Ansible collections. Install with:
+#   ansible-galaxy collection install -r requirements.yml
+#
+# cisco.ios gives us the network_cli connection for exec-mode actions and show
+# parsing. ansible.netcommon gives us the netconf connection and netconf_config /
+# netconf_get / netconf_rpc, which is where all the actual PQC configuration
+# happens.
+collections:
+  - name: cisco.ios
+    version: ">=11.5.1"
+  - name: ansible.netcommon
+    version: ">=8.6.2"
+  - name: ansible.utils
+    version: ">=6.1.0"

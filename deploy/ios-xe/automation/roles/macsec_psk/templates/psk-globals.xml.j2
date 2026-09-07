@@ -1,0 +1,88 @@
+{#
+  MKA policy and MACsec key chain for the pre-shared-key path.
+
+  /native/mka/policy[name]/macsec-cipher-suite
+  /native/key/chain[name]/macsec
+  /native/key/chain[name]/key[id]/cryptographic-algorithm-choice/macsec
+  /native/key/chain[name]/key[id]/key-string/key
+
+  macsec-cipher-suite is not optional in practice. The default MKA policy gives you
+  GCM-AES-256 nowhere: leave it out and the session comes up on GCM-AES-128.
+
+  The key id is the CKN, verbatim. "01" here shows up as CKN 01 in "show mka
+  sessions", which is how you tell a PSK session from an EAP-derived one at a glance:
+  the EAP-TLS path produces a 32-hex-character CKN that changes on every re-auth.
+
+  The key-string is the CAK. The YANG enforces what the CLI enforces: hex only, and
+  exactly 64 characters for aes-256-cmac (32 for aes-128-cmac). Getting that wrong is
+  rejected at the edit rather than silently producing a session that will not come up.
+
+  THE KEY IS PUSHED ONCE, ON THE RUN THAT CREATES THE CHAIN.
+
+  macsec_psk_push_key_string comes from tasks/main.yml, which probes the box for the
+  key chain first. Re-pushing a plaintext key-string onto a chain that already exists
+  does not merely churn, it FAILS: the box has stored the CAK encrypted, so the
+  running config carries "key-string 7 <blob>", and the NETCONF-to-CLI layer renders
+  our plaintext against that "7". "key-string 7 <plaintext hex>" is rejected with
+  "Rejecting: Key must consist of hex digits". Pushing the chain and the cipher suite
+  again is fine; it is only this leaf that cannot be replayed.
+
+  The cost of the skip is documented on the probe task and in DESIGN.md: a rotated
+  CAK needs a teardown with -e macsec_psk_remove_globals=true first. It defaults to
+  true so the teardown path, which renders this same template with
+  nc:operation="remove", is unaffected.
+
+  LIFETIME: macsec.md also sets "lifetime local 00:00:00 Jan 1 2020 infinite" on the
+  key. It is NOT true that this cannot be modelled, though two of the three obvious
+  paths are dead ends. accept-lifetime and send-lifetime both carry
+  when 'not(../../macsec)' and are rejected here with unknown-element, and the older
+  lifetime / lifetime-local choice is status obsolete and also rejected. The live path
+  is a third container, macsec-lifetime/lifetime, gated the other way round with
+  when '../../../macsec':
+
+    <macsec-lifetime><lifetime><lifetime-group-v1>
+      <local/><start-hh-mm-ss>00:00:00</start-hh-mm-ss>
+      <start-month>Jan</start-month><start-day>1</start-day>
+      <start-year>2020</start-year><infinite/>
+    </lifetime-group-v1></lifetime></macsec-lifetime>
+
+  Verified on 26.2.1: that payload is accepted and renders exactly
+  "lifetime local 00:00:00 Jan 1 2020 infinite".
+
+  It is deliberately left out below, because a key with no lifetime is always valid and
+  the shorter payload is one less thing to get wrong. Add the container above if you
+  want byte-for-byte parity with the doc.
+-#}
+{% set op = ' nc:operation="remove"' if state == 'absent' else '' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <mka>
+      <policy xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-mka"{{ op }}>
+        <name>{{ macsec_names.psk_mka_policy }}</name>
+{% if state == 'present' %}
+        <macsec-cipher-suite>{{ macsec_cipher_suite }}</macsec-cipher-suite>
+{% endif %}
+      </policy>
+    </mka>
+    <key>
+      <chain xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto"{{ op }}>
+        <name>{{ macsec_names.psk_key_chain }}</name>
+{% if state == 'present' %}
+        <macsec/>
+{% if macsec_psk_push_key_string | default(true) | bool %}
+        <key>
+          <id>{{ macsec_key_id }}</id>
+          <cryptographic-algorithm-choice>
+            <macsec>{{ macsec_key_algorithm }}</macsec>
+          </cryptographic-algorithm-choice>
+          <key-string>
+            <key>{{ lab_macsec_cak }}</key>
+          </key-string>
+        </key>
+{% endif %}
+{% endif %}
+      </chain>
+    </key>
+  </native>
+</config>

@@ -1,0 +1,13 @@
+Connecting to 198.18.154.202
+Can't use SSL_get_servername
+depth=0 CN=IOS-Self-Signed-Certificate-3526832631
+verify error:num=18:self-signed certificate
+CONNECTION ESTABLISHED
+Protocol version: TLSv1.3
+Ciphersuite: TLS_AES_256_GCM_SHA384
+Peer certificate: CN=IOS-Self-Signed-Certificate-3526832631
+Hash used: SHA256
+Signature type: rsa_pss_rsae_sha256
+Verification error: self-signed certificate
+Peer Temp Key: ECDH, secp384r1, 384 bits
+DONE

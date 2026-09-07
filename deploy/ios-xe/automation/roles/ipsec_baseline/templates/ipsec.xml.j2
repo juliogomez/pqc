@@ -1,0 +1,44 @@
+{#
+  IPsec transform set and one IPsec profile per peer.
+
+  /native/crypto/ipsec/transform-set[tag]/{esp,key-bit,mode}
+  /native/crypto/ipsec/profile[name]/set/{transform-set,ikev2-profile}
+
+  esp-gcm 256 is AEAD, so there is deliberately no esp-hmac: the YANG "when" on
+  esp-hmac excludes esp-gcm, and adding one would be rejected. Encryption and
+  integrity come from the same transform.
+
+  mode tunnel is a choice whose tunnel case is a single empty leaf named
+  tunnel-choice, which is why crypto.yml spells it that way.
+-#}
+{% set op = ' nc:operation="remove"' if state == 'absent' else '' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <ipsec xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <transform-set{{ op }}>
+          <tag>{{ crypto_names.transform_set }}</tag>
+{% if state == 'present' %}
+          <esp>{{ ipsec_esp }}</esp>
+          <key-bit>{{ ipsec_key_bits }}</key-bit>
+          <mode>
+            <{{ ipsec_mode_leaf }}/>
+          </mode>
+{% endif %}
+        </transform-set>
+{% for peer in my_peers %}
+        <profile{{ op }}>
+          <name>{{ crypto_names.ipsec_profile_prefix }}{{ peer.name | upper }}</name>
+{% if state == 'present' %}
+          <set>
+            <transform-set>{{ crypto_names.transform_set }}</transform-set>
+            <ikev2-profile>{{ crypto_names.ike_profile_prefix }}{{ peer.name | upper }}</ikev2-profile>
+          </set>
+{% endif %}
+        </profile>
+{% endfor %}
+      </ipsec>
+    </crypto>
+  </native>
+</config>

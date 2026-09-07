@@ -1,0 +1,79 @@
+---
+# ESCAPE HATCH: network_cli. Interface again, same reason as everywhere else: the
+# pulled Cisco-IOS-XE-native is a partial with no interface containers, so there is no
+# schema to validate an interface payload against.
+#
+# THIS RUNS LAST, and the ordering is the single most dangerous thing in this role.
+#
+# "access-session port-control auto" with "access-session closed" locks the port the
+# instant it is applied. If EAP-TLS cannot complete, the port stays unauthorized,
+# Vlan12 goes down, and Vlan12 is how you reach the CA over SCEP. That is a deadlock
+# you can only break by taking the interface config off again, and you cannot reach the
+# box over the link you just closed to do it.
+#
+# So: certificates first, verified Available, then this. The caller enforces that
+# order and the assertion below refuses to run without a certificate.
+
+# SCREEN-SCRAPE, and the anchoring is the whole point of the task.
+#
+# "show crypto pki certificates <tp>" prints up to two blocks:
+#
+#   Certificate                  <- the identity certificate, what enrolment produces
+#     Status: Available
+#   CA Certificate               <- the CA's own, present as soon as authenticate ran
+#     Status: Available
+#
+# This used to test for a bare "Status: Available" anywhere in that output, which
+# the CA block satisfies on its own. So an enrolment that authenticated the CA and
+# then failed to get an identity certificate passed this guard, and the next task
+# closed the port. That is the exact deadlock the header above warns about: the
+# port locks, Vlan12 goes down, and Vlan12 is the SCEP path you need to fix it.
+#
+# Requiring a newline immediately before "Certificate" is what excludes
+# "CA Certificate". Same regex as roles/common/tasks/pki-enroll.yml, on purpose.
+- name: Interface | certificate must exist before closing the port
+  cisco.ios.ios_command:
+    commands:
+      - "show crypto pki certificates {{ pki_names.eaptls_trustpoint }}"
+  register: eaptls_cert_check
+  changed_when: false
+  failed_when: false
+
+- name: Interface | refuse to close the port without a certificate
+  ansible.builtin.assert:
+    that:
+      - (eaptls_cert_check.stdout[0] | default('')) is search('(^|\n)Certificate\s*\n\s*Status:\s*Available')
+    fail_msg: >-
+      {{ inventory_hostname }} has no Available IDENTITY certificate on trustpoint
+      {{ pki_names.eaptls_trustpoint }}. An authenticated CA certificate does not
+      count and is what this check used to accept. Applying "access-session closed"
+      now would lock the port, take Vlan12 down, and cut the SCEP path you need to
+      fix it. Refusing. Fix enrollment first. Output as read:
+      {{ eaptls_cert_check.stdout[0] | default('(none)') }}
+    quiet: true
+
+# macsec network-link, NOT plain macsec. Plain "macsec" is the access mode and it
+# produces the trap documented in macsec.md: MKA reports Secured, access-session
+# reports Link Secured, and every MACsec counter stays at zero because nothing is
+# actually being encrypted. IOS XE also will not let you switch mode in place; you have
+# to remove one before setting the other.
+- name: Interface | EAP-TLS MACsec
+  cisco.ios.ios_config:
+    parents: "interface {{ my_macsec_interface }}"
+    lines:
+      - macsec network-link
+      - authentication periodic
+      - "authentication timer reauthenticate {{ macsec_reauth_seconds }}"
+      - access-session host-mode multi-host
+      - access-session closed
+      - access-session port-control auto
+      - dot1x pae both
+      - "dot1x authenticator eap profile {{ macsec_names.eap_profile }}"
+      - "dot1x supplicant eap profile {{ macsec_names.eap_profile }}"
+      - "mka policy {{ macsec_names.eaptls_mka_policy }}"
+      - "service-policy type control subscriber {{ macsec_names.control_policy }}"
+      - "dot1x credentials {{ macsec_names.dot1x_credentials }}"
+  # authentication periodic plus the reauthenticate timer is what makes this path
+  # interesting for PQ: every re-auth is a fresh EAP-TLS handshake, so it is the thing
+  # that actually rotates post-quantum keying material. A SAK rekey does not; it keeps
+  # the same CAK and CKN.

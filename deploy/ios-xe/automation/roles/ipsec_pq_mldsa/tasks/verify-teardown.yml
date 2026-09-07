@@ -1,0 +1,79 @@
+---
+# Prove the teardown actually happened. Do not assume it did.
+#
+# Every check below reads the box again after the removals, rather than trusting
+# that the edits returned <ok/>. A NETCONF remove of a node that the server chose
+# not to remove still answers <ok/>, and "crypto key zeroize" on a key that is in
+# use fails with a message that is easy to scroll past.
+#
+# The protected objects are checked too, in the positive direction: the point of
+# a teardown verification is not only "my things are gone" but "nothing else went
+# with them".
+
+- name: "Teardown | {{ inventory_hostname }} | re-read trustpoints, keys and profiles"
+  cisco.ios.ios_command:
+    commands:
+      - show running-config | include ^crypto pki trustpoint
+      - show crypto key mypubkey all
+      - show running-config | include ^service internal
+      - "show running-config | section crypto ikev2 profile"
+  register: mldsa_td
+  changed_when: false
+
+- name: "Teardown | {{ inventory_hostname }} | this role's objects are gone"
+  ansible.builtin.assert:
+    that:
+      # multiline=True is load-bearing: "$" without it anchors to the end of the
+      # whole output, so a surviving trustpoint listed above any other one would
+      # not match and this assertion would pass a teardown that did nothing.
+      - mldsa_td.stdout[0] is not search('crypto pki trustpoint ' ~ pki_names.mldsa_trustpoint ~ '\s*$', multiline=True)
+      - mldsa_td.stdout[1] is not search('Key name:\s*' ~ pki_names.mldsa_key_label ~ '\s')
+      - mldsa_td.stdout[3] is not search('mldsa-sig')
+    fail_msg: >-
+      Teardown did not complete on {{ inventory_hostname }}. Still present:
+      {{ 'trustpoint ' ~ pki_names.mldsa_trustpoint if mldsa_td.stdout[0] is search('crypto pki trustpoint ' ~ pki_names.mldsa_trustpoint) else '' }}
+      {{ 'key ' ~ pki_names.mldsa_key_label if mldsa_td.stdout[1] is search('Key name:\s*' ~ pki_names.mldsa_key_label) else '' }}
+      {{ 'mldsa-sig still on an IKEv2 profile' if mldsa_td.stdout[3] is search('mldsa-sig') else '' }}
+    success_msg: >-
+      {{ pki_names.mldsa_trustpoint }} removed, {{ pki_names.mldsa_key_label }}
+      zeroized, IKEv2 profiles back on pre-shared key
+    quiet: true
+
+- name: "Teardown | {{ inventory_hostname }} | the protected objects are untouched"
+  ansible.builtin.assert:
+    that:
+      # The trustpoint behind "ip http secure-trustpoint", and therefore RESTCONF.
+      - mldsa_td.stdout[0] is search('crypto pki trustpoint TP-self-signed-')
+      # The chassis identity burned in at manufacturing.
+      - mldsa_td.stdout[1] is search('CISCO_IDEVID_SUDI')
+    fail_msg: >-
+      A protected object went missing during teardown on {{ inventory_hostname }}.
+      TP-self-signed-* backs the HTTPS server that RESTCONF answers on, and
+      CISCO_IDEVID_SUDI is the chassis identity. Neither should ever be affected by
+      this role. Trustpoints now: {{ mldsa_td.stdout[0] }}
+    success_msg: "TP-self-signed-* and CISCO_IDEVID_SUDI still present"
+    quiet: true
+
+# multiline=True here for the same reason it is on the trustpoint regex above.
+# "show running-config | include ^service internal" happens to return a single
+# line today, so a bare "^" anchored at the start of the whole string does match
+# and this check does work. It works by accident of the output being one line
+# long, which is not a property worth depending on: the day the filter returns
+# anything above that line, "^" stops matching, the search reads false, and the
+# check cheerfully reports "service internal is off" on a box that still has it.
+- name: "Teardown | {{ inventory_hostname }} | service internal is back where it was"
+  ansible.builtin.assert:
+    that:
+      - ((mldsa_td.stdout[2] is search('^service internal', multiline=True))
+         | bool) == (mldsa_state.service_internal_before | bool)
+    fail_msg: >-
+      "service internal" on {{ inventory_hostname }} is
+      {{ 'on' if mldsa_td.stdout[2] is search('^service internal', multiline=True) else 'off' }}
+      but the build record says it was
+      {{ 'on' if mldsa_state.service_internal_before | bool else 'off' }}
+      before this role ran.
+    success_msg: >-
+      service internal restored to
+      {{ 'on' if mldsa_state.service_internal_before | bool else 'off' }},
+      as it was before the build
+    quiet: true

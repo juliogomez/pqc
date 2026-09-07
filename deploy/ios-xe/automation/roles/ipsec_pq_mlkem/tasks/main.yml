@@ -1,0 +1,99 @@
+---
+# ML-KEM in the IKEv2 handshake. Native hybrid key exchange, nothing to
+# distribute.
+#
+# RFC 9370 lets IKEv2 run an additional key exchange in an IKE_INTERMEDIATE
+# exchange after IKE_SA_INIT, and 26.2 puts ML-KEM in it. The classical ECDH group
+# stays, so the session key depends on both and breaking one is not enough.
+#
+# Idempotent. Two empty leaves merged twice are the same two empty leaves.
+#
+# Fragmentation is already on from ipsec-baseline, which matters here: ML-KEM-768
+# puts a 1,184-byte encapsulation key on the wire and the handshake does not fit in
+# one datagram.
+
+- name: ML-KEM | sanity
+  ansible.builtin.assert:
+    that:
+      - pq_key_exchange in ['mlkem512', 'mlkem768', 'mlkem1024']
+    fail_msg: >-
+      pq_key_exchange must be one of mlkem512, mlkem768 or mlkem1024. The value is
+      used as a YANG leaf name, so it has to match the schema spelling exactly. Got
+      "{{ pq_key_exchange }}".
+    quiet: true
+
+- name: ML-KEM | build
+  when: state == 'present'
+  block:
+
+    - name: Render ML-KEM
+      ansible.builtin.set_fact:
+        nc_label: >-
+          {{ pq_key_exchange }}
+          {{ pq_key_exchange_optional | bool | ternary('(optional)', '(required)') }}
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'mlkem.xml.j2') }}"
+
+    - name: Push ML-KEM
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    # Gated, because "clear crypto ikev2 sa" is an action and an action task is
+    # always "changed". Unconditional, it alone made changed=0 impossible on a
+    # second run, and it is not free either: it drops every tunnel on the box.
+    # Fire it only when the push above really moved something.
+    - name: Force renegotiation so the SA actually uses ML-KEM
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: clear-ikev2-sa
+      when: netconf_edit_result.changed | default(false)
+
+    - name: Note what "optional" costs you
+      ansible.builtin.debug:
+        msg: >-
+          pq_key_exchange_optional is true, so a peer that cannot do
+          {{ pq_key_exchange }} falls back to classical DH and the tunnel still
+          comes up, with no syslog to tell you. verify.yml reads the pqc-group leaf
+          per SA; pqc-gt-none there means you are not protected. Set
+          pq_key_exchange_optional to false in group_vars/all/pqc.yml once every
+          peer is upgraded.
+      when: pq_key_exchange_optional | bool
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config
+
+# --- Teardown ----------------------------------------------------------------
+#
+# Removes the whole pqc container, which takes "optional" with it. The classical
+# proposal underneath is untouched, so the tunnel comes back as a purely classical
+# one rather than going down.
+- name: ML-KEM | tear down
+  when: state == 'absent'
+  block:
+
+    - name: Render ML-KEM removal
+      ansible.builtin.set_fact:
+        nc_label: remove ML-KEM
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'mlkem.xml.j2') }}"
+
+    - name: Push ML-KEM removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    # Same gate as the build side. A repeated teardown has nothing to remove, so it
+    # has no business tearing every SA on the box down again.
+    - name: Force renegotiation so the tunnel drops back to classical
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: clear-ikev2-sa
+      when: netconf_edit_result.changed | default(false)
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config

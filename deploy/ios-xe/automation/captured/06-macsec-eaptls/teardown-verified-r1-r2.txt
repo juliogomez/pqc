@@ -1,0 +1,65 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show running-config | section ^interface TwoGigabitEthernet0/0/0 ---
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 12
+ switchport mode access
+
+--- show running-config | include ^username|^access-session|^eap profile|^aaa attribute|^mka policy|^dot1x credentials ---
+username admin privilege 15 secret 9 <REDACTED-SECRET-HASH>
+username R1
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 0
+      Secured Sessions... 0
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+
+
+--- show macsec status interface TwoGigabitEthernet0/0/0 ---
+MACsec is not enabled or secy status failed
+
+
+--- show ip interface brief | include Vlan12 ---
+Vlan12                 10.0.12.1       YES NVRAM  up                    up      
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show running-config | section ^interface TwoGigabitEthernet0/0/0 ---
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 12
+ switchport mode access
+
+--- show running-config | include ^username|^access-session|^eap profile|^aaa attribute|^mka policy|^dot1x credentials ---
+access-session mac-move deny
+username admin privilege 15 secret 9 <REDACTED-SECRET-HASH>
+username R2
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 0
+      Secured Sessions... 0
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+
+
+--- show macsec status interface TwoGigabitEthernet0/0/0 ---
+MACsec is not enabled or secy status failed
+
+
+--- show ip interface brief | include Vlan12 ---
+Vlan12                 10.0.12.2       YES NVRAM  up                    up      

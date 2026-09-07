@@ -1,0 +1,3 @@
+  r1: Negotiated TLS1.3 group: X25519MLKEM768 
+  r2: Negotiated TLS1.3 group: X25519MLKEM768 
+  r3: Negotiated TLS1.3 group: X25519MLKEM768 

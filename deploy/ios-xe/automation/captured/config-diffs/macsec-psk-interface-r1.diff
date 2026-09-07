@@ -1,0 +1,8 @@
+# macsec-psk-interface-r1.diff
+#
+# macsec-psk.yml teardown returns the interface to its exact pre-state. An empty diff is the pass.
+#
+# command: show running-config | section interface TwoGigabitEthernet0/0/0
+# router:  r1
+
+(no differences)

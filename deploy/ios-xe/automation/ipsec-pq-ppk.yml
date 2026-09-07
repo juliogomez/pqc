@@ -1,0 +1,30 @@
+---
+# Path A to a quantum-safe tunnel: RFC 8784 post-quantum pre-shared key.
+#
+#   ansible-playbook ipsec-pq-ppk.yml
+#   ansible-playbook ipsec-pq-ppk.yml -e state=absent
+#
+# Requires ipsec-baseline.yml first: this adds a PPK to keyring peers and
+# profiles that already exist.
+#
+# Never run alongside ipsec-pq-mlkem.yml. The role checks and refuses. The round
+# trip PPK -> teardown -> ML-KEM -> teardown -> PPK is meant to work, so you can
+# see both answers on the same hardware.
+#
+# Parallel across all three hosts. The change is additive on both ends and the
+# tunnel simply renegotiates.
+
+- name: Mix a post-quantum pre-shared key into the IKEv2 key schedule
+  hosts: routers
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  pre_tasks:
+    - name: Pre-flight — refuse if ML-KEM is still configured
+      ansible.builtin.import_tasks:
+        file: "{{ playbook_dir }}/roles/common/tasks/guard-ppk-vs-mlkem.yml"
+      when: state | default('present') == 'present'
+  roles:
+    - role: ipsec_pq_ppk
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml

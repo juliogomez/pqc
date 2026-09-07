@@ -1,0 +1,39 @@
+---
+# Post-quantum MACsec: ML-KEM inside the EAP-TLS handshake.
+#
+#   ansible-playbook macsec-pq.yml
+#   ansible-playbook macsec-pq.yml -e state=absent
+#
+# Stacks on macsec-eaptls.yml, and refuses to run on a PSK-keyed link because there
+# would be no handshake for ML-KEM to go into.
+#
+# Two leaves, driven by pq_macsec_type and pq_macsec_tls_version in
+# group_vars/all/pqc.yml. Change hybrid to pqc there and re-run, and the link moves from
+# x448 + ML-KEM-768 to pure ML-KEM-512, which is a downgrade despite the name.
+#
+# Both ends in parallel. Teardown puts the shipped defaults back rather than removing the
+# leaves, so the link keeps working and simply becomes classical again.
+
+- name: Steer the EAP-TLS handshake onto ML-KEM
+  hosts: macsec_pair
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: macsec_pq
+
+- name: Confirm MACsec is secured with PQ EAP-TLS settings
+  hosts: macsec_pair
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  tasks:
+    - name: Operational proof
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: verify-macsec-proof
+      vars:
+        macsec_proof_keying: pq
+      when: state | default('present') == 'present'
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

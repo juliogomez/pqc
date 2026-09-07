@@ -1,0 +1,45 @@
+### TAG=phaseB-verify
+### CMD=ansible-playbook verify.yml
+### START=2026-09-01T09:28:09Z
+
+PLAY [Report the post-quantum posture] *****************************************
+
+TASK [Verify | negotiated ML-KEM group per IKEv2 SA] ***************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 SA operational data] ************************
+[ERROR]: Task failed: Could not open socket to 198.18.154.203:830
+Origin: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/common/tasks/netconf-fetch.yml:25:3
+
+23 # that can be reflowed by the next release.
+24
+25 - name: "NETCONF get | {{ nc_label }}"
+     ^ column 3
+
+fatal: [r2]: FAILED! => {"changed": false, "msg": "Task failed: Could not open socket to 198.18.154.203:830"}
+[ERROR]: Task failed: Could not open socket to 198.18.154.204:830
+Origin: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/common/tasks/netconf-fetch.yml:25:3
+
+23 # that can be reflowed by the next release.
+24
+25 - name: "NETCONF get | {{ nc_label }}"
+     ^ column 3
+
+fatal: [r3]: FAILED! => {"changed": false, "msg": "Task failed: Could not open socket to 198.18.154.204:830"}
+[ERROR]: Task failed: Could not open socket to 198.18.154.202:830
+Origin: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/common/tasks/netconf-fetch.yml:25:3
+
+23 # that can be reflowed by the next release.
+24
+25 - name: "NETCONF get | {{ nc_label }}"
+     ^ column 3
+
+fatal: [r1]: FAILED! => {"changed": false, "msg": "Task failed: Could not open socket to 198.18.154.202:830"}
+
+PLAY RECAP *********************************************************************
+r1                         : ok=1    changed=0    unreachable=0    failed=1    skipped=1    rescued=0    ignored=0   
+r2                         : ok=1    changed=0    unreachable=0    failed=1    skipped=1    rescued=0    ignored=0   
+r3                         : ok=1    changed=0    unreachable=0    failed=1    skipped=1    rescued=0    ignored=0   
+
+### END=2026-09-01T09:29:10Z
+### RC=2

@@ -1,0 +1,45 @@
+{#
+  Post-quantum MACsec. Two global leaves.
+
+  /native/access-session/pqc-type
+  /native/access-session/tls-version
+
+  This is the payoff for all of macsec-eaptls. Everything that role built exists so
+  that these two leaves have somewhere to apply: a TLS 1.3 handshake inside EAP-TLS,
+  whose key exchange these steer.
+
+  pqc-type is an enum with four values and the naming is actively misleading:
+
+    pqc      pure mode. Lands on ML-KEM-512, the WEAKER post-quantum choice here.
+    hybrid   x448 + ML-KEM-768. Strongest, and it fails closed: a peer that cannot do
+             ML-KEM is refused rather than downgraded.
+    non-pqc  classical secp521r1. Troubleshooting only.
+    all      hybrid between two IOS XE peers, but silently drops to secp521r1 against
+             a non-PQ peer and still reports "Secured".
+
+  Default is non-pqc, so this is a leaf you have to set: an EAP-TLS session left alone
+  is classical.
+
+  tls-version pinned to 1.3 because ML-KEM in EAP-TLS only exists in the TLS 1.3
+  handshake. The shipped default is "all", which means a peer can land on 1.2 and take
+  the post-quantum key exchange off the table without anything looking wrong.
+
+  On teardown these go back to the shipped defaults rather than being removed, so the
+  EAP-TLS session keeps working and simply becomes classical again. Removing them would
+  do the same thing, but saying it explicitly means the running config shows what you
+  chose.
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <access-session xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-sanet">
+{% if state == 'present' %}
+      <pqc-type>{{ pq_macsec_type }}</pqc-type>
+      <tls-version>{{ pq_macsec_tls_version }}</tls-version>
+{% else %}
+      <pqc-type>non-pqc</pqc-type>
+      <tls-version>all</tls-version>
+{% endif %}
+    </access-session>
+  </native>
+</config>

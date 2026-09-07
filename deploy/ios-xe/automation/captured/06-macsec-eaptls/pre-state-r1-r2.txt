@@ -1,0 +1,60 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show running-config interface TwoGigabitEthernet0/0/0 ---
+Building configuration...
+
+Current configuration : 92 bytes
+!
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 12
+ switchport mode access
+end
+
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 0
+      Secured Sessions... 0
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+
+
+--- show crypto pki certificates PQAUTO-EAPTLS ---
+
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show running-config interface TwoGigabitEthernet0/0/0 ---
+Building configuration...
+
+Current configuration : 92 bytes
+!
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 12
+ switchport mode access
+end
+
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 0
+      Secured Sessions... 0
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+
+
+--- show crypto pki certificates PQAUTO-EAPTLS ---
+

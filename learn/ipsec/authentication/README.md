@@ -595,8 +595,14 @@ So unlike the key-exchange story (where ML-KEM ships in stable strongSwan 6.0.x 
 
 ---
 
-**On real hardware:** the same story holds on Cisco gear, one release later.
-[IOS XE 26.1](../../../deploy/ios-xe/ipsec.md#authentication-the-ml-dsa-roadmap) authenticates
-IKEv2 peers with PSK or classical certificates, with ML-DSA certificate authentication
-planned for 26.2. Until then the mitigation is the PPK you met in the
-[key-exchange lab](../key-exchange/README.md#exercise-3-an-alternate-path-to-quantum-safety-rfc-8784-ppk).
+**On real hardware:** Cisco got there first, which is not what you'd expect from a feature
+this experimental upstream.
+[IOS XE 26.2](../../../deploy/ios-xe/ipsec.md#exercise-5-ml-dsa-certificate-authentication)
+authenticates IKEv2 peers with ML-DSA-44, 65 or 87, using the same ML-DSA-65 default this
+lab uses. Two things are different from strongSwan: the router generates its ML-DSA key in
+exec mode rather than with a `pki` tool, and it can't get that key certified over SCEP, so
+the certificate has to come from a CA you drive by hand or from OpenSSL off-box. And the size
+cost you measured here shows up on the wire as a **six times larger** IKEv2 handshake.
+
+The size explosion is the same lesson in both places. Here you saw it in the certificate
+files; there you see it in `IKE_AUTH` fragment counts.

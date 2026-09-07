@@ -1,0 +1,114 @@
+---
+# Did ML-DSA actually authenticate the tunnel? Ask it PER SA, not once per box.
+#
+# THE ONE LEGITIMATE SCREEN-SCRAPE IN THIS ROLE, and it is worth saying exactly
+# why. Cisco-IOS-XE-crypto-oper models the authentication method as
+# "typedef crypto-auth-method", whose enumeration stops at
+# crypto-ikev2-auth-eap (value 7). There is no ML-DSA value in it. The negotiated
+# ML-KEM group IS modelled (leaf pqc-group, crypto-pqc-group-type), so ipsec-pq-mlkem
+# can answer its question from structured data; this one cannot. Until the enum
+# grows an ML-DSA member, the only place the box will tell you which signature
+# algorithm authenticated the SA is the "Auth sign:" line of
+# "show crypto ikev2 sa detailed".
+#
+# WHY THIS COUNTS ROWS INSTEAD OF SEARCHING THE WHOLE OUTPUT.
+#
+# The previous version ran one search for "Auth sign: MLDSA" across the entire
+# output. On a spoke that is fine, because a spoke has exactly one SA. On the hub
+# it is a false positive waiting to happen: R2 holds one SA per spoke, so a
+# half-migrated box that signs ML-DSA toward R1 and pre-shared key toward R3
+# still contains the string and still passed. That is not a hypothetical, it is
+# the exact state an interrupted run left this lab in, both legs reading
+#
+#   Encr: AES-CBC, ..., DH Grp:20, Auth sign: PSK, Auth verify: MLDSA
+#
+# while the spokes reported ML-DSA and everything looked converged.
+#
+# Each SA emits exactly ONE line carrying "Auth sign:", so counting lines is
+# counting SAs. Three counts have to agree with the number of peers this host
+# has in topology.yml (1 on a spoke, 2 on the hub):
+#
+#   ready_rows   session rows in the Status COLUMN state READY
+#   sign_rows    SAs that reported an "Auth sign:" field at all
+#   mldsa_rows   SAs whose "Auth sign:" says MLDSA
+#
+# sign_rows == mldsa_rows == expected is the load-bearing part: every SA the box
+# has must be ML-DSA signed, and there must be as many of them as there are
+# peers. One PSK leg makes sign_rows exceed mldsa_rows and the check fails.
+#
+# Matching is done per line, on stdout_lines, rather than with a multiline regex
+# over one blob. Same result, and it removes any chance of a "$" quietly
+# anchoring to the end of the whole output instead of the end of a row.
+#
+# DO NOT "SIMPLIFY" THIS BY ASSERTING ON "Auth verify:". IT IS NOT TRUSTWORTHY.
+#
+# Measured on this hardware: with the hub still signing PSK on both legs, R1 and
+# R3 both reported "Auth verify: MLDSA" anyway. The initiator's Auth verify field
+# claimed a peer signature that demonstrably was not ML-DSA. Only the RESPONDER
+# reported both directions truthfully. So "Auth verify" cannot be used to infer
+# what the peer signed. Assert on "Auth sign:" LOCALLY on every device instead:
+# run this play against all three routers and each one vouches for its own
+# signing, which between them covers both directions of every SA without ever
+# trusting a field that lies.
+#
+# READY IS A COLUMN, NOT A LABEL. This used to test for "Status: READY" and that
+# string does not exist anywhere in the output on 26.02.01eftr2. "Status" appears
+# twice and neither is it:
+#
+#   Tunnel-id Local            Remote           fvrf/ivrf   Status      <- header
+#   1         10.0.12.1/500    10.0.12.2/500    none/none   READY       <- the row
+#         Status Description: Negotiation done                          <- prose
+#
+# So the old test could never be satisfied, on any SA, in any state. It burned
+# mldsa_sa_retries x mldsa_sa_delay (18 x 10s = three minutes) and then failed the
+# play on a tunnel that was perfectly healthy. Anchor on the row instead: an SA id,
+# two address/port pairs, the vrf pair, then READY.
+- name: "ML-DSA | {{ inventory_hostname }} | wait for every IKEv2 SA to be ML-DSA authenticated"
+  cisco.ios.ios_command:
+    commands:
+      - show crypto ikev2 sa detailed
+  register: mldsa_sa
+  until:
+    - (mldsa_sa.stdout_lines[0] | default([]) | select('search', '^\s*\d+\s+\S+/\d+\s+\S+/\d+\s+\S+\s+READY') | list | length) == (my_peers | length)
+    - (mldsa_sa.stdout_lines[0] | default([]) | select('search', 'Auth sign\s*:') | list | length) == (my_peers | length)
+    - (mldsa_sa.stdout_lines[0] | default([]) | select('search', 'Auth sign\s*:\s*MLDSA') | list | length) == (my_peers | length)
+  retries: "{{ mldsa_sa_retries }}"
+  delay: "{{ mldsa_sa_delay }}"
+  changed_when: false
+  # The verdict is the assertion below, not this task. Retrying to exhaustion here
+  # would fail the play with "until condition was not met" and nothing about which
+  # of the three counts was wrong, which is the least useful failure available.
+  failed_when: false
+  # An IKEv2 SA is built by traffic, not by configuration. The tunnel interface
+  # keepalives get there on their own, but ML-DSA-65 puts roughly 21 KB into
+  # IKE_AUTH across a dozen or more fragments, so it is not instant.
+
+- name: "ML-DSA | {{ inventory_hostname }} | every SA on this box signs with ML-DSA"
+  ansible.builtin.assert:
+    that:
+      - (mldsa_sa.stdout_lines[0] | default([]) | select('search', '^\s*\d+\s+\S+/\d+\s+\S+/\d+\s+\S+\s+READY') | list | length) == (my_peers | length)
+      - (mldsa_sa.stdout_lines[0] | default([]) | select('search', 'Auth sign\s*:') | list | length) == (my_peers | length)
+      - (mldsa_sa.stdout_lines[0] | default([]) | select('search', 'Auth sign\s*:\s*MLDSA') | list | length) == (my_peers | length)
+    fail_msg: >-
+      {{ inventory_hostname }} has {{ my_peers | length }} peer(s) in topology.yml,
+      so it must hold {{ my_peers | length }} READY IKEv2 SA(s) and every one of
+      them must report "Auth sign: MLDSA". Measured instead:
+      {{ mldsa_sa.stdout_lines[0] | default([]) | select('search', '^\s*\d+\s+\S+/\d+\s+\S+/\d+\s+\S+\s+READY') | list | length }} READY row(s),
+      {{ mldsa_sa.stdout_lines[0] | default([]) | select('search', 'Auth sign\s*:') | list | length }} SA(s) reporting an Auth sign field, of which
+      {{ mldsa_sa.stdout_lines[0] | default([]) | select('search', 'Auth sign\s*:\s*MLDSA') | list | length }} say MLDSA.
+      The Auth sign fields actually present:
+      {{ mldsa_sa.stdout_lines[0] | default([]) | select('search', 'Auth sign\s*:') | map('regex_replace', '^.*(Auth sign\s*:\s*\S+?),?\s*Auth verify.*$', '\1') | map('trim') | list }}
+      More MLDSA rows than expected means a stale SA is still up; fewer means a leg
+      is still on pre-shared key. On the hub a mixed result is the half-migrated
+      state: one spoke swapped, the other not.
+    success_msg: >-
+      all {{ my_peers | length }} SA(s) on {{ inventory_hostname }} are READY and
+      report "Auth sign: MLDSA"
+    quiet: true
+
+- name: "ML-DSA | {{ inventory_hostname }} | report the authenticated SAs"
+  ansible.builtin.debug:
+    msg: >-
+      {{ mldsa_sa.stdout_lines[0] | default([])
+         | select('search', 'Status:|Auth sign|Auth verify|Local spi')
+         | map('trim') | list }}

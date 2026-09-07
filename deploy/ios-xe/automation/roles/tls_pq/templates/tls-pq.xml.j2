@@ -1,0 +1,35 @@
+{#
+  Post-quantum TLS on the management HTTPS server.
+
+  /native/ip/http/secure-pqc-type
+
+  One leaf, and Cisco-IOS-XE-http is a real module augmenting /native/ip, so unlike the SSH
+  payload this one carries its own namespace.
+
+  Same four enum values as the MACsec knob and the same meanings: pqc is pure (and fails
+  closed), hybrid is classical plus ML-KEM, non-pqc is classical only, all negotiates the
+  best available and quietly accepts a classical result.
+
+  The shipped default is already "all", and 26.2 negotiates X25519MLKEM768 with a modern
+  browser without any configuration at all. So setting this to all changes nothing on the
+  wire; what it changes is that the posture is now stated in the running config instead of
+  being an accident of the default. Set it to pqc if you want the management interface to
+  refuse a classical client rather than serve it.
+
+  Teardown removes the leaf rather than writing a value, so the box goes back to its own
+  default instead of to whatever we think the default is.
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <ip>
+      <http xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-http">
+{% if state == 'present' %}
+        <secure-pqc-type>{{ pq_https_pqc_type }}</secure-pqc-type>
+{% else %}
+        <secure-pqc-type nc:operation="remove"/>
+{% endif %}
+      </http>
+    </ip>
+  </native>
+</config>

@@ -1,0 +1,27 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show running-config | section ^key chain ---
+
+
+--- show running-config | include ^mka policy ---
+
+
+--- show running-config | section interface TwoGigabitEthernet0/0/0 ---
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 12
+ switchport mode access
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 0
+      Secured Sessions... 0
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+

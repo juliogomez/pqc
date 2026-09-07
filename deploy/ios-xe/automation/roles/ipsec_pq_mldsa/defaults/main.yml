@@ -1,0 +1,77 @@
+---
+# --- The offline ML-DSA certificate authority --------------------------------
+#
+# Why an offline CA rather than the local IOS certificate server on the hub.
+#
+# The IOS CA CAN sign an ML-DSA certificate request. That was measured, not
+# assumed: an ML-DSA-65 PKCS#10 generated on R1 was fed to an RSA-keyed IOS
+# certificate server with "crypto pki server <name> request pkcs10 terminal pem"
+# and the CA issued a certificate carrying an ML-DSA-65 subject public key.
+#
+# What fails is SCEP. "crypto pki authenticate" succeeds, because SCEP GetCACert
+# is a plain unsigned GET, and then enrolment fails with
+# "%PKI-2-CERT_ENROLL_FAIL" while an identical RSA enrolment to that same CA
+# succeeds. One variable changed, so the transport is the broken layer and the
+# signer is fine. Which part of SCEP breaks was never isolated: nobody ran the
+# paired client-and-CA debug capture. RFC 8894 makes the requester wrap PKCSReq in
+# a CMS SignedData signed with its own key, so a missing ML-DSA CMS signer is the
+# obvious suspect, but that is a hypothesis, not a measurement.
+#
+# Hence: terminal enrolment, which has no CMS layer, and a CA on the control node
+# where OpenSSL 3.5+ has native ML-DSA. The router still generates its own key and
+# its own CSR; only public material crosses the wire.
+#
+# OpenSSL binary. Override if your system openssl predates 3.5 and the ML-DSA
+# build lives somewhere else:  -e mldsa_openssl=/opt/homebrew/bin/openssl
+mldsa_openssl: openssl
+
+# Everything the CA owns lives here, on the control node. Gitignored as a whole
+# directory (see the repo .gitignore); the private key must never be committed.
+mldsa_ca_dir: "{{ playbook_dir }}/.lab-ca"
+mldsa_ca_key: "{{ mldsa_ca_dir }}/pqc-lab-mldsa{{ pq_signature_param_set }}-ca-key.pem"
+mldsa_ca_cert: "{{ mldsa_ca_dir }}/pqc-lab-mldsa{{ pq_signature_param_set }}-ca.crt"
+mldsa_ca_fingerprint_file: "{{ mldsa_ca_dir }}/pqc-lab-mldsa{{ pq_signature_param_set }}-ca.md5"
+mldsa_ca_subject: "/C=ES/O=PQC-Lab/CN=PQC-LAB-MLDSA{{ pq_signature_param_set }}-CA"
+mldsa_ca_days: 3650
+mldsa_leaf_days: 825
+
+# Per-router artefacts. The CSR comes off the router, the certificate goes back.
+mldsa_csr_file: "{{ mldsa_ca_dir }}/{{ inventory_hostname }}.csr"
+mldsa_crt_file: "{{ mldsa_ca_dir }}/{{ inventory_hostname }}.crt"
+mldsa_ext_file: "{{ mldsa_ca_dir }}/{{ inventory_hostname }}.ext"
+
+# What the role changed on each router, so teardown can undo exactly that and
+# nothing else. Written once at build time, read at teardown time. It has to be a
+# file rather than a fact because build and teardown are separate playbook runs.
+mldsa_state_file: "{{ mldsa_ca_dir }}/state/{{ inventory_hostname }}.json"
+
+# --- Identity ----------------------------------------------------------------
+#
+# Subject CN. Uppercase host name, matching the device configs.
+mldsa_subject_name: "CN={{ inventory_hostname | upper }}"
+
+# THE IKEv2 IDENTITY. This is the part that is easy to get wrong by accident, so
+# it is derived explicitly rather than left to chance.
+#
+# roles/ipsec_baseline sets "identity local address <local_address>" on every
+# IKEv2 profile, so each router announces itself in IKE_AUTH as an ID_IPV4_ADDR.
+# With certificate authentication the responder then checks that the address it
+# was given actually appears in the certificate's subjectAltName as an iPAddress.
+# If it does not, IOS XE logs IKMP_NO_ID_CERT_ADDR_MATCH on every negotiation.
+#
+# A CN is NOT enough and neither is a DNS SAN: the ID type is ID_IPV4_ADDR, so
+# the SAN entry has to be an IP.
+#
+# The hub carries one identity per leg (10.0.12.2 toward R1, 10.0.23.1 toward R3),
+# so this is a list, deduplicated, taken straight from the same topology data that
+# built the profiles. Change topology.yml and the SANs follow.
+mldsa_identity_addresses: "{{ my_peers | map(attribute='local_address') | unique | list }}"
+mldsa_subject_alt_name: "{{ mldsa_identity_addresses | map('regex_replace', '^(.*)$', 'IP:\\1') | join(',') }}"
+
+# --- Operational proof -------------------------------------------------------
+#
+# How long to wait for an IKEv2 SA to come up authenticated by ML-DSA. An SA is
+# built by traffic, not by configuration, and ML-DSA-65 puts about 21 KB into
+# IKE_AUTH across a dozen or more fragments, so it is not instant.
+mldsa_sa_retries: 18
+mldsa_sa_delay: 10

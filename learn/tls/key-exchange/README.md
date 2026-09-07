@@ -366,7 +366,8 @@ That's a wrap! You ran a real post-quantum TLS handshake, confirmed the hybrid g
 
 ---
 
-**On real hardware:** [TLS on Cisco IOS XE](../../../deploy/ios-xe/tls.md) is the shortest
-doc in Stage 2, and that says something. The same `X25519MLKEM768` you just negotiated in two
-containers is refused by the router's own HTTPS management server, which still only offers
-classical curves. A general-purpose TLS library versus a purpose-built embedded one.
+**On real hardware:** [TLS on Cisco IOS XE](../../../deploy/ios-xe/tls.md) gets you the
+same `X25519MLKEM768` you just negotiated, from the router's own HTTPS management server,
+with no configuration at all. On IOS XE 26.1 that handshake fell back to a classical curve;
+on 26.2 it doesn't. The doc also shows you the `ip http secure-pqc-type` knob and what a
+HelloRetryRequest looks like when you turn the post-quantum groups off.

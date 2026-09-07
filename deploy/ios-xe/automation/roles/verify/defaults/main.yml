@@ -1,0 +1,83 @@
+---
+# verify is a reporter by default. It tells you what the posture is; it does not
+# decide whether you should be happy about it.
+#
+# Flip any of these to true (or pass -e) to turn the corresponding observation
+# into a hard assertion. That is what you want in CI; it is not what you want
+# when you are running verify.yml standalone to find out where you left the lab.
+verify_require_mlkem: false
+verify_require_mldsa: false
+verify_require_macsec_secured: false
+verify_require_macsec_absent: false
+
+# Scoped verify modes (pass -e on verify.yml). Do not combine macsec_only and
+# ipsec_only in one run.
+verify_macsec_only: false
+verify_ipsec_only: false
+
+# Hard-fail the play when a verify_require_* check fails. On by default for
+# full-fabric verify (CI). Off for verify_ipsec_only unless you pass this too.
+verify_enforce: false
+
+# secured | absent — used with verify_macsec_only=true:
+#   secured — expect MKA secured and encrypting (default after apply)
+#   absent  — MACsec torn down (after macsec-* -e state=absent)
+verify_macsec_expect: secured
+
+# When verify_macsec_only=true, enforce from verify_macsec_expect unless you
+# pass -e verify_macsec_enforce=false (report only, exit 0 even on FAIL).
+verify_macsec_enforce: "{{ verify_macsec_only | bool }}"
+
+verify_effective_macsec_only: "{{ verify_macsec_only | bool }}"
+verify_effective_ipsec_only: "{{ verify_ipsec_only | bool }}"
+
+verify_collect_ipsec: "{{ not (verify_effective_macsec_only | bool) }}"
+verify_collect_ssh_https: >-
+  {{ not (verify_effective_macsec_only | bool)
+     and not (verify_effective_ipsec_only | bool) }}
+verify_collect_macsec: "{{ not (verify_effective_ipsec_only | bool) }}"
+verify_collect_full_fabric: >-
+  {{ not (verify_effective_macsec_only | bool)
+     and not (verify_effective_ipsec_only | bool) }}
+
+# Run hard asserts when enforcing full-fabric CI, or when -e verify_enforce=true.
+verify_effective_enforce: >-
+  {{ (verify_collect_full_fabric | bool)
+     or (verify_enforce | bool) }}
+
+verify_effective_require_macsec_secured: >-
+  {{ (verify_require_macsec_secured | bool)
+     or ((verify_macsec_enforce | bool) and verify_macsec_expect == 'secured') }}
+verify_effective_require_macsec_absent: >-
+  {{ (verify_require_macsec_absent | bool)
+     or ((verify_macsec_enforce | bool) and verify_macsec_expect == 'absent') }}
+
+# What "post-quantum key exchange" means for this run, derived from the intent
+# file rather than restated. The oper model reports the negotiated group as an
+# enum prefixed pqc-gt-, so mlkem768 becomes pqc-gt-mlkem768.
+verify_expected_pqc_group: "pqc-gt-{{ pq_key_exchange }}"
+
+# What the IKEv2 SA detail output prints for an ML-DSA signature. This one is a
+# string match on show output, not a leaf, because the oper model has no ML-DSA
+# value for it. See the comment on the task.
+verify_expected_auth_sign: MLDSA
+
+# --- The MACsec encryption delta ---------------------------------------------
+#
+# "Out Pkts Encrypted" is cumulative, so proving the link is encrypting NOW means
+# sampling the counter twice with known traffic in between. These control that.
+#
+# How many frames to push across the secured link between the two reads. Twenty is
+# plenty to clear any rounding and still finishes in about a second on a LAN.
+verify_macsec_delta_pings: 20
+
+# The far end of the MACsec link, derived from inventory rather than restated, so
+# it cannot drift out of step with macsec_interface in topology.yml. macsec_pair
+# has exactly two members, so "the other one" is unambiguous.
+verify_macsec_peer: >-
+  {{ (((groups['macsec_pair'] | default([])) | difference([inventory_hostname])) + ['']) | first }}
+
+# Its address on the shared VLAN. The ping has to ride the secured link itself, so
+# this is deliberately the underlay address and never the management address.
+verify_macsec_peer_address: >-
+  {{ (lab_topology[verify_macsec_peer] | default({})).underlay_address | default('') }}

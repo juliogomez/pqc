@@ -1,0 +1,20 @@
+---
+# Post-quantum TLS on the management HTTPS server.
+#
+#   ansible-playbook tls-pq.yml
+#   ansible-playbook tls-pq.yml -e state=absent
+#
+# One leaf, driven by pq_https_pqc_type in group_vars/all/pqc.yml, and the only unit in this
+# directory that needs no CLI escape hatch whatsoever.
+#
+# Independent of everything else. Parallel across all three hosts.
+
+- name: Set the post-quantum posture of the HTTPS server
+  hosts: routers
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: tls_pq
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml

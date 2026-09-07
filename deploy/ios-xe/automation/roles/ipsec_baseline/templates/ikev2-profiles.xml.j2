@@ -1,0 +1,71 @@
+{#
+  One IKEv2 profile per peer.
+
+  /native/crypto/ikev2/profile[name]/match/identity/remote/address/ipv4[ipv4-address]
+  /native/crypto/ikev2/profile[name]/identity/local/address
+  /native/crypto/ikev2/profile[name]/authentication/{local,remote}
+  /native/crypto/ikev2/profile[name]/keyring/local/name
+  /native/crypto/ikev2/profile[name]/dpd/{interval,retry,query}
+
+  This loop is the whole argument for doing this with data instead of by hand.
+  The hub needs two of these and each spoke needs one, and the only things that
+  differ are three addresses. Written out as CLI that is 14 lines on R2 that have
+  to stay in step with 7 lines on R1 and 7 on R3.
+
+  authentication is a YANG choice, so switching to ML-DSA later is not an
+  addition, it is a replacement of the case. That is why ipsec_pq_mldsa has to
+  remove pre-share-case explicitly and why that role is the one that is not
+  idempotent.
+-#}
+{% set op = ' nc:operation="remove"' if state == 'absent' else '' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <ikev2 xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+{% for peer in my_peers %}
+        <profile{{ op }}>
+          <name>{{ crypto_names.ike_profile_prefix }}{{ peer.name | upper }}</name>
+{% if state == 'present' %}
+          <match>
+            <identity>
+              <remote>
+                <address>
+                  <ipv4>
+                    <ipv4-address>{{ peer.remote_address }}</ipv4-address>
+                    <ipv4-mask>{{ ike_peer_match_mask }}</ipv4-mask>
+                  </ipv4>
+                </address>
+              </remote>
+            </identity>
+          </match>
+          <identity>
+            <local>
+              <address>{{ peer.local_address }}</address>
+            </local>
+          </identity>
+          <authentication>
+            <local>
+              <pre-share-case/>
+            </local>
+            <remote>
+              <pre-share/>
+            </remote>
+          </authentication>
+          <keyring>
+            <local>
+              <name>{{ crypto_names.ike_keyring }}</name>
+            </local>
+          </keyring>
+          <dpd>
+            <interval>{{ ike_dpd_interval }}</interval>
+            <retry>{{ ike_dpd_retry }}</retry>
+            <query>{{ ike_dpd_query }}</query>
+          </dpd>
+{% endif %}
+        </profile>
+{% endfor %}
+      </ikev2>
+    </crypto>
+  </native>
+</config>

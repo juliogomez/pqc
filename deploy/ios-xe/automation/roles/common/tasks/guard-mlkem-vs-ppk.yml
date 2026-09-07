@@ -1,0 +1,22 @@
+---
+# Pre-flight for ipsec-pq-mlkem.yml (present only). Refuses if a PPK is configured.
+
+- ansible.builtin.import_tasks: netconf-fetch.yml
+  vars:
+    nc_label: probe for an existing PPK
+    nc_source: running
+    nc_filter: |
+      <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+        <crypto>
+          <ikev2 xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+            <keyring/>
+          </ikev2>
+        </crypto>
+      </native>
+
+- ansible.builtin.import_tasks: refuse-stacked-pq-path.yml
+  vars:
+    refuse_search_token: '<ppk'
+    refuse_other_path: PPK
+    refuse_this_path: ML-KEM
+    refuse_teardown_cmd: ansible-playbook ipsec-pq-ppk.yml -e state=absent

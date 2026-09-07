@@ -1,0 +1,56 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show running-config | include ^authentication display ---
+
+
+--- show running-config | section policy-map type control subscriber ---
+policy-map type control subscriber PQAUTO-MACSEC-POLICY
+ event session-started match-all
+  10 class always do-until-failure
+   10 authenticate using dot1x both
+ event authentication-success match-all
+  10 class always do-until-failure
+   10 activate service-template DEFAULT_LINKSEC_POLICY_MUST_SECURE
+
+--- show running-config | section ^interface TwoGigabitEthernet0/0/0 ---
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 12
+ switchport mode access
+ macsec network-link
+ authentication periodic
+ authentication timer reauthenticate 1800
+ access-session host-mode multi-host
+ access-session closed
+ access-session port-control auto
+ dot1x pae both
+ dot1x authenticator eap profile PQAUTO-EAP
+ dot1x credentials PQAUTO-DOT1X
+ dot1x supplicant eap profile PQAUTO-EAP
+ mka policy PQAUTO-MKA-EAP
+ service-policy type control subscriber PQAUTO-MACSEC-POLICY
+
+--- show running-config | include ^aaa new-model|^dot1x system ---
+aaa new-model
+dot1x system-auth-control
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show running-config | include ^authentication display ---
+
+
+--- show running-config | section policy-map type control subscriber ---
+policy-map type control subscriber PQAUTO-MACSEC-POLICY
+
+--- show running-config | section ^interface TwoGigabitEthernet0/0/0 ---
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 12
+ switchport mode access
+
+--- show running-config | include ^aaa new-model|^dot1x system ---
+aaa new-model
+dot1x system-auth-control

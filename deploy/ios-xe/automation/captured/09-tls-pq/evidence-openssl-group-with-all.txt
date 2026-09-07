@@ -1,0 +1,3 @@
+  r1: Negotiated TLS1.3 group: X25519MLKEM768 | Protocol version: TLSv1.3 Ciphersuite: TLS_AES_256_GCM_SHA384 
+  r2: Negotiated TLS1.3 group: X25519MLKEM768 | Protocol version: TLSv1.3 Ciphersuite: TLS_AES_256_GCM_SHA384 
+  r3: Negotiated TLS1.3 group: X25519MLKEM768 | Protocol version: TLSv1.3 Ciphersuite: TLS_AES_256_GCM_SHA384 

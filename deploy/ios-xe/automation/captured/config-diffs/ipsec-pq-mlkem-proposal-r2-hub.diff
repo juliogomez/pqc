@@ -1,0 +1,15 @@
+# ipsec-pq-mlkem-proposal-r2-hub.diff
+#
+# What ipsec-pq-mlkem.yml adds to the IKEv2 proposal on the hub. One line, and it is the whole unit.
+#
+# command: show running-config | section crypto ikev2 proposal
+# router:  first block in the file
+
+--- BEFORE: without the unit (state after teardown)   [phaseC/r2-mlkem-teardown.txt]
++++ AFTER:  with the unit applied   [phaseC/r2-mlkem-applied.txt]
+@@ -1,4 +1,5 @@
+ crypto ikev2 proposal LAB-PROPOSAL 
++ pqc mlkem768 optional
+  encryption aes-cbc-256
+  integrity sha512
+  group 20

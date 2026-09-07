@@ -1,0 +1,96 @@
+---
+# Prove the identity certificate is really there and really ML-DSA.
+#
+# READ THIS BEFORE SIMPLIFYING THE CHECK.
+#
+# An earlier version of this role tested for a bare "Status: Available" anywhere
+# in "show crypto pki certificates <tp>". That passes on a total failure. Once the
+# CA has been authenticated the output contains two blocks:
+#
+#   Certificate                <- the identity certificate
+#     Status: Available
+#   CA Certificate             <- the CA's own
+#     Status: Available
+#
+# and the CA block alone satisfied the test. Measured on 26.2.1: an enrolment that
+# died with %PKI-2-CERT_ENROLL_FAIL and produced no identity certificate at all
+# still reported success.
+#
+# So the check here splits the output at "CA Certificate" and only ever looks at
+# what comes before it, then insists that region says both Available and ML-DSA.
+# "verbose" is needed because the short form omits Subject Key Info entirely.
+
+- name: "ML-DSA | {{ inventory_hostname }} | read the trustpoint in full"
+  cisco.ios.ios_command:
+    commands:
+      - "show crypto pki certificates verbose {{ pki_names.mldsa_trustpoint }}"
+  register: mldsa_verify_raw
+  changed_when: false
+
+- name: "ML-DSA | {{ inventory_hostname }} | isolate the identity certificate block"
+  ansible.builtin.set_fact:
+    # Everything before the first "CA Certificate" heading. If the heading is
+    # absent the whole output is the identity region, which is also correct.
+    mldsa_identity_block: >-
+      {{ (mldsa_verify_raw.stdout[0] | default('')).split('\nCA Certificate')[0] }}
+
+- name: "ML-DSA | {{ inventory_hostname }} | the identity certificate is present and is ML-DSA"
+  ansible.builtin.assert:
+    that:
+      # An identity certificate exists, and it is this heading, not the CA's.
+      - mldsa_identity_block is search('(^|\n)Certificate\s*\n\s*Status:\s*Available')
+      # Its subject public key is ML-DSA.
+      #
+      # NO PARAMETER SET ON THIS LINE, and that is the router's choice, not an
+      # omission here. Confirmed verbatim on 26.02.01eftr2 against a certificate
+      # that really is ML-DSA-65:
+      #
+      #   Subject Key Info:
+      #     Public Key Algorithm: ML-DSA
+      #     Public Key Size: (1974 bytes)
+      #   Signature Algorithm: ML-DSA-65
+      #
+      # So the SUBJECT key line prints the bare family and the SIGNATURE line
+      # prints the parameter set. Asserting "ML-DSA-65" on the subject key line
+      # failed on a perfectly good certificate. The parameter set of the subject
+      # key is still pinned, one assertion further down, from
+      # "show crypto key mypubkey all", which does spell it out as
+      # "Key type: ML-DSA-65".
+      - "mldsa_identity_block is search('Public Key Algorithm:\\s*ML-DSA(\\s|$)')"
+      # And it was signed by the offline ML-DSA CA, not by something classical.
+      # This line DOES carry the parameter set.
+      - "mldsa_identity_block is search('Signature Algorithm:\\s*ML-DSA-' ~ pq_signature_param_set)"
+      # Belt and braces: it is bound to the trustpoint this role owns.
+      - mldsa_identity_block is search('Associated Trustpoints:.*' ~ pki_names.mldsa_trustpoint)
+    fail_msg: >-
+      {{ inventory_hostname }} does not hold a usable ML-DSA-{{ pq_signature_param_set }}
+      identity certificate in {{ pki_names.mldsa_trustpoint }}. This check looks
+      only at the region before the "CA Certificate" heading precisely so that an
+      authenticated CA cannot make a failed enrolment look like a success.
+      Identity region as read:
+      {{ mldsa_identity_block | default('(empty)') }}
+    success_msg: >-
+      {{ inventory_hostname }}: identity certificate Available,
+      ML-DSA-{{ pq_signature_param_set }} public key, ML-DSA-{{ pq_signature_param_set }}
+      issuer signature, bound to {{ pki_names.mldsa_trustpoint }}
+    quiet: true
+
+# Cross-check from the other side: the key store must agree that the label this
+# trustpoint names is an ML-DSA key of the right parameter set. The certificate
+# could in principle be right while the trustpoint points at a different key.
+- name: "ML-DSA | {{ inventory_hostname }} | the bound key is ML-DSA in the key store too"
+  cisco.ios.ios_command:
+    commands:
+      - show crypto key mypubkey all
+  register: mldsa_verify_keys
+  changed_when: false
+
+- name: "ML-DSA | {{ inventory_hostname }} | key store agrees"
+  ansible.builtin.assert:
+    that:
+      - mldsa_verify_keys.stdout[0] is search('Key name:\s*' ~ pki_names.mldsa_key_label ~ '\s*\n\s*Key type:\s*ML-DSA-' ~ pq_signature_param_set)
+    fail_msg: >-
+      "{{ pki_names.mldsa_key_label }}" is not an ML-DSA-{{ pq_signature_param_set }}
+      key in "show crypto key mypubkey all" on {{ inventory_hostname }}.
+    success_msg: "{{ pki_names.mldsa_key_label }} is ML-DSA-{{ pq_signature_param_set }}"
+    quiet: true

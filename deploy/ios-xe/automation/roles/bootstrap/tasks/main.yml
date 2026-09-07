@@ -1,0 +1,94 @@
+---
+# Turn on the transport everything else in this layer rides.
+#
+# This is the one unit that cannot use NETCONF, because NETCONF is what it is
+# switching on. So it runs over network_cli with cisco.ios.ios_config, and it is
+# the only place in the layer where that is the primary tool rather than an
+# escape hatch.
+#
+# Idempotent: ios_config compares against the running config, so a second run
+# reports changed=false and pushes nothing.
+
+- name: Bootstrap | enable the management transports
+  when: state == 'present'
+  block:
+
+    - name: Enable netconf-yang and restconf
+      cisco.ios.ios_config:
+        lines: "{{ ['netconf-yang'] + (bootstrap_enable_restconf | bool | ternary(['restconf'], [])) }}"
+      register: bootstrap_transport
+
+    - name: Show exactly what changed
+      ansible.builtin.debug:
+        msg: >-
+          {{ ((bootstrap_transport.commands | default([]) | length) > 0)
+             | ternary('Pushed: ' ~ (bootstrap_transport.commands | default([]) | join(', ')),
+                       'Already enabled, nothing pushed') }}
+
+    # Only pay the wait if we actually changed something. On a second run the
+    # subsystem is already up and there is nothing to wait for.
+    - name: Wait for the NETCONF subsystem to start listening
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ netconf_port }}"
+        timeout: "{{ bootstrap_netconf_wait_seconds }}"
+        sleep: "{{ bootstrap_netconf_poll_seconds }}"
+      delegate_to: localhost
+      when: bootstrap_transport.changed
+      # The subsystem restart takes about 135 seconds on this platform. This is a
+      # wait, not a health check: a closed port at t+75s means nothing.
+
+    - name: Confirm a real NETCONF session comes up and the crypto model is there
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-fetch
+      vars:
+        nc_label: capability probe (crypto ikev2 config subtree)
+        nc_source: running
+        nc_filter: |
+          <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+            <crypto>
+              <ikev2 xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto"/>
+            </crypto>
+          </native>
+
+    - name: Assert the probe actually answered
+      ansible.builtin.assert:
+        that:
+          - netconf_fetch_result is defined
+          - not (netconf_fetch_result.failed | default(false))
+        fail_msg: >-
+          NETCONF is enabled in the running config but the session did not
+          answer. Check "show platform software yang-management process" and give
+          it another couple of minutes; the subsystem takes about 135 seconds to
+          come up on this platform.
+        quiet: true
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config
+
+# --- Teardown ----------------------------------------------------------------
+#
+# Not idempotent in spirit: this removes the transport that every other playbook
+# in the layer needs, so run it last or not at all.
+- name: Bootstrap | remove the management transports
+  when: state == 'absent'
+  block:
+
+    - name: Warn about what is about to happen
+      ansible.builtin.debug:
+        msg: >-
+          Removing netconf-yang{{ bootstrap_enable_restconf | bool | ternary(' and restconf', '') }}.
+          Every other playbook here needs NETCONF, so re-run bootstrap.yml before
+          you run anything else.
+
+    - name: Disable netconf-yang and restconf
+      cisco.ios.ios_config:
+        lines: "{{ ['no netconf-yang'] + (bootstrap_enable_restconf | bool | ternary(['no restconf'], [])) }}"
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config

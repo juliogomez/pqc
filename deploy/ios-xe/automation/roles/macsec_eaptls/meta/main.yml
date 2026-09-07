@@ -1,0 +1,16 @@
+---
+# roles/common is this layer's shared library. Its defaults (state, netconf_port,
+# save_config, and the two blast-radius regexes) must be in scope BEFORE the first
+# task runs, because the task files gate their blocks on "when: state == 'present'".
+#
+# include_role loads a role's defaults only from the point of inclusion onward, and
+# the includes of common live *inside* those blocks, so without this dependency the
+# play dies before doing anything:
+#
+#   A 'when' expression failed: Error while evaluating conditional:
+#   'state' is undefined
+#
+# Declaring the dependency loads common's defaults ahead of this role while still
+# letting -e state=absent win, since extra vars outrank role defaults.
+dependencies:
+  - role: common

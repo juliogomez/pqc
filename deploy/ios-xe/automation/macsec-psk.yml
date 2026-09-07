@@ -1,0 +1,40 @@
+---
+# MACsec on the R1-R2 link, keyed by a static pre-shared key.
+#
+#   ansible-playbook macsec-psk.yml
+#   ansible-playbook macsec-psk.yml -e state=absent
+#   ansible-playbook macsec-psk.yml -e state=absent -e macsec_psk_remove_globals=true
+#
+# Quantum-safe by construction: nothing is negotiated, so there is no key exchange to
+# record and break later. Also a dead end, because the whole link rests on one secret
+# that never changes.
+#
+# Tear this down before macsec-eaptls.yml. The two use the same interface with
+# different key sources and will fight over it.
+#
+# Only R1 and R2 have the physical link, so only they are in macsec_pair. Both ends
+# in parallel: MKA is symmetric and simply waits for its peer.
+
+- name: Build MACsec with a pre-shared key
+  hosts: macsec_pair
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: macsec_psk
+
+- name: Confirm MACsec is secured with the static CAK
+  hosts: macsec_pair
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  tasks:
+    - name: Operational proof
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: verify-macsec-proof
+      vars:
+        macsec_proof_keying: psk
+      when: state | default('present') == 'present'
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

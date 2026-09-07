@@ -1,0 +1,18 @@
+[1. mka policy only, re-push] ACCEPTED
+[2. key chain WITHOUT key-string, re-push] ACCEPTED
+[3. key chain WITH plaintext key-string, re-push] REFUSED
+  severity  : error
+  tag       : invalid-value
+  type      : application
+  path      : None
+  message   : inconsistent value: Device refused one or more commands
+  info      : <?xml version="1.0" encoding="UTF-8"?><error-info xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0"><severity xmlns="http://cisco.com/yang/cisco-ia">error_cli</severity>
+<detail xmlns="http://cisco.com/yang/cisco-ia">
+  <bad-cli>
+    <bad-command>  key-string 7 <REDACTED-CAK></bad-command>
+    <error-location>13</error-location>
+    <parser-response>Rejecting: Key must consist of hex digits&#13;
+</parser-response>
+    <parser-context>key chain PQAUTO-MACSEC-KC macsec
+ key 01
+  key-string 7 <REDACTED-CAK>

@@ -1,0 +1,25 @@
+---
+# Post-quantum SSH key exchange on all three routers.
+#
+#   ansible-playbook ssh-pq.yml
+#   ansible-playbook ssh-pq.yml -e state=absent
+#
+# One ordered leaf-list, driven by pq_ssh_kex in group_vars/all/pqc.yml. Reorder that list
+# and the offer order on every router changes with it.
+#
+# Independent of everything else here: no baseline needed, nothing stacks on it. Parallel
+# across all three hosts, because each router's SSH server is its own business.
+#
+# The one thing to check before running: that your control node's SSH client knows an
+# algorithm on the list. "ssh -Q kex" tells you. The role refuses to leave the server with
+# no classical fallback unless you insist.
+
+- name: Offer ML-KEM hybrid key exchange to SSH clients
+  hosts: routers
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: ssh_pq
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml

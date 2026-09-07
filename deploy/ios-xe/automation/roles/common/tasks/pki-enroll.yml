@@ -1,0 +1,119 @@
+---
+# Create a trustpoint, authenticate the CA, enrol, and wait for the certificate.
+#
+# Shared by ipsec-pq-mldsa (ML-DSA identity) and macsec-eaptls (RSA identity). The
+# flow is identical; only the keypair container in the trustpoint differs, which is
+# why one template covers both.
+#
+# Callers pass, and must have run ios-ca.yml against the CA host first so
+# ca_fingerprint is available:
+#   pki_tp_name        trustpoint name
+#   pki_tp_subject     subject name, e.g. "CN=R1"
+#   pki_tp_url         SCEP URL of the CA
+#   pki_tp_keytype     mldsa | rsa
+#   pki_tp_key_label   on-box key label
+#   pki_tp_param_set   ML-DSA parameter set (mldsa only)
+#   pki_tp_key_size    RSA modulus (rsa only)
+#   pki_tp_fingerprint CA fingerprint to pin
+#
+# Idempotent in effect, not in mechanism. The trustpoint push is a merge, and both
+# authenticate and enroll are skipped when the certificate is already Available. Do
+# not remove that skip: re-enrolling issues a second certificate and the router then
+# has two valid identities for the same subject, which makes "which one did EAP
+# present" unanswerable.
+
+# The fingerprint is not optional, and getting this wrong is a hang rather than an
+# error. "crypto pki authenticate" below is an ios_command with no prompt handling,
+# which is only correct because the trustpoint pins the CA fingerprint; unpinned, it
+# stops and asks "% Do you accept this certificate? [yes/no]:" and the task sits
+# there until the persistent connection times out.
+#
+# Callers reach the fingerprint through "hostvars[macsec_ca_host].ca_fingerprint |
+# default('')", so a run that skipped the CA play (a --limit that missed the hub, a
+# CA that never started) silently arrives here with an empty string, the template
+# omits the <fingerprint> leaf, and the box asks the question this layer is not
+# allowed to answer. Stop first instead.
+- name: "PKI | {{ pki_tp_name }} | the CA fingerprint must be pinned"
+  ansible.builtin.assert:
+    that:
+      - pki_tp_fingerprint | default('') | length >= 32
+    fail_msg: >-
+      No CA fingerprint to pin into trustpoint {{ pki_tp_name }}. It is read from
+      "show crypto pki server" by roles/common/tasks/ios-ca.yml on the CA host and
+      passed in as pki_tp_fingerprint. Without it IOS XE either refuses the CA
+      certificate with "Trustpoint fingerprint must be supplied" or asks
+      "% Do you accept this certificate? [yes/no]:", which nothing here will answer,
+      so the enrolment would hang rather than fail. Run the CA play first.
+    success_msg: "pinning CA fingerprint {{ pki_tp_fingerprint | default('') }}"
+    quiet: true
+
+- name: "PKI | {{ pki_tp_name }} | render trustpoint"
+  ansible.builtin.set_fact:
+    nc_label: "trustpoint {{ pki_tp_name }} ({{ pki_tp_keytype }})"
+    nc_operation: merge
+    nc_payload: "{{ lookup('template', 'pki-trustpoint.xml.j2') }}"
+
+- name: "PKI | {{ pki_tp_name }} | push trustpoint"
+  ansible.builtin.include_tasks: netconf-edit.yml
+
+# SCREEN-SCRAPE. There is no operational YANG for certificate status on this
+# platform, so enrollment progress comes off show output.
+#
+# The regex has to anchor on the IDENTITY certificate, not just "Status: Available".
+# "show crypto pki certificates <tp>" prints two blocks once the CA is authenticated:
+#
+#   Certificate                  <- the identity cert, the one enrolment produces
+#     Status: Available
+#   CA Certificate               <- the CA's own cert, present after authenticate
+#     Status: Available
+#
+# A bare "Status: Available" matches the CA block, so authenticate alone was enough to
+# make this report success. Measured on 26.2.1: an ML-DSA enrolment that failed
+# outright with %PKI-2-CERT_ENROLL_FAIL still passed the old check, because the CA
+# certificate sat there Available and no identity certificate ever existed. Requiring
+# a newline immediately before "Certificate" excludes "CA Certificate".
+- name: "PKI | {{ pki_tp_name }} | already enrolled?"
+  cisco.ios.ios_command:
+    commands:
+      - "show crypto pki certificates {{ pki_tp_name }}"
+  register: pki_cert_state
+  changed_when: false
+  failed_when: false
+
+- name: "PKI | {{ pki_tp_name }} | enrol"
+  when: not ((pki_cert_state.stdout[0] | default('')) is search('(^|\n)Certificate\s*\n\s*Status:\s*Available'))
+  block:
+
+    # Non-interactive, because the fingerprint is pinned in the trustpoint. Without
+    # the pin this command asks "Do you accept this certificate? [yes/no]:", and
+    # answering that blind is exactly what the safety rule forbids. Pin it; do not
+    # answer it.
+    - name: "PKI | {{ pki_tp_name }} | authenticate the CA"
+      cisco.ios.ios_command:
+        commands:
+          - "crypto pki authenticate {{ pki_tp_name }}"
+      changed_when: true
+
+    # Also non-interactive, but only because the CA has "grant auto". On 26.2 with
+    # grant auto, enroll asks nothing: no challenge password, no serial-number
+    # question, no final confirmation. If your CA does not grant automatically this
+    # command will prompt, this task will time out, and you will need to route it
+    # through exec-with-prompt with the exact prompts spelled out.
+    - name: "PKI | {{ pki_tp_name }} | enrol against the CA"
+      cisco.ios.ios_command:
+        commands:
+          - "crypto pki enroll {{ pki_tp_name }}"
+      changed_when: true
+
+    - name: "PKI | {{ pki_tp_name }} | wait for the certificate to be granted"
+      cisco.ios.ios_command:
+        commands:
+          - "show crypto pki certificates {{ pki_tp_name }}"
+      register: pki_cert_wait
+      until: (pki_cert_wait.stdout[0] | default('')) is search('(^|\n)Certificate\s*\n\s*Status:\s*Available')
+      retries: 12
+      delay: 10
+      changed_when: false
+      # SCEP is a poll, not a request/response. The grant is quick with grant auto,
+      # but "sent to Certificate Authority" is not "issued", so wait for the leaf
+      # rather than assuming.

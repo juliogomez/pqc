@@ -1,0 +1,331 @@
+---
+# ML-DSA certificate authentication for IKEv2, issued by an offline CA.
+#
+# The other half of a quantum-safe tunnel. ML-KEM protects the key exchange, so a
+# recorded handshake stays unreadable. ML-DSA protects the identity proof, so
+# nobody can forge a signature and be R2. Both are needed; neither substitutes for
+# the other.
+#
+# WHY THERE IS NO CERTIFICATE SERVER ON THE HUB ANY MORE.
+#
+# This role used to stand up "crypto pki server" on R2 and enrol against it over
+# SCEP. That fails for ML-DSA, and it is worth recording where it fails, because
+# it is not where you would guess. It is not the CA.
+#
+# Measured on this hardware, IOS XE 26.02.01eftr2, three runs:
+#
+#   1. R1 generated an ML-DSA-65 key on the box, took "enrollment terminal", and
+#      "crypto pki enroll" produced a PKCS#10 that OpenSSL reads as
+#      "Public Key Algorithm: ML-DSA-65" and verifies with
+#      "Certificate request self-signature verify OK". The requester is fine.
+#
+#   2. That exact PKCS#10 went to an ordinary RSA-keyed IOS certificate server via
+#      "crypto pki server <name> request pkcs10 terminal pem", the same signing
+#      path SCEP feeds but with no SCEP in front of it. The CA logged
+#      "CRYPTO_CS: reqID=1 granted" and issued a certificate with an ML-DSA-65
+#      subject public key. The signer is fine.
+#
+#   3. Same key, same CA, same subject, but over SCEP. "crypto pki authenticate"
+#      SUCCEEDED, which makes sense: SCEP GetCACert is an unsigned GET. The
+#      enrolment that follows fails with "%PKI-2-CERT_ENROLL_FAIL", and an
+#      identical RSA enrolment to that same CA succeeds. One variable changed, so
+#      SCEP is the layer that breaks.
+#
+# WHERE INSIDE SCEP IT BREAKS WAS NOT ISOLATED. Nobody ran the paired
+# client-and-CA debug capture, so whether the router never builds the request or
+# the CA rejects it at the SCEP message layer is still open, and those are
+# different bugs with different fixes. RFC 8894 requires the requester to wrap
+# PKCSReq in a CMS SignedData signed with its own key, so a missing ML-DSA CMS
+# signer is the obvious suspect; an internal key-type gate is a second one, since
+# the trustpoint is MLDSA while an IOS CA's own certificate is always RSA. Both
+# are hypotheses, not measurements.
+#
+# Both are avoided here anyway. Terminal enrolment has no CMS layer, and the
+# workstation CA is itself ML-DSA-65, so the trustpoint and the CA certificate
+# agree on key type.
+#
+# Idempotent, all of it. A second run reports changed=0. Every step that cannot be
+# repeated safely is guarded by a read of the box's actual state, and the one
+# genuinely destructive action in the layer, "clear crypto ikev2 sa", only fires
+# when something above it actually changed.
+#
+# serial: 1 in the playbook, still. Swapping authentication is a replacement of a
+# YANG choice, not an addition, so for the window between one end switching and
+# the other following, the peers disagree and the tunnel drops. Rolling one router
+# at a time keeps that window to a single peer pair.
+
+- name: ML-DSA | sanity
+  ansible.builtin.assert:
+    that:
+      - pq_signature_param_set | int in [44, 65, 87]
+      - my_peers | length > 0
+    fail_msg: >-
+      pq_signature_param_set must be 44, 65 or 87. The YANG range on
+      mldsakeypair/parameter-set is literally "44 | 65 | 87", so anything else is
+      rejected by the box. Got "{{ pq_signature_param_set }}".
+    quiet: true
+
+# --- Build -------------------------------------------------------------------
+
+- name: ML-DSA | build
+  when: state == 'present'
+  block:
+
+    # apply: is how delegation reaches the included tasks. Everything in
+    # workstation-ca.yml is OpenSSL on the control node, and the play connection is
+    # network_cli, so without this the openssl calls would be attempted on a router.
+    - name: ML-DSA | offline certificate authority on the control node
+      ansible.builtin.include_tasks:
+        file: workstation-ca.yml
+        apply:
+          delegate_to: localhost
+          run_once: true
+      run_once: true
+
+    - name: ML-DSA | pick up the CA fingerprint to pin
+      ansible.builtin.set_fact:
+        mldsa_ca_fingerprint: "{{ lookup('file', mldsa_ca_fingerprint_file) | trim }}"
+
+    # "service internal" is a debug-only global, and on 26.2.1 the "mldsakeypair"
+    # line under a trustpoint does not parse without it. These lab routers are
+    # also used for the hand-driven exercises in ../ipsec.md, and some of them
+    # already have it on for that reason, so "turn it off at teardown"
+    # unconditionally would take away something this role never added.
+    #
+    # Record what was there BEFORE touching anything, on the control node, so the
+    # teardown (a separate playbook run, with no memory of this one) can put back
+    # exactly the prior value. force: false means the record is written once and
+    # never overwritten, which is also what keeps this task idempotent.
+    - name: ML-DSA | read the prior "service internal" setting
+      cisco.ios.ios_command:
+        commands:
+          - show running-config | include ^service internal
+      register: mldsa_si_before
+      changed_when: false
+
+    - name: ML-DSA | record it so teardown can restore it
+      ansible.builtin.copy:
+        content: >-
+          {{ {'service_internal_before':
+              ((mldsa_si_before.stdout[0] | default('')) is search('^service internal', multiline=True)),
+              'trustpoint': pki_names.mldsa_trustpoint,
+              'key_label': pki_names.mldsa_key_label} | to_nice_json }}
+        dest: "{{ mldsa_state_file }}"
+        mode: "0644"
+        force: false
+      delegate_to: localhost
+
+    - name: ML-DSA | enable service internal
+      cisco.ios.ios_config:
+        lines:
+          - service internal
+      when: pq_signature_requires_service_internal | bool
+
+    - name: ML-DSA | enrol an identity certificate
+      ansible.builtin.include_tasks: enroll.yml
+
+    - name: ML-DSA | verify the identity certificate
+      ansible.builtin.include_tasks: verify-cert.yml
+
+    - name: ML-DSA | render the authentication swap
+      ansible.builtin.set_fact:
+        nc_label: "authentication -> ML-DSA-{{ pq_signature_param_set }}"
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'mldsa-auth.xml.j2') }}"
+
+    - name: ML-DSA | push the authentication swap
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    # "clear crypto ikev2 sa" is unconditional in every other role in this layer,
+    # and that is exactly what stopped this one reporting changed=0 on a second
+    # run: an action task is always "changed". It is also not free, it drops every
+    # tunnel on the box. So it only fires when something above it really moved.
+    - name: ML-DSA | did anything actually change?
+      ansible.builtin.set_fact:
+        mldsa_changed: >-
+          {{ (mldsa_tp_changed | default(false) | bool)
+             or (mldsa_authenticate.changed | default(false))
+             or (mldsa_import.changed | default(false))
+             or (netconf_edit_result.changed | default(false)) }}
+
+    - name: ML-DSA | force renegotiation onto the new authentication method
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: clear-ikev2-sa
+      when: mldsa_changed | bool
+
+    - name: ML-DSA | note the handshake cost
+      ansible.builtin.debug:
+        msg: >-
+          ML-DSA-{{ pq_signature_param_set }} puts roughly
+          {{ {44: '15', 65: '21', 87: '28'}[pq_signature_param_set | int] }} KB of
+          certificate and signature into IKE_AUTH, spread across a dozen or more
+          fragments. That is why ipsec-baseline sets IKE fragmentation to
+          {{ pq_ike_fragmentation_mtu }}. The SA will report a slightly smaller MTU
+          in use because the router subtracts ESP overhead; that is expected.
+
+    - name: ML-DSA | save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config
+
+# --- Teardown ----------------------------------------------------------------
+#
+# Puts pre-shared key authentication back, then removes the trustpoint and the
+# on-box key. Both removals are checked against the protected-object patterns
+# first, because "remove a trustpoint" is one keystroke away from removing the one
+# behind "ip http secure-trustpoint" and taking RESTCONF with it. The PQAUTO-
+# prefix is the second line of defence: this role only ever removes objects it
+# named itself.
+
+- name: ML-DSA | tear down
+  when: state == 'absent'
+  block:
+
+    - name: ML-DSA | what did the build change here?
+      ansible.builtin.stat:
+        path: "{{ mldsa_state_file }}"
+      register: mldsa_state_stat
+      delegate_to: localhost
+
+    - name: ML-DSA | load the build record
+      ansible.builtin.set_fact:
+        mldsa_state: >-
+          {{ (lookup('file', mldsa_state_file) | from_json)
+             if mldsa_state_stat.stat.exists
+             else {'service_internal_before': true} }}
+      # No record means we cannot prove this role turned "service internal" on, so
+      # the safe default is to assume it was already there and leave it alone.
+
+    - name: ML-DSA | render the authentication swap back to pre-shared key
+      ansible.builtin.set_fact:
+        nc_label: authentication -> pre-shared key
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'mldsa-auth.xml.j2') }}"
+
+    - name: ML-DSA | push the authentication swap back
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    # netconf-edit.yml registers into netconf_edit_result and the trustpoint
+    # removal below pushes through the same file and overwrites it, so capture
+    # this one now. Same reason as the equivalent line in enroll.yml.
+    - name: ML-DSA | remember whether the authentication swap moved
+      ansible.builtin.set_fact:
+        mldsa_auth_reverted: "{{ netconf_edit_result.changed | default(false) }}"
+
+    - name: ML-DSA | guard the trustpoint before removing it
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: assert-safe-to-remove
+      vars:
+        guard_kind: trustpoint
+        guard_name: "{{ pki_names.mldsa_trustpoint }}"
+
+    - name: ML-DSA | is the trustpoint even there?
+      cisco.ios.ios_command:
+        commands:
+          - show running-config | include ^crypto pki trustpoint
+      register: mldsa_tp_list
+      changed_when: false
+
+    - name: ML-DSA | remove the trustpoint
+      # "$" only anchors per line with multiline=True. Without it the trustpoint
+      # is only found when it happens to be the last one listed, so on a box with
+      # other trustpoints below it the removal below would silently be skipped.
+      when: (mldsa_tp_list.stdout[0] | default('')) is search('crypto pki trustpoint ' ~ pki_names.mldsa_trustpoint ~ '\s*$', multiline=True)
+      block:
+
+        - name: ML-DSA | render trustpoint removal
+          ansible.builtin.set_fact:
+            nc_label: "remove trustpoint {{ pki_names.mldsa_trustpoint }}"
+            nc_operation: none
+            nc_payload: "{{ lookup('template', 'mldsa-trustpoint-remove.xml.j2') }}"
+
+        - name: ML-DSA | push trustpoint removal
+          ansible.builtin.include_role:
+            name: common
+            tasks_from: netconf-edit
+
+    - name: ML-DSA | guard the key label before zeroizing it
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: assert-safe-to-remove
+      vars:
+        guard_kind: key-label
+        guard_name: "{{ pki_names.mldsa_key_label }}"
+
+    - name: ML-DSA | is the key even there?
+      cisco.ios.ios_command:
+        commands:
+          - show crypto key mypubkey all
+      register: mldsa_keys_before_zeroize
+      changed_when: false
+
+    # ESCAPE HATCH plus a real confirmation prompt.
+    #
+    # Prompt matched, exactly:
+    #   "Do you really want to remove these keys? [yes/no]"
+    #
+    # This is the task the safety rule was written for. The answer is bound to this
+    # one command and this one prompt string, the key label has already been checked
+    # against the protected-object patterns AND carries the PQAUTO- prefix this role
+    # owns, and nothing here would answer a different [yes/no] that the router
+    # happened to ask instead. It is also skipped outright when the key is not
+    # there, so a repeated teardown asks nothing at all.
+    - name: ML-DSA | zeroize the ML-DSA key (strict prompt handling)
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: exec-with-prompt
+      vars:
+        exec_label: "zeroize ML-DSA key {{ pki_names.mldsa_key_label }}"
+        exec_command: "crypto key zeroize mldsa {{ pki_names.mldsa_key_label }}"
+        exec_prompt:
+          - "Do you really want to remove these keys\\? \\[yes/no\\]"
+        exec_answer:
+          - "yes"
+      when: (mldsa_keys_before_zeroize.stdout[0] | default('')) is search('Key name:\s*' ~ pki_names.mldsa_key_label ~ '\s')
+
+    # Only if the build record says this role is the one that turned it on.
+    - name: ML-DSA | restore the prior "service internal" setting
+      cisco.ios.ios_config:
+        lines:
+          - service internal
+      when:
+        - pq_signature_requires_service_internal | bool
+        - mldsa_state.service_internal_before | bool
+
+    - name: ML-DSA | remove "service internal" because this role added it
+      cisco.ios.ios_config:
+        lines:
+          - no service internal
+      when:
+        - pq_signature_requires_service_internal | bool
+        - not (mldsa_state.service_internal_before | bool)
+
+    # Gated for the same reason as the build side, which this path was missing:
+    # "clear crypto ikev2 sa" is an action, an action task is always "changed", and
+    # a second teardown finds nothing to remove and should therefore report
+    # changed=0 rather than dropping every tunnel on the box to prove it.
+    - name: ML-DSA | did the teardown actually move anything?
+      ansible.builtin.set_fact:
+        mldsa_td_changed: >-
+          {{ (mldsa_auth_reverted | default(false) | bool)
+             or (netconf_edit_result.changed | default(false)) }}
+
+    - name: ML-DSA | force renegotiation back onto pre-shared key
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: clear-ikev2-sa
+      when: mldsa_td_changed | bool
+
+    - name: ML-DSA | verify the teardown actually happened
+      ansible.builtin.include_tasks: verify-teardown.yml
+
+    - name: ML-DSA | save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config

@@ -1,0 +1,43 @@
+---
+# Is this fabric quantum-safe right now, and by which mechanism?
+#
+# Every config playbook here ends by importing this file, and it is also fine to
+# run on its own to find out where you left the lab:
+#
+#   ansible-playbook verify.yml
+#
+# Scoped re-checks (shorter output, no full-fabric JSON):
+#
+#   ansible-playbook verify.yml -e verify_ipsec_only=true
+#   ansible-playbook verify.yml -e verify_macsec_only=true
+#   ansible-playbook verify.yml -e verify_macsec_only=true -e verify_macsec_expect=absent
+#
+# Reports by default and asserts nothing on scoped ipsec_only (require_* adds
+# require_checks=PASS|FAIL on the posture line). Hard fail:
+#
+#   ansible-playbook verify.yml -e verify_require_mlkem=true
+#   ansible-playbook verify.yml -e verify_require_mldsa=true
+#   ansible-playbook verify.yml -e verify_ipsec_only=true -e verify_require_mlkem=true -e verify_enforce=true
+#   ansible-playbook verify.yml -e verify_macsec_only=true
+#
+# verify_macsec_only enforces secured+encrypting by default; report only:
+#   ansible-playbook verify.yml -e verify_macsec_only=true -e verify_macsec_enforce=false
+#
+# The posture report prints as a yellow "changed" line per router (display_ok_hosts
+# is off repo-wide). PLAY RECAP is omitted on exit 0 (pqc_lab stdout callback).
+# Or: ANSIBLE_DISPLAY_OK_HOSTS=1 ansible-playbook verify.yml
+#
+# The play runs over network_cli because three of the observations have no
+# operational YANG behind them; the NETCONF reads inside the role switch
+# connection per task.
+
+- name: Report the post-quantum posture
+  hosts: "{{ verify_play_hosts }}"
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  vars:
+    verify_macsec_only: false
+    verify_ipsec_only: false
+    verify_play_hosts: "{{ 'macsec_pair' if verify_macsec_only | bool else 'routers' }}"
+  roles:
+    - role: verify

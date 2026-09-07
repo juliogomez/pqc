@@ -1,0 +1,162 @@
+---
+# ESCAPE HATCH: network_cli for the AAA, EAP and subscriber-policy plumbing.
+#
+# This is the largest single use of CLI in the layer, so here is exactly why, node by
+# node.
+#
+#   aaa new-model / authentication dot1x / authorization network /
+#   authorization credential-download / dot1x system-auth-control
+#       MODELLED in Cisco-IOS-XE-aaa and Cisco-IOS-XE-dot1x.
+#
+#   eap profile <name> / method tls / pki-trustpoint <tp>
+#       NOT in the pulled schema set. EAP lives in its own module, which was not
+#       among the modules retrieved from the box.
+#
+#   policy-map type control subscriber / event / class / authenticate using dot1x /
+#   activate service-template
+#       NOT in the pulled schema set either. The subscriber control policy is a
+#       CLI-shaped construct with ordered numbered actions, and nothing in the modules
+#       we have models it.
+#
+#   aaa attribute list <name> / attribute type linksec-policy must-secure
+#   username <user> aaa attribute list <name>
+#       Not found in the pulled Cisco-IOS-XE-aaa either.
+#
+# The judgement call is to send the whole stack over one transport rather than split a
+# single logical unit across two. Splitting would buy nothing (the PQ knobs are not in
+# here; they are in macsec_pq, over NETCONF) and would cost the one property that
+# matters when it breaks: a half-applied AAA stack with the EAP profile missing
+# authenticates nothing, and you would be debugging two transports at once to find out
+# why.
+#
+# ios_config still diffs against the running config, so this is idempotent.
+
+- name: AAA | local authentication and authorization for dot1x
+  cisco.ios.ios_config:
+    lines:
+      - aaa new-model
+      - aaa authentication dot1x default local
+      - aaa authorization network default local
+      - aaa authorization credential-download default local
+      - dot1x system-auth-control
+
+# The link must be MACsec-protected before the port authorizes. must-secure is what
+# turns "authenticated" into "authenticated AND encrypted"; without it a successful
+# EAP-TLS handshake authorizes a port that is forwarding in clear text.
+- name: AAA | linksec must-secure attribute list
+  cisco.ios.ios_config:
+    parents: "aaa attribute list {{ macsec_names.linksec_attribute_list }}"
+    lines:
+      - attribute type linksec-policy must-secure
+
+- name: AAA | bind the attribute list to the peer identity
+  cisco.ios.ios_config:
+    lines:
+      - "username {{ my_macsec_identity }} aaa attribute list {{ macsec_names.linksec_attribute_list }}"
+  # The username has to match the certificate CN, because that CN is what EAP sends.
+
+- name: EAP | which certificate EAP-TLS presents, in both roles
+  cisco.ios.ios_config:
+    parents: "eap profile {{ macsec_names.eap_profile }}"
+    lines:
+      - method tls
+      - "pki-trustpoint {{ pki_names.eaptls_trustpoint }}"
+
+# The control policy is three levels deep in the CLI hierarchy:
+#
+#   policy-map type control subscriber PQ-MACSEC-POLICY
+#    event session-started match-all
+#     10 class always do-until-failure
+#      10 authenticate using dot1x both
+#
+# So it goes in as two tasks with the full parent chain spelled out, one per event,
+# rather than as one flat list of lines. That is not cosmetic. ios_config diffs each
+# line against the running config *within its parent context*, so a flattened list
+# would never match what the box reports and the task would re-push the whole policy
+# on every single run.
+#
+# "authenticate using dot1x both" is load-bearing. Each router is simultaneously
+# supplicant and authenticator on this link, and "both" is what lets it play both
+# roles. Drop it and one direction never authenticates.
+# The subscriber control policy prompts on a box that has never used one, and this
+# is the task that answers it. Measured on R2, IOS XE 26.02.01eftr2, verbatim:
+#
+#   This operation will permanently convert all relevant authentication commands to
+#   their CPL control-policy equivalents. As this conversion is irreversible and will
+#   disable the conversion CLI 'authentication display [legacy|new-style]', you are
+#   strongly advised to back up your current configuration before proceeding.
+#   Do you wish to continue? [yes]:
+#
+# What is going on: IOS XE has two ways of expressing port authentication, the old
+# flat "authentication ..." interface commands (legacy) and the CPL subscriber
+# control policies this role uses (new-style). A box only holds one at a time, and
+# the first "policy-map type control subscriber" is what flips it. R1 had already
+# been flipped by the hand-driven macsec.md exercises, so it never asked. R2 was
+# untouched, so it did.
+#
+# Why this is its own task instead of prompt handling on the ios_config below:
+# ios_config cannot answer a prompt at all. With no handler the command sits at the
+# question until the connection gives up, which is what happened here. Both runs
+# died with
+#
+#   timeout value 180 seconds reached while trying to send command:
+#   b'policy-map type control subscriber PQAUTO-MACSEC-POLICY'
+#
+# and R2 was left with no control policy, no MKA policy and a bare interface, while
+# R1 built fully and then waited three minutes for a peer that was never coming.
+#
+# So the policy-map is entered once here, through the strict wrapper, purely to get
+# the conversion out of the way. The ios_config tasks below then fill in the events
+# against a converted box and never see the question. On a box that is already
+# new-style the command just enters the mode and the prompt never fires, so this is
+# idempotent and costs one round trip.
+#
+# The conversion IS irreversible, which is worth saying out loud rather than
+# burying. It is also unavoidable: every "policy-map type control subscriber" on a
+# legacy box triggers it, so the choice is not whether to convert but whether to do
+# it deliberately with the prompt text pinned, or by accident with a hung session.
+#
+# One warning for anyone driving this by hand. The default is [yes], so a bare
+# newline accepts it. Answering with anything else, including sending the next
+# command you meant to run, gets "% Please answer 'yes' or 'no'." and the question
+# again. Do not let a prompt-discovery tool call something like find_prompt() while
+# this is on screen; that sends a newline and converts the box.
+- name: Subscriber | control policy | convert to CPL, strict prompt handling
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: exec-with-prompt
+  vars:
+    exec_label: "policy-map type control subscriber {{ macsec_names.control_policy }}"
+    exec_pre_commands:
+      - configure terminal
+    exec_command: "policy-map type control subscriber {{ macsec_names.control_policy }}"
+    exec_post_commands:
+      - end
+    # Matched literal: "Do you wish to continue? [yes]:"
+    exec_prompt:
+      - 'Do you wish to continue\? \[yes\]:'
+    exec_answer:
+      - "yes"
+    # false, because a box that is already new-style never asks. check_all would turn
+    # the second run into a failure.
+    exec_check_all: false
+
+- name: Subscriber | control policy | on session start, authenticate
+  cisco.ios.ios_config:
+    parents:
+      - "policy-map type control subscriber {{ macsec_names.control_policy }}"
+      - event session-started match-all
+      - 10 class always do-until-failure
+    lines:
+      - 10 authenticate using dot1x both
+
+- name: Subscriber | control policy | on success, demand a secured link
+  cisco.ios.ios_config:
+    parents:
+      - "policy-map type control subscriber {{ macsec_names.control_policy }}"
+      - event authentication-success match-all
+      - 10 class always do-until-failure
+    lines:
+      - "10 activate service-template {{ macsec_names.linksec_template }}"
+    # DEFAULT_LINKSEC_POLICY_MUST_SECURE is a shipped-in service template, not ours.
+    # Nothing in this layer creates or removes it.

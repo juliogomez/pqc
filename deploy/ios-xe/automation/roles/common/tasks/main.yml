@@ -1,0 +1,22 @@
+---
+# common is a library, not a unit. It has no work of its own.
+#
+# Other roles pull one file at a time:
+#
+#   - ansible.builtin.include_role:
+#       name: common
+#       tasks_from: netconf-edit
+#     vars:
+#       nc_label: ...
+#       nc_payload: ...
+#
+# include_role loads this role's defaults, which is why netconf_port, state,
+# save_config and the two blast-radius patterns are visible to the helpers.
+
+- name: common has no default tasks
+  ansible.builtin.debug:
+    msg: >-
+      roles/common is a helper library. Include one of its task files
+      (netconf-edit, netconf-fetch, exec-with-prompt, assert-safe-to-remove,
+      save-config) rather than the role itself.
+  when: false

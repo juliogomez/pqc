@@ -1,0 +1,31 @@
+
+============================================================
+  R3 (198.18.154.204)
+============================================================
+
+--- show running-config | section crypto ikev2 ---
+
+
+--- show running-config | section crypto ipsec ---
+
+
+--- show running-config | include ^interface Tunnel ---
+
+
+--- show crypto ikev2 sa ---
+ IPv4 Crypto IKEv2  SA 
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+1         10.0.23.2/500         10.0.23.1/500         none/none            DELETE 
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      Life/Active Time: 86400/139 sec
+      CE id: 1303, Session-id: 49
+      Local spi: 8807CFEA1737D0F8       Remote spi: D2B70ABBFE766285
+
+ IPv6 Crypto IKEv2  SA 
+
+
+--- show ip interface brief | include Vlan|GigabitEthernet0 ---
+GigabitEthernet0       198.18.154.204  YES NVRAM  up                    up      
+Vlan1                  unassigned      YES unset  up                    down    
+Vlan23                 10.0.23.2       YES NVRAM  up                    up      

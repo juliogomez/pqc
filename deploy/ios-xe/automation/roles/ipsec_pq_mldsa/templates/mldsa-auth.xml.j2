@@ -1,0 +1,59 @@
+{#
+  Swap IKEv2 authentication from pre-shared key to ML-DSA signatures.
+
+  /native/crypto/ikev2/profile[name]/authentication/local/mldsa-sig
+  /native/crypto/ikev2/profile[name]/authentication/remote/mldsa-sig
+  /native/crypto/ikev2/profile[name]/pki/trust-points[name]
+
+  This is the one payload in the whole layer that mixes operations. Both directions
+  have to change in the same edit-config, because a profile with no authentication
+  method is not a valid profile and a profile with two is ambiguous.
+
+  authentication/local is a YANG choice: pre-share-case and mldsa-sig-case are
+  alternative cases, so the remove is belt and braces on a well-behaved server and
+  necessary on one that is not. authentication/remote is NOT a choice; pre-share and
+  mldsa-sig are plain siblings there, so the remove is load-bearing. Leave both in.
+
+  Note "pki trust-points", not "pki trustpoint". The singular leaf exists in the
+  schema and is marked obsolete, even though the CLI still prints
+  "pki trustpoint TP-MLDSA65".
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <ikev2 xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+{% for peer in my_peers %}
+        <profile>
+          <name>{{ crypto_names.ike_profile_prefix }}{{ peer.name | upper }}</name>
+          <authentication>
+            <local>
+{% if state == 'present' %}
+              <pre-share-case nc:operation="remove"/>
+              <mldsa-sig/>
+{% else %}
+              <mldsa-sig nc:operation="remove"/>
+              <pre-share-case/>
+{% endif %}
+            </local>
+            <remote>
+{% if state == 'present' %}
+              <pre-share nc:operation="remove"/>
+              <mldsa-sig/>
+{% else %}
+              <mldsa-sig nc:operation="remove"/>
+              <pre-share/>
+{% endif %}
+            </remote>
+          </authentication>
+          <pki>
+            <trust-points{{ ' nc:operation="remove"' if state == 'absent' else '' }}>
+              <name>{{ pki_names.mldsa_trustpoint }}</name>
+            </trust-points>
+          </pki>
+        </profile>
+{% endfor %}
+      </ikev2>
+    </crypto>
+  </native>
+</config>

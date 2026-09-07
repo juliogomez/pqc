@@ -1,0 +1,12 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show macsec statistics interface TwoGigabitEthernet0/0/0 ---
+MACsec is not enabled or get stats failed
+
+
+--- show macsec status interface TwoGigabitEthernet0/0/0 ---
+MACsec is not enabled or secy status failed
+

@@ -1,0 +1,67 @@
+---
+# Tear the IKEv2 SAs down so the next packet renegotiates, then send that packet.
+#
+# ESCAPE HATCH: network_cli. Cisco-IOS-XE-crypto contains zero rpc statements, so
+# there is no modelled action for this. Config is fully modelled; verbs are not.
+# That is the single biggest gap in the standards story here.
+#
+# Why it is needed at all: changing a proposal or an authentication method does
+# not touch an SA that is already up. Without this, you push ML-KEM, run verify,
+# see pqc-gt-none, and conclude the feature is broken when it simply has not been
+# renegotiated yet.
+#
+# WHY THE CLEAR IS ONLY HALF THE JOB.
+#
+# An IKEv2 SA on a "tunnel mode ipsec ipv4" interface is built by traffic, not by
+# configuration. Clearing it leaves the pair with no SA at all, and on an idle lab
+# link nothing rebuilds it: there is no traffic to be interesting. Measured on
+# 26.02.01eftr2 after ipsec-pq-ppk pushed a PPK and cleared: the R2-R3 pair came
+# back on its own, R1-R2 sat with zero SAs, and verify.yml duly reported
+# ike_sa_count 0 with every quantum-resistance counter at 0. Nothing was wrong
+# with the feature. Nobody had sent a packet.
+#
+# That is a false negative that reads exactly like a broken feature, and with
+# "-e verify_require_mlkem=true" it is a failed run. So the clear is followed by
+# one ping per peer across the overlay, which is the cheapest possible piece of
+# interesting traffic.
+#
+# Deliberately non-fatal. roles/ipsec_pq_mldsa runs serial: 1 and swaps a YANG
+# choice rather than adding to it, so between one end switching and the other
+# following the peers genuinely disagree and the tunnel is genuinely down. A ping
+# that fails in that window is the documented behaviour, not an error, and failing
+# the play there would break the one unit that has a legitimate reason to see it.
+# verify.yml is where the posture is judged; this is only the packet that gives it
+# something to judge.
+#
+# Not interactive on IOS XE, so it does not go through exec-with-prompt. If a
+# future release starts asking for confirmation this task will time out and fail,
+# which is the correct outcome.
+
+- name: Clear IKEv2 SAs
+  cisco.ios.ios_command:
+    commands:
+      - clear crypto ikev2 sa
+  changed_when: true
+
+# The far end of the overlay, not the near end. Pinging your own tunnel address
+# is answered locally and never leaves the box, so it triggers nothing. The peer
+# address is read out of the same lab_topology that built the tunnel, so it
+# cannot drift from the interface configuration.
+- name: Re-trigger the tunnel so a new SA is negotiated
+  cisco.ios.ios_command:
+    commands:
+      - "ping {{ _reneg_peer_ip }} source {{ item.tunnel_address }} repeat 5"
+  loop: "{{ my_peers | default([]) }}"
+  loop_control:
+    label: "Tunnel{{ item.tunnel_id }} to {{ item.name }}"
+  vars:
+    _reneg_peer_ip: >-
+      {{ (lab_topology[item.name].peers
+          | selectattr('tunnel_id', 'equalto', item.tunnel_id)
+          | first).tunnel_address }}
+  register: reneg_ping
+  until: (reneg_ping.stdout[0] | default('')) is not search('Success rate is 0 percent')
+  retries: "{{ reneg_retries | default(6) }}"
+  delay: "{{ reneg_delay | default(5) }}"
+  failed_when: false
+  changed_when: false

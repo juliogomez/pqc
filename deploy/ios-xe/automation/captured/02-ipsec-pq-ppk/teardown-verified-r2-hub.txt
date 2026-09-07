@@ -1,0 +1,54 @@
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show running-config | section crypto ikev2 keyring ---
+crypto ikev2 keyring LAB-KEYRING
+ peer R1
+  address 10.0.12.1
+  pre-shared-key <REDACTED-IKEV2-PSK>
+ !
+ peer R3
+  address 10.0.23.2
+  pre-shared-key <REDACTED-IKEV2-PSK>
+ !
+
+--- show running-config | section crypto ikev2 profile ---
+crypto ikev2 profile PQAUTO-SPOKE-R1
+ match identity remote address 10.0.12.1 255.255.255.255 
+ identity local address 10.0.12.2
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local LAB-KEYRING
+ dpd 30 5 periodic
+crypto ikev2 profile PQAUTO-SPOKE-R3
+ match identity remote address 10.0.23.2 255.255.255.255 
+ identity local address 10.0.23.1
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local LAB-KEYRING
+ dpd 30 5 periodic
+
+--- show crypto ikev2 stats ---
+--------------------------------------------------------------------------------
+                          Crypto IKEv2 SA Statistics
+--------------------------------------------------------------------------------
+System Resource Limit:   0        Max IKEv2 SAs: 0        Max in nego(in/out): 40/60
+Total incoming IKEv2 SA Count:    2        active:        2        negotiating: 0     
+Total outgoing IKEv2 SA Count:    0        active:        0        negotiating: 0     
+Incoming IKEv2 Requests: 98       accepted:      98       rejected:    0       
+Outgoing IKEv2 Requests: 74       accepted:      74       rejected:    0       
+Rejected IKEv2 Requests: 0        rsrc low:      0        SA limit:    0       
+IKEv2 packets dropped at dispatch: 0       
+Incoming Requests dropped as LOW Q limit reached : 0       
+Incoming IKEV2 Cookie Challenged Requests: 0       
+    accepted: 0        rejected: 0        rejected no cookie: 0       
+Total Deleted sessions of Cert Revoked Peers: 0       
+Total init sa request rejected due to queue limit : 0       
+SA Strength Enforcement Rejects - incoming:        0 outgoing:        0
+Sessions with Quantum Resistance: 0        Manual: 0        Dynamic: 0       
+PPK Identity Mismatch: 0        
+PPK Retrieve Failure    -    ALL:      0        With PPK Required:    0       
+PPK Authentication Failure - ALL:      0        With PPK Required:    0       
+

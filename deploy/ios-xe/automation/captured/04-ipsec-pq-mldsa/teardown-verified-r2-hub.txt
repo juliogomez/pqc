@@ -1,0 +1,105 @@
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show running-config | include ^crypto pki trustpoint ---
+crypto pki trustpoint SLA-TrustPoint
+crypto pki trustpoint TP-self-signed-1461620534
+
+--- show crypto key mypubkey all ---
+% Key pair was generated at: 12:21:39 UTC Aug 30 2026
+Key name: bfl-cpoc-d14-8235-02.lab.local
+Key type: RSA KEYS      2048 bits
+ Storage Device: private-config
+ Usage: General Purpose Key
+ Key is not exportable. Redundancy enabled.
+ Key Data:
+  <public key data elided by the capture scrubber>
+% Key pair was generated at: 12:28:46 UTC Aug 30 2026
+Key name: TP-self-signed-1461620534
+Key type: RSA KEYS      3072 bits
+ Storage Device: private-config
+ Usage: General Purpose Key
+ Key is not exportable. Redundancy enabled.
+ Key Data:
+  <public key data elided by the capture scrubber>
+% Key pair was generated at: 18:21:25 UTC Aug 30 2026
+Key name: CISCO_IDEVID_SUDI
+Key type: RSA KEYS      2048 bits
+ On Cryptographic Device: act2 (label=act2, key index=24)
+ Usage: General Purpose Key
+ Key is not exportable.
+ Key Data:
+  <public key data elided by the capture scrubber>
+
+--- show running-config | include ^service internal ---
+
+
+--- show running-config | section crypto ikev2 profile ---
+crypto ikev2 profile PQAUTO-SPOKE-R1
+ match identity remote address 10.0.12.1 255.255.255.255 
+ identity local address 10.0.12.2
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local LAB-KEYRING
+ dpd 30 5 periodic
+crypto ikev2 profile PQAUTO-SPOKE-R3
+ match identity remote address 10.0.23.2 255.255.255.255 
+ identity local address 10.0.23.1
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local LAB-KEYRING
+ dpd 30 5 periodic
+
+--- show crypto ikev2 sa detailed ---
+ IPv4 Crypto IKEv2  SA 
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+2         10.0.23.1/500         10.0.23.2/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      Life/Active Time: 86400/38 sec
+      CE id: 1094, Session-id: 20
+      Local spi: E2F1202236CC932A       Remote spi: 82E903F22CBE4A27
+      Status Description: Negotiation done
+      Local id: 10.0.23.1
+      Remote id: 10.0.23.2
+      Local req msg id:  1              Remote req msg id:  3         
+      Local next msg id: 1              Remote next msg id: 3         
+      Local req queued:  1              Remote req queued:  3         
+      Local window:      20             Remote window:      20        
+      DPD configured for 30 seconds, retry 5
+      IETF Std Fragmentation  enabled.
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : No
+      PEER TYPE: IOS-XE
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+1         10.0.12.2/500         10.0.12.1/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      Life/Active Time: 86400/98 sec
+      CE id: 1091, Session-id: 18
+      Local spi: FD5FD879A6C816CB       Remote spi: 30791010C472368A
+      Status Description: Negotiation done
+      Local id: 10.0.12.2
+      Remote id: 10.0.12.1
+      Local req msg id:  3              Remote req msg id:  5         
+      Local next msg id: 3              Remote next msg id: 5         
+      Local req queued:  3              Remote req queued:  5         
+      Local window:      20             Remote window:      20        
+      DPD configured for 30 seconds, retry 5
+      IETF Std Fragmentation  enabled.
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : No
+      PEER TYPE: IOS-XE
+
+ IPv6 Crypto IKEv2  SA 
+

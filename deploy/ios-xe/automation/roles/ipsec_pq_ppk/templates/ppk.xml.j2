@@ -1,0 +1,66 @@
+{#
+  RFC 8784 post-quantum pre-shared key.
+
+  /native/crypto/ikev2/keyring[name]/peer[name]/ppk/manual/id
+  /native/crypto/ikev2/keyring[name]/peer[name]/ppk/manual/key/hex
+  /native/crypto/ikev2/keyring[name]/peer[name]/ppk/manual/key/required
+  /native/crypto/ikev2/profile[name]/keyring/ppk/keyring-name
+
+  Two things worth knowing about this payload.
+
+  The PPK goes INSIDE the keyring peer, next to the IKE pre-shared key, which is
+  confusing because they are unrelated: the PSK proves who you are talking to,
+  the PPK is stirred into the key schedule so a broken DH does not give up the
+  session keys. Same container, different jobs.
+
+  "required" sits under key, not next to id, and it is what makes the tunnel fail
+  closed. Without it a peer that has never heard of PPK is quietly accepted with
+  classical-only key derivation.
+
+  Note also that ppk-type is a YANG choice with manual and dynamic cases, so
+  provisioning a SKIP/QKD client later means replacing this case rather than
+  adding to it.
+-#}
+{% set op = ' nc:operation="remove"' if state == 'absent' else '' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <ikev2 xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <keyring>
+          <name>{{ crypto_names.ike_keyring }}</name>
+{% for peer in my_peers %}
+          <peer>
+            <name>{{ peer.name | upper }}</name>
+            <ppk{{ op }}>
+{% if state == 'present' %}
+              <manual>
+                <id>{{ pq_ppk_id }}</id>
+                <key>
+                  <hex>{{ lab_ppk_hex }}</hex>
+{% if pq_ppk_required | bool %}
+                  <required/>
+{% endif %}
+                </key>
+              </manual>
+{% endif %}
+            </ppk>
+          </peer>
+{% endfor %}
+        </keyring>
+{% for peer in my_peers %}
+        <profile>
+          <name>{{ crypto_names.ike_profile_prefix }}{{ peer.name | upper }}</name>
+          <keyring>
+            <ppk{{ op }}>
+{% if state == 'present' %}
+              <keyring-name>{{ crypto_names.ike_keyring }}</keyring-name>
+{% endif %}
+            </ppk>
+          </keyring>
+        </profile>
+{% endfor %}
+      </ikev2>
+    </crypto>
+  </native>
+</config>

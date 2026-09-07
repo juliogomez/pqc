@@ -8,7 +8,7 @@ Every secure handshake rests on two pillars a quantum computer threatens: **key 
 (the shared secret, fixed by **ML-KEM**) and **authentication** (proving identity, fixed by
 **ML-DSA**). Each lab below takes a real protocol post-quantum along one or both of those
 axes. If that framing is new, read
-[the challenge](../README.md#the-challenge-two-pillars-two-deadlines) first.
+[the challenge](../README.md#the-challenge) first.
 
 Nothing here needs hardware. Everything runs in throwaway Docker containers on your laptop,
 so you can break a lab and rerun it as many times as you like.
@@ -49,8 +49,9 @@ Take a real IKEv2/IPsec VPN tunnel post-quantum.
 
 *Start with Key Exchange: it introduces the containers, strongSwan, and the hybrid handshake that the Authentication lab builds on.*
 
-**On Cisco hardware:** [IPsec on IOS XE](../deploy/ios-xe/ipsec.md). ML-KEM and PPK both
-ship today, ML-DSA authentication lands in 26.2.
+**On Cisco hardware:** [IPsec on IOS XE](../deploy/ios-xe/ipsec.md). ML-KEM, PPK and
+ML-DSA authentication all work on 26.2, and the write-up measures what ML-DSA does to the
+handshake: six times the bytes, and a migration that can't be done without an outage.
 
 ### TLS 1.3 (the web's secure channel)
 
@@ -64,8 +65,9 @@ Take TLS post-quantum, the protocol behind HTTPS and most application traffic.
 
 *Same two pillars as the IPsec family, this time at the application layer.*
 
-**On Cisco hardware:** [TLS on IOS XE](../deploy/ios-xe/tls.md). The shortest doc in the
-set, because the router's management HTTPS server is still classical-only.
+**On Cisco hardware:** [TLS on IOS XE](../deploy/ios-xe/tls.md). On 26.2 the router's
+management HTTPS server negotiates X25519MLKEM768 with no configuration at all. Its
+certificate is still classical.
 
 ### MACsec / 802.1X (Layer 2 link encryption)
 
@@ -76,9 +78,10 @@ Take MACsec post-quantum. Its entire quantum exposure lives in an EAP-TLS handsh
 
 *Both pillars live in a **single** EAP-TLS handshake here, so this is one combined lab, at Layer 2 over a different control plane, a useful contrast for anyone running switching/access infrastructure.*
 
-**On Cisco hardware:** [MACsec on IOS XE](../deploy/ios-xe/macsec.md). The PQ path is a
-supported feature, and the write-up covers both the working PSK mechanics and exactly which
-platform restriction blocked the EAP-TLS leg.
+**On Cisco hardware:** [MACsec on IOS XE](../deploy/ios-xe/macsec.md). The PQ key exchange
+is a supported feature and the write-up runs it end to end, PSK first and then EAP-TLS with
+ML-KEM, including the three config lines that decide whether frames are actually
+encrypted. ML-DSA certificates are the one open question left on 26.2.
 
 ### SSH (secure remote access)
 
@@ -90,7 +93,8 @@ Take SSH post-quantum, the protocol behind remote shells, git, CI/CD deploys, an
 *Both pillars live in one SSH handshake, so this is one combined lab where the key exchange is the easy, on-by-default half, and the authentication is the frontier.*
 
 **On Cisco hardware:** [SSH on IOS XE](../deploy/ios-xe/ssh.md). The hybrid KEX is one
-config line; the composite ML-DSA keys are not there yet.
+config line; the composite ML-DSA keys are still not there on 26.2, and the doc shows the
+CLI proving it.
 
 ### Module Lattices (bonus lab: the math foundation)
 
@@ -109,4 +113,41 @@ All the Dockerfiles and entrypoints live in [`docker/`](docker/); the compose fi
 lab reference them, so run `docker compose` from the lab directory rather than from here.
 
 **Do I need a quantum computer to run these labs?** No. 🙂 Everything runs on classical hardware in Docker. The labs demonstrate the *defenses* being deployed today against a future CRQC.
+
+---
+
+## When you're done
+
+Every lab ends with its own **Cleanup** section, and they're worth actually running. Two
+reasons, and neither is obvious from inside a container:
+
+**The keys land in your clone, not in the container.** The four labs that mint credentials
+(both authentication labs, MACsec, SSH) write their CA, host keys and certificates into
+`config/`, which is bind-mounted from your working copy. `docker compose down` removes the
+containers and leaves those private keys sitting on your disk. `.gitignore` keeps them out
+of commits, but that's not the same as deleting them, so each of those four cleanup sections
+carries the `rm` line for its own material.
+
+**Config edits persist the same way.** The IPsec key-exchange and MACsec labs have you edit
+tracked config files (`swanctl.conf`, `hostapd.conf`) to toggle proposals and trigger a
+downgrade. Those edits go straight into your clone. Both cleanup sections end with `git
+restore config/`, which snaps everything back in one shot whether or not you reverted by
+hand as you went.
+
+Images are kept in all cases, so re-running a lab later is instant rather than another
+from-source build.
+
+One bit of Docker housekeeping worth knowing about. The four labs with a one-shot `certgen`
+or `keygen` service leave an empty `<project>_default` network behind after `docker compose
+down`, because the network was created by `compose run` rather than by `compose up`. Harmless
+in itself, but each one grabs an auto-assigned `/16`, and these labs pin their own subnets
+(`172.20.0.0/24` through `172.25.0.0/24`) specifically to avoid collisions. If you run the
+labs a few times, sweep them up:
+
+```bash
+docker network prune
+```
+
+Then head to [Stage 2](../deploy/README.md) and do it all again on real routers, where the
+cleanup story is [considerably less forgiving](../deploy/ios-xe/README.md#putting-the-routers-back).
 

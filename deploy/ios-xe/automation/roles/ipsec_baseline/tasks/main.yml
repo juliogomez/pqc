@@ -1,0 +1,123 @@
+---
+# Classical hub-and-spoke IPsec. The thing the PQ units are measured against.
+#
+# Straight to hub and spoke: R2 terminates one tunnel per spoke, R1 and R3
+# terminate one each toward the hub. No point-to-point stage to migrate away
+# from.
+#
+# Idempotent. Every configuration task is a NETCONF merge of named list entries,
+# so a second run pushes the same leaves and reports changed=false.
+#
+# The underlay is a precondition. Nothing here configures Vlan12, Vlan23, an SVI
+# address or a route.
+#
+# Note the shape of every NETCONF step: render the payload into nc_payload here,
+# in this role, then hand it to roles/common/tasks/netconf-edit.yml. The render
+# has to happen on this side because a template lookup resolves against the role
+# the task belongs to, and common has no templates directory.
+
+- name: IPsec baseline | sanity
+  ansible.builtin.assert:
+    that:
+      - my_peers | length > 0
+      - lab_ikev2_psk | default('') | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} has no peers in lab_topology, or lab_ikev2_psk is
+      not set. Copy group_vars/all/lab.yml.example to lab.yml and fill it in.
+    quiet: true
+
+- name: IPsec baseline | build
+  when: state == 'present'
+  block:
+
+    - name: Render IKEv2 global
+      ansible.builtin.set_fact:
+        nc_label: IKEv2 proposal, policy, keyring, fragmentation
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'ikev2-base.xml.j2') }}"
+
+    - name: Push IKEv2 global
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Render IKEv2 profiles
+      ansible.builtin.set_fact:
+        nc_label: "IKEv2 profiles ({{ my_peers | map(attribute='name') | join(', ') }})"
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'ikev2-profiles.xml.j2') }}"
+
+    - name: Push IKEv2 profiles
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Render IPsec transform set and profiles
+      ansible.builtin.set_fact:
+        nc_label: IPsec transform set and profiles
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'ipsec.xml.j2') }}"
+
+    - name: Push IPsec transform set and profiles
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Tunnel interfaces
+      ansible.builtin.include_tasks: tunnels.yml
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config
+
+# --- Teardown ----------------------------------------------------------------
+#
+# Reverse order, because the references run the other way: the tunnel points at
+# the IPsec profile, which points at the IKEv2 profile, which points at the
+# keyring. Remove a keyring while a profile still names it and the box refuses the
+# edit.
+- name: IPsec baseline | tear down
+  when: state == 'absent'
+  block:
+
+    - name: Tunnel interfaces
+      ansible.builtin.include_tasks: tunnels.yml
+
+    - name: Render IPsec removal
+      ansible.builtin.set_fact:
+        nc_label: remove IPsec transform set and profiles
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'ipsec.xml.j2') }}"
+
+    - name: Push IPsec removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Render IKEv2 profile removal
+      ansible.builtin.set_fact:
+        nc_label: remove IKEv2 profiles
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'ikev2-profiles.xml.j2') }}"
+
+    - name: Push IKEv2 profile removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Render IKEv2 global removal
+      ansible.builtin.set_fact:
+        nc_label: remove IKEv2 global
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'ikev2-base.xml.j2') }}"
+
+    - name: Push IKEv2 global removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config

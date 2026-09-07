@@ -1,0 +1,39 @@
+---
+# Refuse to touch PKI on a router whose clock is not authoritative.
+#
+# SCREEN-SCRAPE, and an unavoidable one: there is no operational leaf that says
+# "this clock is trusted". Matched literal: a leading "*" on the "show clock"
+# output line, which is IOS's way of saying the time was never set
+# authoritatively.
+#
+# Why it is worth a whole task file. A CA whose clock was never set takes your
+# passphrase and then refuses to start with "% Time has not been set. Cannot start
+# the Certificate server", and "show crypto pki server" reports "State: check
+# failed". Worse, if the CA starts but the enrolling routers disagree about the
+# time, enrollment appears to succeed and then EAP-TLS fails much later with
+# "certificate not yet valid". Certificate validity is absolute time; there is no
+# tolerance to lean on.
+#
+# Fix with "clock set <hh:mm:ss> <day> <month> <year>" on every router, or point
+# them at NTP, which is what you would do for real. Not automated here: guessing at
+# what time your lab thinks it is would be worse than stopping.
+
+- name: Clock | read
+  cisco.ios.ios_command:
+    commands:
+      - show clock
+  register: clock_check
+  changed_when: false
+
+- name: Clock | must be authoritative
+  ansible.builtin.assert:
+    that:
+      - not ((clock_check.stdout[0] | default('*')) is match('\s*\*'))
+    fail_msg: >-
+      The clock on {{ inventory_hostname }} is not authoritative
+      ({{ clock_check.stdout[0] | default('no output') | trim }}). The leading
+      asterisk is the tell. A local CA will not start, and certificates issued
+      against a wrong clock fail validation later with "certificate not yet valid",
+      long after enrollment looked fine. Set the clock on every router, then re-run.
+    success_msg: "clock is authoritative"
+    quiet: true

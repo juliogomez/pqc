@@ -1,0 +1,144 @@
+---
+# Prove the PPK teardown actually happened. Do not assume it did.
+#
+# This file exists because the PPK role used to have nothing like it. The ML-DSA
+# role has verify-teardown.yml; PPK trusted the NETCONF reply on its own, and a
+# NETCONF remove of a node the server chose not to remove still answers <ok/>.
+# So "changed=2, rc=0" was the entire evidence that a PPK had been withdrawn from
+# the key schedule. Everything below re-reads the box instead.
+#
+# Three independent questions, because config and behaviour can disagree:
+#
+#   1. is the ppk container gone from every keyring peer
+#   2. is the "keyring ppk" reference gone from every IKEv2 profile
+#   3. do the operational counters agree that no session is quantum resistant
+#
+# 3 is the one that cannot be faked by a cosmetic config edit. A leftover PPK that
+# is still in the key schedule shows up there whatever the running config says.
+#
+# The protected object is checked in the positive direction too, the same way
+# roles/ipsec_pq_mldsa does it: the point of a teardown verification is not only
+# "my things are gone" but "nothing else went with them". Here that means the
+# CLASSICAL pre-shared keyring, because the ppk container is removed from inside
+# the keyring peers and an over-broad remove would take the IKE pre-shared key
+# with it and drop the baseline tunnel.
+#
+# EVERY ANCHORED REGEX BELOW CARRIES multiline=True, and it is load-bearing rather
+# than decorative. "show running-config | section ..." returns many lines in one
+# string, so without multiline=True "^" matches only the very start of the whole
+# blob and "$" only the very end. An audit of this layer found two regexes missing
+# it, and the effect is always the same: the pattern cannot match a line in the
+# middle, the "is not search(...)" reads as true, and the check passes a teardown
+# that removed nothing.
+
+# The quantum-resistance gauge is a live count of sessions, so give the box a
+# moment to finish clearing and re-forming SAs after the teardown before believing
+# a reading. Bounded deliberately: a few polls over half a minute, not a silent
+# loop that hides a PPK that never went away.
+- name: "PPK teardown | {{ inventory_hostname }} | re-read the keyring, the profiles and the counters"
+  cisco.ios.ios_command:
+    commands:
+      - "show running-config | section crypto ikev2 keyring {{ crypto_names.ike_keyring }}"
+      - show running-config | section crypto ikev2 profile
+      - show crypto ikev2 stats
+  register: ppk_td
+  until:
+    - ppk_td.stdout is defined
+    - >-
+      ((ppk_td.stdout[2] | default('')
+        | regex_findall('Sessions with Quantum Resistance:\s*([0-9]+)')
+        + ['0']) | first) == '0'
+  retries: 6
+  delay: 5
+  changed_when: false
+  # The verdict is the assertions below. Retrying to exhaustion here would fail
+  # with "until condition was not met" and say nothing about which check failed.
+  failed_when: false
+
+- name: "PPK teardown | {{ inventory_hostname }} | the PPK is gone from the keyring peers"
+  ansible.builtin.assert:
+    that:
+      # The build renders "ppk manual id PPK-LAB key hex <...> required" inside
+      # each "peer <NAME>" block. Match the literal token; avoid \b in Jinja
+      # single-quoted patterns (there it is a backspace, not a word boundary).
+      - ppk_td.stdout[0] is not search('ppk manual')
+      - ppk_td.stdout[0] is not search('ppk')
+    fail_msg: >-
+      A PPK is still configured on keyring {{ crypto_names.ike_keyring }} on
+      {{ inventory_hostname }}, so the teardown did not complete even though the
+      edit was accepted. Keyring now reads:
+      {{ ppk_td.stdout_lines[0] | default([]) | map('trim') | list }}
+    success_msg: >-
+      no ppk container left on any peer of {{ crypto_names.ike_keyring }}
+    quiet: true
+
+- name: "PPK teardown | {{ inventory_hostname }} | the profiles no longer reference a PPK keyring"
+  ansible.builtin.assert:
+    that:
+      # The build renders "keyring ppk LAB-KEYRING" under each IKEv2 profile.
+      # Matching "keyring ppk" specifically and not bare "keyring" matters: the
+      # baseline's own "keyring local LAB-KEYRING" must survive and does contain
+      # the word keyring.
+      - ppk_td.stdout[1] is not search('keyring ppk')
+      - ppk_td.stdout[1] is not search('ppk')
+    fail_msg: >-
+      An IKEv2 profile on {{ inventory_hostname }} still references a PPK keyring.
+      Profiles now read:
+      {{ ppk_td.stdout_lines[1] | default([]) | map('trim') | list }}
+    success_msg: "no PPK keyring reference left on any IKEv2 profile"
+    quiet: true
+
+- name: "PPK teardown | {{ inventory_hostname }} | parse the quantum-resistance counters"
+  ansible.builtin.set_fact:
+    ppk_td_qr: >-
+      {{ (ppk_td.stdout[2] | default('')
+          | regex_findall('Sessions with Quantum Resistance:\s*([0-9]+)')
+          + ['0']) | first }}
+    ppk_td_manual: >-
+      {{ (ppk_td.stdout[2] | default('')
+          | regex_findall('Quantum Resistance:\s*[0-9]+\s+Manual:\s*([0-9]+)')
+          + ['0']) | first }}
+
+- name: "PPK teardown | {{ inventory_hostname }} | no session is quantum resistant any more"
+  ansible.builtin.assert:
+    that:
+      # Parsed with regex_findall, same as roles/verify/tasks/main.yml. Do not use
+      # "is search(...\b)" in a bare assert that: list: without {{ }} quoting the
+      # backslashes get eaten and the check reads "0" as a pass while always failing.
+      - ppk_td_qr == '0'
+      - ppk_td_manual == '0'
+    fail_msg: >-
+      The IKEv2 counters on {{ inventory_hostname }} still report a quantum
+      resistant session, so a PPK is still in the key schedule regardless of what
+      the running config shows. This is the check that cannot be satisfied by a
+      cosmetic config removal. Parsed counters: quantum_resistant={{ ppk_td_qr }},
+      manual={{ ppk_td_manual }}. Counter line:
+      {{ ppk_td.stdout_lines[2] | default([]) | select('search', 'Quantum Resistance') | map('trim') | list }}
+    success_msg: >-
+      "Sessions with Quantum Resistance: 0", so the PPK really is out of the key
+      schedule
+    quiet: true
+
+- name: "PPK teardown | {{ inventory_hostname }} | the classical keyring is untouched"
+  ansible.builtin.assert:
+    that:
+      - ppk_td.stdout[0] is search('crypto ikev2 keyring ' ~ crypto_names.ike_keyring)
+      - ppk_td.stdout[0] is search('pre-shared-key')
+    fail_msg: >-
+      The classical pre-shared keyring {{ crypto_names.ike_keyring }} on
+      {{ inventory_hostname }} did not survive the PPK teardown. The ppk container
+      is removed from INSIDE the keyring peers, so an over-broad remove takes the
+      IKE pre-shared key with it and the baseline tunnel goes down with it. This
+      check assumes the documented teardown order, PPK before ipsec-baseline; if
+      the baseline is already gone there is nothing here to protect. Keyring now:
+      {{ ppk_td.stdout_lines[0] | default([]) | map('trim') | list }}
+    success_msg: >-
+      {{ crypto_names.ike_keyring }} and its pre-shared keys survived the teardown
+    quiet: true
+
+- name: "PPK teardown | {{ inventory_hostname }} | report"
+  ansible.builtin.debug:
+    msg: >-
+      {{ ppk_td.stdout_lines[2] | default([])
+         | select('search', 'Quantum Resistance|PPK ')
+         | map('trim') | list }}

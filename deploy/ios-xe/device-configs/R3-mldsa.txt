@@ -1,0 +1,387 @@
+! R3 (spoke 2), working ML-DSA IKEv2 authentication on IOS XE 26.2 / C8235-G2
+! Verified state: two tunnels, both "Auth sign: MLDSA" + "PQC Key Exchange: ML-KEM-768"
+!   Tunnel0 -> R1  (10.0.12.1)  profile MLDSA-PROFILE, direct spoke-to-spoke, ipsec.md Exercise 5
+!   Tunnel2 -> R2  (10.0.23.1)  profile HUB-MLDSA,     hub leg,               ipsec.md Exercise 7
+!
+! R3 is the peer that gets migrated in ipsec.md Exercise 7. It reached this state from
+! "authentication local rsa-sig" + TP-RSA, and the cutover was an outage: both ends have
+! to change "authentication local" together, even with both methods listed under
+! "authentication remote".
+!
+! Mirror of R1 otherwise. Same "service internal" prerequisite, same mandatory
+! "crypto ikev2 fragmentation mtu 1400", same unbound comparison trustpoints.
+!
+! Sanitized: password hashes, PSKs, PPKs, the chassis serial and every
+! certificate body have been replaced with <removed>. Regenerate the PKI with
+! mldsa-certs/gen-mldsa-certs.sh and re-import; nothing else needs changing.
+!
+Current configuration : 98573 bytes
+!
+! Last configuration change at 13:02:01 UTC Fri Aug 28 2026 by admin
+!
+version 26.2
+service timestamps debug datetime msec
+service timestamps log datetime msec
+service internal
+platform qfp utilization monitor load 80
+!
+hostname bfl-cpoc-d14-8235-03
+!
+boot-start-marker
+boot system bootflash:packages.conf
+boot system bootflash:c8kg2be-universalk9.26.01.01.SPA.conf
+boot-end-marker
+!
+!
+vrf definition Mgmt-intf
+ !
+ address-family ipv4
+ exit-address-family
+ !
+ address-family ipv6
+ exit-address-family
+!
+aaa new-model
+!
+!
+aaa authentication login default local
+aaa authorization exec default local 
+!
+!
+aaa session-id common
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+login on-success log
+!
+!
+!
+!
+!
+!
+!
+!
+subscriber templating
+! 
+! 
+! 
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+product-analytics
+!
+crypto pki trustpoint TP-self-signed-4006297798
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-4006297798
+ revocation-check none
+ rsakeypair TP-self-signed-4006297798
+ hash sha512
+!
+crypto pki trustpoint SLA-TrustPoint
+ enrollment pkcs12
+ revocation-check crl
+ hash sha512
+!
+crypto pki trustpoint TP-MLDSA44
+ enrollment pkcs12
+ revocation-check none
+ mldsakeypair TP-MLDSA44 44
+ hash sha512
+!
+crypto pki trustpoint TP-MLDSA65
+ enrollment pkcs12
+ revocation-check none
+ mldsakeypair TP-MLDSA65 65
+ hash sha512
+!
+crypto pki trustpoint TP-MLDSA87
+ enrollment pkcs12
+ revocation-check none
+ mldsakeypair TP-MLDSA87 87
+ hash sha512
+!
+crypto pki trustpoint TP-ECDSA
+ enrollment pkcs12
+ revocation-check none
+ eckeypair TP-ECDSA
+ hash sha256
+!
+crypto pki trustpoint TP-RSA
+ enrollment pkcs12
+ revocation-check none
+ rsakeypair TP-RSA
+ hash sha256
+!
+!
+crypto pki certificate chain TP-self-signed-4006297798
+ ! certificate bodies removed; regenerate with mldsa-certs/gen-mldsa-certs.sh and re-import
+crypto pki certificate chain SLA-TrustPoint
+ ! certificate bodies removed; regenerate with mldsa-certs/gen-mldsa-certs.sh and re-import
+crypto pki certificate chain TP-MLDSA44
+ ! certificate bodies removed; regenerate with mldsa-certs/gen-mldsa-certs.sh and re-import
+crypto pki certificate chain TP-MLDSA65
+ ! certificate bodies removed; regenerate with mldsa-certs/gen-mldsa-certs.sh and re-import
+crypto pki certificate chain TP-MLDSA87
+ ! certificate bodies removed; regenerate with mldsa-certs/gen-mldsa-certs.sh and re-import
+crypto pki certificate chain TP-ECDSA
+ ! certificate bodies removed; regenerate with mldsa-certs/gen-mldsa-certs.sh and re-import
+crypto pki certificate chain TP-RSA
+ ! certificate bodies removed; regenerate with mldsa-certs/gen-mldsa-certs.sh and re-import
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+voice-card 0/4
+!
+diagnostic bootup level minimal
+!
+license udi pid C8235-G2 sn <removed>
+license boot level advantage
+license smart transport smart
+license smart vrf Mgmt-intf
+memory free low-watermark processor 63115
+!
+spanning-tree extend system-id
+!
+!
+enable secret 9 <removed>
+!
+username admin privilege 15 secret 9 <removed>
+!
+redundancy
+ mode none
+!
+!
+!
+crypto ikev2 proposal CLASSICAL-PROPOSAL 
+ pqc mlkem768 optional
+ encryption aes-cbc-256
+ integrity sha512
+ group 20
+!
+crypto ikev2 policy CLASSICAL-POLICY 
+ proposal CLASSICAL-PROPOSAL
+!
+crypto ikev2 keyring CLASSICAL-KEYRING
+ peer R1
+  address 10.0.12.1
+  pre-shared-key <removed>
+  ppk manual id PPK-R1R3 key <removed>
+ !
+!
+!
+crypto ikev2 profile MLDSA-PROFILE
+ match identity remote address 10.0.12.1 255.255.255.255 
+ identity local address 10.0.23.2
+ authentication remote mldsa-sig
+ authentication local mldsa-sig
+ pki trustpoint TP-MLDSA65
+ dpd 30 5 periodic
+!
+crypto ikev2 profile HUB-MLDSA
+ match identity remote address 10.0.23.1 255.255.255.255 
+ identity local address 10.0.23.2
+ authentication remote mldsa-sig
+ authentication local mldsa-sig
+ pki trustpoint TP-MLDSA65
+ dpd 30 5 periodic
+!
+crypto ikev2 fragmentation mtu 1400
+!
+!
+vlan internal allocation policy ascending
+!
+!
+!
+!
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+crypto ipsec transform-set CLASSICAL-TS esp-gcm 256 
+ mode tunnel
+!
+crypto ipsec profile HUB-IPSEC
+ set transform-set CLASSICAL-TS 
+ set ikev2-profile HUB-MLDSA
+!
+crypto ipsec profile MLDSA-IPSEC
+ set transform-set CLASSICAL-TS 
+ set ikev2-profile MLDSA-PROFILE
+!
+!
+!
+!
+!
+!
+! 
+! 
+!
+!
+interface Tunnel0
+ ip address 192.168.100.2 255.255.255.0
+ tunnel source Vlan23
+ tunnel mode ipsec ipv4
+ tunnel destination 10.0.12.1
+ tunnel protection ipsec profile MLDSA-IPSEC
+!
+interface Tunnel2
+ ip address 192.168.102.2 255.255.255.0
+ tunnel source Vlan23
+ tunnel mode ipsec ipv4
+ tunnel destination 10.0.23.1
+ tunnel protection ipsec profile HUB-IPSEC
+!
+interface TwoGigabitEthernet0/0/0
+ switchport access vlan 23
+ switchport mode access
+!
+interface TwoGigabitEthernet0/0/1
+!
+interface TwoGigabitEthernet0/0/2
+!
+interface TwoGigabitEthernet0/0/3
+!
+interface TwoGigabitEthernet0/0/4
+ switchport
+!
+interface TwoGigabitEthernet0/0/5
+ switchport
+!
+interface TwoGigabitEthernet0/0/6
+ no ip address
+ ip proxy-arp
+ shutdown
+ negotiation auto
+!
+interface TwoGigabitEthernet0/0/7
+ no ip address
+ ip proxy-arp
+ shutdown
+ negotiation auto
+!
+interface TenGigabitEthernet0/0/8
+ no ip address
+ ip proxy-arp
+ shutdown
+!
+interface TenGigabitEthernet0/0/9
+ no ip address
+ ip proxy-arp
+ shutdown
+!
+interface Service-Engine0/4/0
+!
+interface GigabitEthernet0
+ vrf forwarding Mgmt-intf
+ ip address 198.18.154.204 255.255.192.0
+ ip proxy-arp
+ negotiation auto
+!
+interface Vlan1
+ no ip address
+ ip proxy-arp
+!
+interface Vlan23
+ ip address 10.0.23.2 255.255.255.252
+ ip proxy-arp
+!
+ip rcmd domain-lookup
+ip forward-protocol nd
+ip forward-protocol udp
+ip forward-protocol udp tftp
+ip telnet tos C0
+ip telnet comport enable
+ip telnet comport flow level 16
+ip telnet comport receive window 4128
+ip telnet comport disconnect delay 0
+ip tftp arp-glean
+ip tftp blocksize 512
+ip ftp passive
+ip http server
+ip http secure-server
+ip http secure-trustpoint TP-self-signed-4006297798
+!
+ip route 10.0.12.0 255.255.255.252 10.0.23.1
+ip route vrf Mgmt-intf 0.0.0.0 0.0.0.0 198.18.128.1
+ip ssh bulk-mode 131072
+ip ssh stricthostkeycheck accept-new
+ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256
+ip scp server enable
+!
+ip radius source-interface GigabitEthernet0 
+!
+!
+!
+radius server PQ-RADIUS
+ address ipv4 198.18.134.29 auth-port 1812 acct-port 1813
+ key pqc-radius-secret
+!
+!
+!
+control-plane
+!
+!
+mgcp behavior rsip-range tgcp-only
+mgcp behavior comedia-role none
+mgcp behavior comedia-check-media-src disable
+mgcp behavior comedia-sdp-force disable
+!
+mgcp profile default
+!
+!
+!
+!
+!
+!
+line con 0
+ activation-character 13
+ logging synchronous
+ stopbits 1
+line aux 0
+ activation-character 13
+line vty 0 4
+ privilege level 15
+ activation-character 13
+ logging synchronous
+ transport input ssh
+line vty 5 14
+ privilege level 15
+ activation-character 13
+ logging synchronous
+ transport input ssh
+!
+ntp allow mode control 3
+!
+!
+!
+!
+!
+!
+end

@@ -1,0 +1,79 @@
+---
+# Post-quantum TLS on the management HTTPS server.
+#
+# The smallest unit here, and the only one that needs no CLI escape hatch at all: one
+# modelled leaf, one NETCONF edit, nothing else. Which makes it the cleanest illustration
+# of what this whole layer is for.
+#
+# It is also the least dramatic. 26.2 already negotiates X25519MLKEM768 out of the box, so
+# on a default config this does not change what happens on the wire; it makes the posture
+# explicit, and it lets you prove the knob does something by setting it to non-pqc and
+# watching the group change.
+#
+# Idempotent. One enum, merged.
+
+- name: TLS PQ | sanity
+  ansible.builtin.assert:
+    that:
+      - pq_https_pqc_type in ['pqc', 'non-pqc', 'hybrid', 'all']
+    fail_msg: >-
+      pq_https_pqc_type must be one of pqc, non-pqc, hybrid or all. Got
+      "{{ pq_https_pqc_type }}".
+    quiet: true
+
+# The HTTPS server has to be on for this to mean anything, and on these boxes it is also
+# how RESTCONF answers. Read it rather than enabling it: turning the secure server on has
+# side effects (it wants a trustpoint) that do not belong in a PQ playbook.
+- name: TLS PQ | check the secure server is enabled
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: netconf-fetch
+  vars:
+    nc_label: ip http secure-server
+    nc_source: running
+    nc_filter: |
+      <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+        <ip>
+          <http xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-http"/>
+        </ip>
+      </native>
+
+- name: TLS PQ | warn if the secure server is off
+  ansible.builtin.debug:
+    msg: >-
+      "ip http secure-server" does not appear enabled on {{ inventory_hostname }}. The
+      pqc-type leaf will still be accepted, but nothing will negotiate it until the HTTPS
+      server is listening. Enabling it needs a trustpoint decision, which is not this
+      playbook's business, so it is left to you.
+  when:
+    - state == 'present'
+    - not ((netconf_fetch_result.stdout | default('')) is search('<secure-server>true</secure-server>'))
+
+- name: TLS PQ | render
+  ansible.builtin.set_fact:
+    nc_label: >-
+      {{ (state == 'present')
+         | ternary('ip http secure-pqc-type ' ~ pq_https_pqc_type,
+                   'remove ip http secure-pqc-type') }}
+    nc_operation: merge
+    nc_payload: "{{ lookup('template', 'tls-pq.xml.j2') }}"
+
+- name: TLS PQ | push
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: netconf-edit
+
+- name: TLS PQ | how to prove it
+  ansible.builtin.debug:
+    msg: >-
+      Check it from the control node with
+      "openssl s_client -connect {{ ansible_host }}:443 -groups X25519MLKEM768" and look at
+      the "Negotiated TLS1.3 group" line. Needs OpenSSL 3.5 or later; anything older has
+      never heard of the group and will tell you the server does not support it, which is a
+      lie about your own client.
+  when: state == 'present'
+
+- name: TLS PQ | save
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: save-config

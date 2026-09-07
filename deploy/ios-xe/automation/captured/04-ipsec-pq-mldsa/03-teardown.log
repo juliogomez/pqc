@@ -1,0 +1,551 @@
+### TAG=phaseB-teardown2-mldsa
+### CMD=ansible-playbook ipsec-pq-mldsa.yml -e state=absent
+### START=2026-09-01T09:51:06Z
+
+PLAY [Swap IKEv2 authentication to ML-DSA, one router at a time] ***************
+
+TASK [ipsec_pq_mldsa : ML-DSA | sanity] ****************************************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | what did the build change here?] ***************
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | load the build record] *************************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | render the authentication swap back to pre-shared key] ***
+ok: [r2]
+
+TASK [ML-DSA | push the authentication swap back] ******************************
+included: common for r2
+
+TASK [common : NETCONF edit-config | authentication -> pre-shared key] *********
+changed: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | remember whether the authentication swap moved] ***
+ok: [r2]
+
+TASK [ML-DSA | guard the trustpoint before removing it] ************************
+included: common for r2
+
+TASK [common : Guard | trustpoint PQAUTO-MLDSA65 is safe to remove] ************
+ok: [r2]
+[WARNING]: ansible-pylibssh not installed, falling back to paramiko
+
+TASK [ipsec_pq_mldsa : ML-DSA | is the trustpoint even there?] *****************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | render trustpoint removal] *********************
+ok: [r2]
+
+TASK [ML-DSA | push trustpoint removal] ****************************************
+included: common for r2
+
+TASK [common : NETCONF edit-config | remove trustpoint PQAUTO-MLDSA65] *********
+changed: [r2]
+
+TASK [ML-DSA | guard the key label before zeroizing it] ************************
+included: common for r2
+
+TASK [common : Guard | key-label PQAUTO-MLDSA65 is safe to remove] *************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | is the key even there?] ************************
+ok: [r2]
+
+TASK [ML-DSA | zeroize the ML-DSA key (strict prompt handling)] ****************
+included: common for r2
+
+TASK [common : Guard | zeroize ML-DSA key PQAUTO-MLDSA65 has one answer per prompt] ***
+ok: [r2]
+
+TASK [common : Exec (strict prompt) | zeroize ML-DSA key PQAUTO-MLDSA65] *******
+ok: [r2]
+[WARNING]: To ensure idempotency and correct diff the input configuration lines should be similar to how they appear if present in the running configuration on device
+
+TASK [ipsec_pq_mldsa : ML-DSA | remove "service internal" because this role added it] ***
+changed: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | did the teardown actually move anything?] ******
+ok: [r2]
+
+TASK [ML-DSA | force renegotiation back onto pre-shared key] *******************
+included: common for r2
+
+TASK [common : Clear IKEv2 SAs] ************************************************
+changed: [r2]
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (5 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (4 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (3 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (2 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (1 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (0 retries left).
+
+TASK [common : Re-trigger the tunnel so a new SA is negotiated] ****************
+ok: [r2] => (item=Tunnel101 to r1)
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (5 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (4 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (3 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (2 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (1 retries left).
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (0 retries left).
+ok: [r2] => (item=Tunnel102 to r3)
+
+TASK [ipsec_pq_mldsa : ML-DSA | verify the teardown actually happened] *********
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/verify-teardown.yml for r2
+
+TASK [ipsec_pq_mldsa : Teardown | r2 | re-read trustpoints, keys and profiles] ***
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : Teardown | r2 | this role's objects are gone] ***********
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : Teardown | r2 | the protected objects are untouched] ****
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : Teardown | r2 | service internal is back where it was] ***
+ok: [r2]
+
+TASK [ML-DSA | save] ***********************************************************
+included: common for r2
+
+PLAY [Swap IKEv2 authentication to ML-DSA, one router at a time] ***************
+
+TASK [ipsec_pq_mldsa : ML-DSA | sanity] ****************************************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | what did the build change here?] ***************
+ok: [r1 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | load the build record] *************************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | render the authentication swap back to pre-shared key] ***
+ok: [r1]
+
+TASK [ML-DSA | push the authentication swap back] ******************************
+included: common for r1
+
+TASK [common : NETCONF edit-config | authentication -> pre-shared key] *********
+changed: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | remember whether the authentication swap moved] ***
+ok: [r1]
+
+TASK [ML-DSA | guard the trustpoint before removing it] ************************
+included: common for r1
+
+TASK [common : Guard | trustpoint PQAUTO-MLDSA65 is safe to remove] ************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | is the trustpoint even there?] *****************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | render trustpoint removal] *********************
+ok: [r1]
+
+TASK [ML-DSA | push trustpoint removal] ****************************************
+included: common for r1
+
+TASK [common : NETCONF edit-config | remove trustpoint PQAUTO-MLDSA65] *********
+changed: [r1]
+
+TASK [ML-DSA | guard the key label before zeroizing it] ************************
+included: common for r1
+
+TASK [common : Guard | key-label PQAUTO-MLDSA65 is safe to remove] *************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | is the key even there?] ************************
+ok: [r1]
+
+TASK [ML-DSA | zeroize the ML-DSA key (strict prompt handling)] ****************
+included: common for r1
+
+TASK [common : Guard | zeroize ML-DSA key PQAUTO-MLDSA65 has one answer per prompt] ***
+ok: [r1]
+
+TASK [common : Exec (strict prompt) | zeroize ML-DSA key PQAUTO-MLDSA65] *******
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | remove "service internal" because this role added it] ***
+changed: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | did the teardown actually move anything?] ******
+ok: [r1]
+
+TASK [ML-DSA | force renegotiation back onto pre-shared key] *******************
+included: common for r1
+
+TASK [common : Clear IKEv2 SAs] ************************************************
+changed: [r1]
+FAILED - RETRYING: [r1]: common : Re-trigger the tunnel so a new SA is negotiated (5 retries left).
+FAILED - RETRYING: [r1]: common : Re-trigger the tunnel so a new SA is negotiated (4 retries left).
+FAILED - RETRYING: [r1]: common : Re-trigger the tunnel so a new SA is negotiated (3 retries left).
+FAILED - RETRYING: [r1]: common : Re-trigger the tunnel so a new SA is negotiated (2 retries left).
+
+TASK [common : Re-trigger the tunnel so a new SA is negotiated] ****************
+ok: [r1] => (item=Tunnel101 to r2)
+
+TASK [ipsec_pq_mldsa : ML-DSA | verify the teardown actually happened] *********
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/verify-teardown.yml for r1
+
+TASK [ipsec_pq_mldsa : Teardown | r1 | re-read trustpoints, keys and profiles] ***
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : Teardown | r1 | this role's objects are gone] ***********
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : Teardown | r1 | the protected objects are untouched] ****
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : Teardown | r1 | service internal is back where it was] ***
+ok: [r1]
+
+TASK [ML-DSA | save] ***********************************************************
+included: common for r1
+
+PLAY [Swap IKEv2 authentication to ML-DSA, one router at a time] ***************
+
+TASK [ipsec_pq_mldsa : ML-DSA | sanity] ****************************************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | what did the build change here?] ***************
+ok: [r3 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | load the build record] *************************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | render the authentication swap back to pre-shared key] ***
+ok: [r3]
+
+TASK [ML-DSA | push the authentication swap back] ******************************
+included: common for r3
+
+TASK [common : NETCONF edit-config | authentication -> pre-shared key] *********
+changed: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | remember whether the authentication swap moved] ***
+ok: [r3]
+
+TASK [ML-DSA | guard the trustpoint before removing it] ************************
+included: common for r3
+
+TASK [common : Guard | trustpoint PQAUTO-MLDSA65 is safe to remove] ************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | is the trustpoint even there?] *****************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | render trustpoint removal] *********************
+ok: [r3]
+
+TASK [ML-DSA | push trustpoint removal] ****************************************
+included: common for r3
+
+TASK [common : NETCONF edit-config | remove trustpoint PQAUTO-MLDSA65] *********
+changed: [r3]
+
+TASK [ML-DSA | guard the key label before zeroizing it] ************************
+included: common for r3
+
+TASK [common : Guard | key-label PQAUTO-MLDSA65 is safe to remove] *************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | is the key even there?] ************************
+ok: [r3]
+
+TASK [ML-DSA | zeroize the ML-DSA key (strict prompt handling)] ****************
+included: common for r3
+
+TASK [common : Guard | zeroize ML-DSA key PQAUTO-MLDSA65 has one answer per prompt] ***
+ok: [r3]
+
+TASK [common : Exec (strict prompt) | zeroize ML-DSA key PQAUTO-MLDSA65] *******
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | remove "service internal" because this role added it] ***
+changed: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | did the teardown actually move anything?] ******
+ok: [r3]
+
+TASK [ML-DSA | force renegotiation back onto pre-shared key] *******************
+included: common for r3
+
+TASK [common : Clear IKEv2 SAs] ************************************************
+changed: [r3]
+FAILED - RETRYING: [r3]: common : Re-trigger the tunnel so a new SA is negotiated (5 retries left).
+
+TASK [common : Re-trigger the tunnel so a new SA is negotiated] ****************
+ok: [r3] => (item=Tunnel102 to r2)
+
+TASK [ipsec_pq_mldsa : ML-DSA | verify the teardown actually happened] *********
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/verify-teardown.yml for r3
+
+TASK [ipsec_pq_mldsa : Teardown | r3 | re-read trustpoints, keys and profiles] ***
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : Teardown | r3 | this role's objects are gone] ***********
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : Teardown | r3 | the protected objects are untouched] ****
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : Teardown | r3 | service internal is back where it was] ***
+ok: [r3]
+
+TASK [ML-DSA | save] ***********************************************************
+included: common for r3
+
+PLAY [Confirm ML-DSA is what actually authenticated the tunnels] ***************
+
+PLAY [Report the post-quantum posture] *****************************************
+
+TASK [Verify | negotiated ML-KEM group per IKEv2 SA] ***************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 SA operational data] ************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [verify : Verify | record the negotiated groups] **************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | PPK quantum-resistance counters] ********************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 statistics] *********************************
+ok: [r3]
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | record the PPK counters as YANG reports them] **********
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [verify : Verify | IKEv2 signature algorithm and PPK counters (show parsing, see comment)] ***
+ok: [r3]
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the signature algorithms] ***********************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [verify : Verify | record the PPK counters as the CLI reports them] *******
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | SSH key exchange algorithms] ************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip ssh server algorithm kex] **********************
+ok: [r3]
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the SSH posture] ********************************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [Verify | HTTPS PQC type] *************************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip http secure-pqc-type] **************************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [verify : Verify | record the HTTPS posture] ******************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | access-session PQ settings] *************************************
+included: common for r2, r1
+
+TASK [common : NETCONF get | access-session pqc-type / tls-version] ************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the access-session settings] ********************
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | MKA and MACsec state (show parsing, see comment)] ******
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | record the MACsec state] *******************************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | PQ posture] ********************************************
+ok: [r2] => {
+    "msg": {
+        "host": "r2",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": true,
+            "ike_sa_count": 2,
+            "negotiated_pqc_group": [
+                "pqc-gt-none",
+                "pqc-gt-none"
+            ],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": [
+                "PSK",
+                "PSK"
+            ]
+        },
+        "macsec": {
+            "cipher": "(none)",
+            "ckn": "(none)",
+            "mka_secured_sessions": "0",
+            "out_pkts_encrypted": "0",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": false
+        },
+        "ssh": {
+            "hostkey": [],
+            "kex_offer_order": []
+        }
+    }
+}
+ok: [r1] => {
+    "msg": {
+        "host": "r1",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": true,
+            "ike_sa_count": 1,
+            "negotiated_pqc_group": [
+                "pqc-gt-none"
+            ],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": [
+                "PSK"
+            ]
+        },
+        "macsec": {
+            "cipher": "(none)",
+            "ckn": "(none)",
+            "mka_secured_sessions": "0",
+            "out_pkts_encrypted": "0",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": false
+        },
+        "ssh": {
+            "hostkey": [
+                "rsa-sha2-512",
+                "rsa-sha2-256"
+            ],
+            "kex_offer_order": [
+                "mlkem768x25519-sha256",
+                "mlkem768nistp256-sha256",
+                "curve25519-sha256",
+                "ecdh-sha2-nistp256"
+            ]
+        }
+    }
+}
+ok: [r3] => {
+    "msg": {
+        "host": "r3",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": true,
+            "ike_sa_count": 1,
+            "negotiated_pqc_group": [
+                "pqc-gt-none"
+            ],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": [
+                "PSK"
+            ]
+        },
+        "macsec": "not on the MACsec link",
+        "ssh": {
+            "hostkey": [
+                "rsa-sha2-512",
+                "rsa-sha2-256"
+            ],
+            "kex_offer_order": []
+        }
+    }
+}
+
+PLAY RECAP *********************************************************************
+r1                         : ok=51   changed=4    unreachable=0    failed=0    skipped=23   rescued=0    ignored=0   
+r2                         : ok=51   changed=4    unreachable=0    failed=0    skipped=23   rescued=0    ignored=0   
+r3                         : ok=46   changed=4    unreachable=0    failed=0    skipped=27   rescued=0    ignored=0   
+
+### END=2026-09-01T09:58:17Z
+### RC=0

@@ -1,0 +1,23 @@
+---
+# Classical hub-and-spoke IPsec across R1, R2 and R3.
+#
+#   ansible-playbook ipsec-baseline.yml
+#   ansible-playbook ipsec-baseline.yml -e state=absent
+#
+# Runs all three hosts in parallel. Everything it pushes is an additive NETCONF
+# merge of named objects, and a tunnel does not care which end came up first, so
+# there is nothing to serialise.
+#
+# This is the "before" picture. AES-256, SHA-512, ECDH P-384: strong today,
+# harvest-now-decrypt-later tomorrow. The three ipsec-pq-* playbooks each fix
+# that a different way.
+
+- name: Build classical hub-and-spoke IPsec
+  hosts: routers
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: ipsec_baseline
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml

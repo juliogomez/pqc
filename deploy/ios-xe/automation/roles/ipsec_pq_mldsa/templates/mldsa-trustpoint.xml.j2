@@ -1,0 +1,63 @@
+{#
+  The ML-DSA identity trustpoint, enrolled by hand against an offline CA.
+
+  /native/crypto/pki/trustpoint[id]/enrollment/enrollment-method/terminal/pem
+  /native/crypto/pki/trustpoint[id]/subject-name
+  /native/crypto/pki/trustpoint[id]/revocation-check
+  /native/crypto/pki/trustpoint[id]/hash
+  /native/crypto/pki/trustpoint[id]/fingerprint
+  /native/crypto/pki/trustpoint[id]/mldsakeypair/{key-label,parameter-set}
+
+  Separate from roles/common/templates/pki-trustpoint.xml.j2, which is the SCEP
+  shape used by the EAP-TLS unit. The difference is the whole point of this role:
+  enrollment-method is a YANG choice, and this one takes terminal-case rather than
+  url-case, so there is no CA URL, no SCEP and no CMS envelope anywhere in it.
+
+  The "pem" leaf under terminal is worth having. Without it IOS brackets the
+  request with its own prose banners ("Certificate Request follows:" and
+  "---End - This line not part of the certificate request---") and emits bare
+  base64; with it you get real -----BEGIN CERTIFICATE REQUEST----- boundaries,
+  which is one less thing for the parser to get wrong.
+
+  mldsakeypair is the 26.2 addition: leaf key-label plus leaf parameter-set, whose
+  YANG range is literally "44 | 65 | 87". The key itself is generated on the box
+  beforehand in exec mode; this only binds the trustpoint to that label. Note that
+  the CLI behind this node does not parse without "service internal", which the
+  role turns on first and puts back afterwards.
+
+  fingerprint pins the CA certificate by its MD5, computed on the control node
+  from the DER form. Pinning it is not tidiness: without it "crypto pki
+  authenticate" stops and asks "% Do you accept this certificate? [yes/no]:", and
+  answering a yes/no blind is the one thing this layer never does.
+
+  revocation-check none is a lab answer. The trustpoint default is crl, and this
+  CA publishes no CRL distribution point, so the router would go looking for a CRL
+  it can never find and stall IKE_AUTH.
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <pki xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <trustpoint>
+          <id>{{ pki_names.mldsa_trustpoint }}</id>
+          <enrollment>
+            <enrollment-method>
+              <terminal>
+                <pem/>
+              </terminal>
+            </enrollment-method>
+          </enrollment>
+          <subject-name>{{ mldsa_subject_name }}</subject-name>
+          <revocation-check>{{ pki_revocation_check }}</revocation-check>
+          <hash>{{ pki_hash }}</hash>
+          <fingerprint>{{ mldsa_ca_fingerprint }}</fingerprint>
+          <mldsakeypair>
+            <key-label>{{ pki_names.mldsa_key_label }}</key-label>
+            <parameter-set>{{ pq_signature_param_set }}</parameter-set>
+          </mldsakeypair>
+        </trustpoint>
+      </pki>
+    </crypto>
+  </native>
+</config>

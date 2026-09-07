@@ -1,0 +1,33 @@
+---
+# RSA modulus for the EAP-TLS identity certificate.
+#
+# Not a PQ knob, and deliberately so. Authentication on this path is RSA-2048 and it
+# stays that way on 26.2: the ML-KEM part of EAP-TLS is the key exchange inside the
+# TLS 1.3 handshake, not the certificate. macsec-pq turns that on; nothing here makes
+# the signature quantum-safe. ipsec-pq-mldsa is where PQ signatures live.
+macsec_eaptls_key_size: 2048
+
+# SCEP URL of the local CA. One address for both ends here, because MACsec runs on the
+# direct R1-R2 link and both routers reach the CA on the hub's Vlan12 address.
+macsec_eaptls_url: "{{ macsec_ca_url }}"
+
+# Subject CN. This is the identity EAP presents, so it has to match the username in
+# dot1x credentials, and that has to match the "username ... aaa attribute list"
+# entry. Three places, one variable.
+macsec_eaptls_subject: "CN={{ my_macsec_identity }}"
+
+# How long to give EAP-TLS to settle after the interface is closed.
+#
+# A cold start thrashes: both ends come up as supplicant and authenticator at once,
+# both start a handshake, one loses, EAPOL retries. Measured at roughly 120 seconds
+# before the session settles into Secured. Fail-fast here reports a broken build that
+# is merely mid-negotiation, so wait.
+macsec_eaptls_settle_retries: 18
+macsec_eaptls_settle_delay: 10
+
+# Whether the teardown removes the local username that carries the linksec
+# attribute list. Off by default: that line is a "no username", the identity is
+# unprefixed because it has to equal the certificate CN, and the cost of getting it
+# wrong on a remotely managed box is console recovery. See the comment on the task
+# in tasks/main.yml.
+macsec_eaptls_remove_identity_user: false

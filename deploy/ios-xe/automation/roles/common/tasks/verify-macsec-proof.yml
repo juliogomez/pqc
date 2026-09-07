@@ -1,0 +1,223 @@
+---
+# Operational proof that MACsec is secured, keyed the way this playbook claims,
+# and encrypting right now.
+#
+# Mirrors ipsec_pq_mldsa/tasks/verify-tunnel.yml: a separate play after the build
+# role, named tasks, assert with a plain-language fail_msg, debug report with
+# changed_when: true so it shows up under display_ok_hosts = false.
+#
+# Required var: macsec_proof_keying = psk | eaptls | pq
+#
+# CKN is the cheap fingerprint:
+#   PSK     -> "01" (key-chain key ID, not negotiated)
+#   EAP-TLS -> 32 hex chars (MSK-derived, new every re-auth)
+#   PQ      -> same CKN shape as EAP-TLS; pqc-type leaf proves ML-KEM intent
+
+- name: "MACsec proof | {{ inventory_hostname }} | far end of the MACsec link"
+  ansible.builtin.set_fact:
+    macsec_proof_peer: >-
+      {{ (((groups['macsec_pair'] | default([])) | difference([inventory_hostname])) + ['']) | first }}
+    macsec_proof_delta_pings: "{{ verify_macsec_delta_pings | default(20) }}"
+
+- name: "MACsec proof | {{ inventory_hostname }} | peer underlay for delta ping"
+  ansible.builtin.set_fact:
+    macsec_proof_peer_address: >-
+      {{ (lab_topology[macsec_proof_peer] | default({})).underlay_address | default('') }}
+
+- name: "MACsec proof | {{ inventory_hostname }} | wait for MKA to secure"
+  cisco.ios.ios_command:
+    commands:
+      - show mka sessions
+  register: macsec_proof_mka_wait
+  until: (macsec_proof_mka_wait.stdout[0] | default('')) is search('Secured Sessions\.*\s*[1-9]')
+  retries: "{{ macsec_proof_settle_retries | default(18) }}"
+  delay: "{{ macsec_proof_settle_delay | default(5) }}"
+  changed_when: false
+
+- name: "MACsec proof | {{ inventory_hostname }} | configured PQ leaves (pq path)"
+  when: macsec_proof_keying == 'pq'
+  block:
+    - name: "MACsec proof | {{ inventory_hostname }} | fetch access-session settings"
+      ansible.builtin.include_tasks: netconf-fetch.yml
+      vars:
+        nc_label: access-session pqc-type / tls-version
+        nc_source: running
+        nc_filter: |
+          <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+            <access-session xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-sanet"/>
+          </native>
+
+    - name: "MACsec proof | {{ inventory_hostname }} | record access-session settings"
+      ansible.builtin.set_fact:
+        macsec_proof_pqc_type: >-
+          {{ ((netconf_fetch_result.stdout | default(''))
+              | regex_findall('<pqc-type>([^<]+)</pqc-type>') + ['(default: non-pqc)'])
+             | first }}
+        macsec_proof_tls_version: >-
+          {{ ((netconf_fetch_result.stdout | default(''))
+              | regex_findall('<tls-version>([^<]+)</tls-version>') + ['(default: all)'])
+             | first }}
+        macsec_proof_expected_pqc_type: "{{ pq_macsec_type }}"
+        macsec_proof_expected_tls_version: "{{ pq_macsec_tls_version }}"
+
+- name: "MACsec proof | {{ inventory_hostname }} | MKA and MACsec state"
+  cisco.ios.ios_command:
+    commands:
+      - show mka sessions
+      - "show macsec status interface {{ my_macsec_interface }}"
+      - "show macsec statistics interface {{ my_macsec_interface }}"
+  register: macsec_proof_show
+  changed_when: false
+  failed_when: false
+
+- name: "MACsec proof | {{ inventory_hostname }} | parse show output"
+  ansible.builtin.set_fact:
+    macsec_proof_mka_secured: >-
+      {{ ((macsec_proof_show.stdout[0] | default(''))
+          | regex_findall('Secured Sessions\.*\s*([0-9]+)') + ['0']) | first }}
+    macsec_proof_cipher: >-
+      {{ ((macsec_proof_show.stdout[1] | default(''))
+          | regex_findall('Cipher:\s*(\S+)') + ['(none)']) | first }}
+    macsec_proof_transmitting: >-
+      {{ (macsec_proof_show.stdout[1] | default('')) is search('Transmitting:\s*TRUE') }}
+    macsec_proof_encrypted_out: >-
+      {{ ((macsec_proof_show.stdout[2] | default(''))
+          | regex_findall('Out Pkts Encrypted:\s*([0-9]+)') + ['0']) | first }}
+    macsec_proof_ckn: >-
+      {{ (['(none)'] + ((macsec_proof_show.stdout[0] | default(''))
+          | regex_findall('^(?!.*Sessions).*\s([0-9A-Fa-f]{2,32})\s*$', multiline=True)))
+         | last }}
+    macsec_proof_enabled: >-
+      {{ (macsec_proof_show.stdout[2] | default('')) is not search('MACsec is not enabled') }}
+
+- name: "MACsec proof | {{ inventory_hostname }} | push frames across the secured link"
+  cisco.ios.ios_command:
+    commands:
+      - "ping {{ macsec_proof_peer_address }} repeat {{ macsec_proof_delta_pings }}"
+  register: macsec_proof_ping
+  changed_when: false
+  failed_when: false
+  when:
+    - macsec_proof_enabled | bool
+    - macsec_proof_peer_address | length > 0
+
+- name: "MACsec proof | {{ inventory_hostname }} | second counter read"
+  cisco.ios.ios_command:
+    commands:
+      - "show macsec statistics interface {{ my_macsec_interface }}"
+  register: macsec_proof_show2
+  changed_when: false
+  failed_when: false
+  when: macsec_proof_enabled | bool
+
+- name: "MACsec proof | {{ inventory_hostname }} | record second counter read"
+  ansible.builtin.set_fact:
+    macsec_proof_encrypted_out_2: >-
+      {{ ((macsec_proof_show2.stdout[0] | default(''))
+          | regex_findall('Out Pkts Encrypted:\s*([0-9]+)') + ['0']) | first }}
+    macsec_proof_ping_success: >-
+      {{ ((macsec_proof_ping.stdout[0] | default(''))
+          | regex_findall('Success rate is [0-9]+ percent \(([0-9]+)/') + ['0']) | first }}
+  when: macsec_proof_enabled | bool
+
+- name: "MACsec proof | {{ inventory_hostname }} | compute encryption delta"
+  ansible.builtin.set_fact:
+    macsec_proof_encrypted_delta: >-
+      {{ (macsec_proof_encrypted_out_2 | int) - (macsec_proof_encrypted_out | int) }}
+  when: macsec_proof_enabled | bool
+
+- name: "MACsec proof | {{ inventory_hostname }} | MACsec is enabled on the interface"
+  ansible.builtin.assert:
+    that:
+      - macsec_proof_enabled | bool
+    fail_msg: >-
+      MACsec is not enabled on {{ my_macsec_interface }} on {{ inventory_hostname }}.
+      The build role may not have finished, or this box is mid-teardown.
+    quiet: true
+
+- name: "MACsec proof | {{ inventory_hostname }} | secured, transmitting, and encrypting now"
+  ansible.builtin.assert:
+    that:
+      - macsec_proof_mka_secured | int > 0
+      - macsec_proof_transmitting | bool
+      - macsec_proof_encrypted_delta | default(-1) | int > 0
+    fail_msg: >-
+      {{ inventory_hostname }} is not secured and encrypting on {{ my_macsec_interface }}.
+      Secured sessions {{ macsec_proof_mka_secured | default('0') }}, transmitting
+      {{ macsec_proof_transmitting | default(false) }}, Out Pkts Encrypted
+      {{ macsec_proof_encrypted_out | default('0') }} ->
+      {{ macsec_proof_encrypted_out_2 | default('(not sampled)') }}, delta
+      {{ macsec_proof_encrypted_delta | default('(not sampled)') }} across
+      {{ macsec_proof_delta_pings }} pings to {{ macsec_proof_peer_address }} of which
+      {{ macsec_proof_ping_success | default('0') }} succeeded. A zero delta with a
+      non-zero cumulative count means the link encrypted in the past and is idle or broken
+      now. A zero delta with zero cumulative is the plain "macsec" instead of
+      "macsec network-link" trap.
+    success_msg: >-
+      {{ inventory_hostname }}: MKA Secured, transmitting, Out Pkts Encrypted delta
+      {{ macsec_proof_encrypted_delta }} across {{ macsec_proof_delta_pings }} pings
+    quiet: true
+
+- name: "MACsec proof | {{ inventory_hostname }} | CKN matches pre-shared keying"
+  ansible.builtin.assert:
+    that:
+      - macsec_proof_ckn | upper == '01'
+    fail_msg: >-
+      Expected a PSK session (CKN 01) on {{ inventory_hostname }}, got CKN
+      {{ macsec_proof_ckn | default('(none)') }}. A 32-character hex CKN means EAP-TLS
+      is still active; tear macsec-eaptls.yml down before macsec-psk.yml, or the other
+      way around if you meant to be on certificates.
+    success_msg: "CKN 01 — static CAK from the key chain, not an EAP-TLS MSK"
+    quiet: true
+  when: macsec_proof_keying == 'psk'
+
+- name: "MACsec proof | {{ inventory_hostname }} | CKN matches EAP-TLS keying"
+  ansible.builtin.assert:
+    that:
+      - macsec_proof_ckn is match('^[0-9A-Fa-f]{32}$')
+    fail_msg: >-
+      Expected a 32-character hex CKN from EAP-TLS on {{ inventory_hostname }}, got
+      {{ macsec_proof_ckn | default('(none)') }}. CKN 01 means the link is still on
+      macsec-psk.yml. Run macsec-eaptls.yml (and tear PSK down first if you switched paths).
+    success_msg: >-
+      CKN {{ macsec_proof_ckn }} — MSK-derived, not the static PSK id 01
+    quiet: true
+  when: macsec_proof_keying == 'eaptls'
+
+- name: "MACsec proof | {{ inventory_hostname }} | PQ leaves match pqc.yml"
+  ansible.builtin.assert:
+    that:
+      - macsec_proof_pqc_type == macsec_proof_expected_pqc_type
+      - macsec_proof_tls_version == macsec_proof_expected_tls_version
+      - macsec_proof_ckn is match('^[0-9A-Fa-f]{32}$')
+    fail_msg: >-
+      {{ inventory_hostname }} PQ MACsec mismatch. Configured access-session pqc-type
+      {{ macsec_proof_pqc_type | default('(unread)') }} (expected
+      {{ macsec_proof_expected_pqc_type }}), tls-version
+      {{ macsec_proof_tls_version | default('(unread)') }} (expected
+      {{ macsec_proof_expected_tls_version }}), CKN
+      {{ macsec_proof_ckn | default('(none)') }} (expected 32 hex chars from EAP-TLS).
+    success_msg: >-
+      access-session pqc-type {{ macsec_proof_pqc_type }}, tls-version
+      {{ macsec_proof_tls_version }}, EAP-TLS CKN present
+    quiet: true
+  when: macsec_proof_keying == 'pq'
+
+- name: "MACsec proof | {{ inventory_hostname }} | operational summary"
+  ansible.builtin.debug:
+    msg: "{{ macsec_proof_summary }}"
+  changed_when: true
+  vars:
+    macsec_proof_scenario: >-
+      {%- if macsec_proof_keying == 'psk' -%}psk
+      {%- elif macsec_proof_keying == 'pq' -%}eaptls-mlkem
+      {%- elif macsec_proof_keying == 'eaptls' -%}eaptls
+      {%- else -%}unknown{%- endif -%}
+    macsec_proof_summary: >-
+      {{ inventory_hostname }}
+      | scenario={{ macsec_proof_scenario }}
+      | health=PASS
+      | mka_secured={{ macsec_proof_mka_secured | default('0') }}
+      | transmitting={{ macsec_proof_transmitting | default(false) }}
+      | encrypt_delta={{ macsec_proof_encrypted_delta | default('(not sampled)') }}
+      | ckn={{ macsec_proof_ckn | default('(none)') }}

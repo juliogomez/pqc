@@ -1,0 +1,35 @@
+### TAG=job3-macsec-psk-run2-idempotence
+### CMD=ansible-playbook macsec-psk.yml
+### START=2026-09-01T12:03:12Z
+
+PLAY [Build MACsec with a pre-shared key] **************************************
+
+TASK [macsec_psk : MACsec PSK | sanity] ****************************************
+ok: [r2]
+ok: [r1]
+
+TASK [macsec_psk : Render MKA policy and key chain] ****************************
+ok: [r1]
+ok: [r2]
+
+TASK [Push MKA policy and key chain] *******************************************
+included: common for r1, r2
+
+TASK [common : NETCONF edit-config | MKA policy PQAUTO-MKA-PSK and key chain PQAUTO-MACSEC-KC] ***
+[ERROR]: Task failed: Action failed: inconsistent value: Device refused one or more commands
+Origin: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/common/tasks/netconf-edit.yml:20:3
+
+18 # teardown).
+19
+20 - name: "NETCONF edit-config | {{ nc_label }}"
+     ^ column 3
+
+fatal: [r2]: FAILED! => {"changed": false, "msg": "inconsistent value: Device refused one or more commands"}
+fatal: [r1]: FAILED! => {"changed": false, "msg": "inconsistent value: Device refused one or more commands"}
+
+PLAY RECAP *********************************************************************
+r1                         : ok=3    changed=0    unreachable=0    failed=1    skipped=1    rescued=0    ignored=0   
+r2                         : ok=3    changed=0    unreachable=0    failed=1    skipped=1    rescued=0    ignored=0   
+
+### END=2026-09-01T12:03:24Z
+### RC=2

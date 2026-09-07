@@ -1,0 +1,65 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show crypto ikev2 stats ---
+--------------------------------------------------------------------------------
+                          Crypto IKEv2 SA Statistics
+--------------------------------------------------------------------------------
+System Resource Limit:   0        Max IKEv2 SAs: 0        Max in nego(in/out): 40/60
+Total incoming IKEv2 SA Count:    0        active:        0        negotiating: 0     
+Total outgoing IKEv2 SA Count:    1        active:        1        negotiating: 0     
+Incoming IKEv2 Requests: 97       accepted:      97       rejected:    0       
+Outgoing IKEv2 Requests: 469      accepted:      469      rejected:    0       
+Rejected IKEv2 Requests: 0        rsrc low:      0        SA limit:    0       
+IKEv2 packets dropped at dispatch: 0       
+Incoming Requests dropped as LOW Q limit reached : 0       
+Incoming IKEV2 Cookie Challenged Requests: 0       
+    accepted: 0        rejected: 0        rejected no cookie: 0       
+Total Deleted sessions of Cert Revoked Peers: 0       
+Total init sa request rejected due to queue limit : 0       
+SA Strength Enforcement Rejects - incoming:        0 outgoing:        0
+Sessions with Quantum Resistance: 1        Manual: 1        Dynamic: 0       
+PPK Identity Mismatch: 0        
+PPK Retrieve Failure    -    ALL:      0        With PPK Required:    0       
+PPK Authentication Failure - ALL:      0        With PPK Required:    0       
+
+
+--- show running-config | section crypto ikev2 keyring ---
+crypto ikev2 keyring LAB-KEYRING
+ peer R2
+  address 10.0.12.2
+  pre-shared-key <REDACTED-IKEV2-PSK>
+  ppk manual id PPK-LAB key hex <REDACTED-PPK-HEX> required
+ !
+
+--- show crypto ikev2 sa detailed ---
+ IPv4 Crypto IKEv2  SA 
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+1         10.0.12.1/500         10.0.12.2/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK, QR
+      Life/Active Time: 86400/24 sec
+      CE id: 1264, Session-id: 52
+      Local spi: C8C2B7FC137B4791       Remote spi: 6DFCF0C0083B7254
+      Status Description: Negotiation done
+      Local id: 10.0.12.1
+      Remote id: 10.0.12.2
+      Local req msg id:  2              Remote req msg id:  0         
+      Local next msg id: 2              Remote next msg id: 0         
+      Local req queued:  2              Remote req queued:  0         
+      Local window:      20             Remote window:      20        
+      DPD configured for 30 seconds, retry 5
+      IETF Std Fragmentation  enabled.
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : Yes
+      Quantum-safe Encryption using Manual PPK
+      PEER TYPE: IOS-XE
+
+ IPv6 Crypto IKEv2  SA 
+

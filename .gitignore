@@ -45,6 +45,34 @@ __pycache__/
 
 # --- Stage 2: deploy (real hardware) ---
 
+# ML-DSA PKI for the IOS XE IKEv2 authentication exercises: root CAs, per-router
+# identity certs and the PKCS#12 bundles imported to the routers. Produced at
+# runtime by gen-mldsa-certs.sh. The bundles carry unencrypted private keys.
+deploy/ios-xe/mldsa-certs/mldsa-pki/
+
+# Belt and braces for the same material: gen-mldsa-certs.sh honours OUT=, so key
+# and bundle files can land anywhere under deploy/. Never commit either.
+deploy/**/*.p12
+deploy/**/*.key
+deploy/**/*.srl
+
+# Workstation-side ML-DSA certificate authority used by roles/ipsec_pq_mldsa:
+# the CA private key, its self-signed certificate, the per-router CSRs pulled off
+# the routers and the identity certificates issued back to them, plus the small
+# state files that record what the role changed so teardown can undo exactly that.
+# Created at runtime, never committed. The CA private key lives in here.
+deploy/ios-xe/automation/.lab-ca/
+
+# Ansible lab credentials for the IOS XE automation layer: management addresses,
+# device login, the IKEv2 pre-shared key, the RFC 8784 PPK, the MACsec CAK and the
+# local CA passphrase. Copy lab.yml.example to lab.yml and fill it in; the example
+# is tracked, the real file never is.
+deploy/ios-xe/automation/group_vars/all/lab.yml
+
+# Local Python virtualenvs for the Ansible control node (never commit).
+deploy/ios-xe/automation/venv/
+deploy/ios-xe/automation/.venv/
+
 # Editor / OS cruft
 .cursor/
 .DS_Store

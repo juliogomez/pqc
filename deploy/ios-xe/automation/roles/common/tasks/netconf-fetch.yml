@@ -1,0 +1,77 @@
+---
+# One NETCONF <get> or <get-config>, returned as parsed JSON.
+#
+# Used by verify.yml and by the pre-flight checks. Reading operational state as
+# structured data is the whole reason for standing NETCONF up: "did this SA
+# negotiate ML-KEM-768" is a leaf value, not a line of screen output.
+#
+# Callers pass:
+#   nc_label       short human name
+#   nc_filter      subtree filter document
+#   nc_source      running / candidate / startup for get-config, or omit for a
+#                  <get> that returns config plus state
+#
+# The reply comes back as netconf_fetch_result.stdout, an XML document with the
+# namespaces stripped. No display conversion is requested on purpose: the json
+# and native displays need jxmlease on the control node, which is not in
+# requirements.txt, and depending on it would make the whole layer fail to run
+# for a reader who installed exactly what the repo told them to install.
+#
+# Callers pull named YANG leaves out of that document with a regex on the element
+# name. That is still structured data in the way that matters: <pqc-group> is a
+# schema-defined enum with four legal values, not a column in a formatted table
+# that can be reflowed by the next release.
+
+# WHY THIS RETRIES.
+#
+# Measured on this hardware: verify.yml failed standalone with
+# "Could not open socket to <ip>:830" on all three routers at once, and passed on
+# an immediate re-run with nothing changed in between. Port 830 was open
+# throughout and ncclient connected fine directly, so the box was fine and the
+# first connection attempt was not. A single-shot get therefore reports a broken
+# fabric on a healthy one.
+#
+# The retry is deliberately small: five attempts, four seconds apart, so about
+# sixteen seconds worst case. Enough to ride out one refused connection, not
+# enough to sit quietly on a box that is genuinely gone. Nothing here masks a
+# real failure, because the failure this covers is a transport hiccup that clears
+# in one attempt; a router that is actually unreachable still ends up with no
+# answer, and the task below says so out loud.
+#
+# The until condition tests "stdout is defined", not "not failed". That is not
+# interchangeable. failed_when: false forces .failed to false, so .failed cannot
+# distinguish a reply from a socket error; the presence of stdout can. An empty
+# subtree still sets stdout, to an empty document, so a legitimate "nothing
+# configured yet" answer satisfies the condition on the first attempt and does
+# not spend the retries.
+- name: "NETCONF get | {{ nc_label }}"
+  ansible.netcommon.netconf_get:
+    filter: "{{ nc_filter }}"
+    source: "{{ nc_source | default(omit) }}"
+    lock: never
+  vars:
+    ansible_connection: ansible.netcommon.netconf
+    ansible_network_os: ansible.netcommon.default
+    ansible_port: "{{ netconf_port }}"
+  register: netconf_fetch_result
+  until: netconf_fetch_result.stdout is defined
+  retries: 5
+  delay: 4
+  # An empty subtree is a legitimate answer ("nothing configured yet"), so a
+  # caller that is probing must not be killed by it.
+  failed_when: false
+
+# A probe that never answered and an empty subtree are indistinguishable to a
+# caller reading "stdout | default('')", and that ambiguity is how a missing
+# answer turns into a confident wrong conclusion. Say it plainly instead of
+# leaving it to be inferred. Skipped, and therefore invisible, on every normal
+# run.
+- name: "NETCONF get | {{ nc_label }} | WARNING: no answer after retries"
+  ansible.builtin.debug:
+    msg: >-
+      NETCONF <get> for "{{ nc_label }}" on {{ inventory_hostname }} produced no
+      reply after 5 attempts. This is NOT the same as an empty subtree: nothing
+      was read at all, so any caller that treats a missing element as "not
+      configured" is about to be wrong. Check port {{ netconf_port }} and
+      "show platform software yang-management process".
+  when: netconf_fetch_result.stdout is not defined

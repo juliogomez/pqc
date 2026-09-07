@@ -1,0 +1,297 @@
+---
+# Get an ML-DSA identity certificate onto this router, without SCEP.
+#
+# The whole round trip, and every step of it is guarded so a second run is a
+# no-op:
+#
+#   1. generate the ML-DSA key on the box        skipped if the label exists
+#   2. create the trustpoint (NETCONF)           merge, so no diff means no change
+#   3. authenticate the CA (paste the root)      skipped if the CA cert is there
+#   4. crypto pki enroll -> PKCS#10 on terminal  skipped if the identity cert is there
+#   5. sign it on the control node with OpenSSL  ditto
+#   6. paste the signed certificate back         ditto
+#
+# The private key never leaves the router and the CA key never leaves the control
+# node. What crosses the wire is a CSR one way and a certificate the other, both
+# public.
+
+# SCREEN-SCRAPE. Matched literal: "Key name: <label>" in
+# "show crypto key mypubkey all". There is no operational YANG for the key store.
+- name: "ML-DSA | {{ inventory_hostname }} | look for an existing key"
+  cisco.ios.ios_command:
+    commands:
+      - show crypto key mypubkey all
+  register: mldsa_keys
+  changed_when: false
+
+# ESCAPE HATCH: network_cli. "crypto key generate" is an exec-mode ACTION and
+# Cisco-IOS-XE-crypto contains zero rpc statements, so there is no modelled
+# equivalent. Verified non-interactive on 26.2: it prints "The name for the keys
+# will be: <label>" and "% Generating MLDSA-65 keys, keys will be
+# non-exportable...[OK]" and asks nothing. If a future release starts asking,
+# this task times out and fails rather than guessing at an answer.
+- name: "ML-DSA | {{ inventory_hostname }} | generate the key on the box"
+  cisco.ios.ios_command:
+    commands: >-
+      crypto key generate mldsa param {{ pq_signature_param_set }}
+      label {{ pki_names.mldsa_key_label }}
+      {{ pq_signature_key_exportable | bool | ternary('exportable', '') }}
+  when: not mldsa_key_present
+  changed_when: true
+  vars:
+    mldsa_key_present: >-
+      {{ (mldsa_keys.stdout[0] | default(''))
+         is search('Key name:\s*' ~ pki_names.mldsa_key_label ~ '\s') }}
+
+- name: "ML-DSA | {{ inventory_hostname }} | render the trustpoint"
+  ansible.builtin.set_fact:
+    nc_label: "trustpoint {{ pki_names.mldsa_trustpoint }} (ML-DSA-{{ pq_signature_param_set }}, enrollment terminal)"
+    nc_operation: merge
+    nc_payload: "{{ lookup('template', 'mldsa-trustpoint.xml.j2') }}"
+
+- name: "ML-DSA | {{ inventory_hostname }} | push the trustpoint"
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: netconf-edit
+
+# netconf-edit.yml registers into netconf_edit_result, and the authentication swap
+# later in main.yml pushes through the same file and overwrites it. Capture this
+# one now or the "did anything change?" test only ever sees the last edit.
+- name: "ML-DSA | {{ inventory_hostname }} | remember whether the trustpoint moved"
+  ansible.builtin.set_fact:
+    mldsa_tp_changed: "{{ netconf_edit_result.changed | default(false) }}"
+
+# SCREEN-SCRAPE, and the anchoring matters more than it looks.
+#
+# "show crypto pki certificates <tp>" prints up to two blocks:
+#
+#   Certificate                  <- the identity certificate, what enrolment produces
+#     Status: Available
+#   CA Certificate               <- the CA's own, present once authenticate has run
+#     Status: Available
+#
+# A bare "Status: Available" matches the CA block, so authenticating alone was
+# enough to make an earlier version of this code report success while no identity
+# certificate existed at all. Requiring a newline immediately before "Certificate"
+# is what excludes "CA Certificate". The two states are read separately because
+# steps 3 and 4 are skipped independently.
+- name: "ML-DSA | {{ inventory_hostname }} | what is already in the trustpoint?"
+  cisco.ios.ios_command:
+    commands:
+      - "show crypto pki certificates {{ pki_names.mldsa_trustpoint }}"
+  register: mldsa_tp_state
+  changed_when: false
+  failed_when: false
+
+- name: "ML-DSA | {{ inventory_hostname }} | classify what is present"
+  ansible.builtin.set_fact:
+    mldsa_ca_cert_present: >-
+      {{ (mldsa_tp_state.stdout[0] | default(''))
+         is search('(^|\n)CA Certificate\s*\n\s*Status:\s*Available') }}
+    mldsa_id_cert_present: >-
+      {{ (mldsa_tp_state.stdout[0] | default(''))
+         is search('(^|\n)Certificate\s*\n\s*Status:\s*Available') }}
+
+# --- 3. Authenticate the CA --------------------------------------------------
+#
+# ESCAPE HATCH plus a paste. "crypto pki authenticate" is exec-mode and unmodelled.
+#
+# Prompt matched, exactly, as IOS XE 26.2 prints it:
+#   "End with a blank line or the word \"quit\" on a line by itself"
+#
+# The answer is the CA certificate PEM followed by "quit" on its own line. It is
+# bound to this one command and this one banner.
+#
+# There is deliberately no handler for "% Do you accept this certificate?
+# [yes/no]:". That question does not get asked, because the trustpoint pins the
+# CA's MD5 fingerprint (see mldsa-trustpoint.xml.j2). If a future build asks it
+# anyway, no answer is sent, this task times out and the play fails. Failing is
+# the correct outcome; answering a yes/no we did not expect is what took a router
+# out of service in this lab once already.
+- name: "ML-DSA | {{ inventory_hostname }} | authenticate the CA (paste the root)"
+  when: not mldsa_ca_cert_present
+  ansible.netcommon.cli_command:
+    command: "crypto pki authenticate {{ pki_names.mldsa_trustpoint }}"
+    prompt:
+      - 'End with a blank line or the word "quit" on a line by itself'
+    answer:
+      # trim is load-bearing. Both PEM files end with a newline, and IOS treats a
+      # BLANK LINE as an end-of-input terminator just like the word "quit". Leave
+      # the trailing newline on and the blank line closes the paste first, which
+      # drops "quit" onto the exec prompt as a command of its own. "quit" in IOS
+      # exec mode logs the session out. Trim it, and the terminator is the word.
+      - "{{ lookup('file', mldsa_ca_cert) | trim }}\nquit"
+    newline: true
+  register: mldsa_authenticate
+  changed_when: true
+
+- name: "ML-DSA | {{ inventory_hostname }} | the CA must have been accepted"
+  ansible.builtin.assert:
+    that:
+      - mldsa_authenticate.stdout is search('Trustpoint CA certificate accepted')
+    fail_msg: >-
+      "crypto pki authenticate {{ pki_names.mldsa_trustpoint }}" did not print
+      "Trustpoint CA certificate accepted". Verbatim output:
+      {{ mldsa_authenticate.stdout | default('(none)') }}
+    success_msg: "CA certificate accepted into {{ pki_names.mldsa_trustpoint }}"
+    quiet: true
+  when: not mldsa_ca_cert_present
+
+# --- 4, 5, 6. CSR out, signature in ------------------------------------------
+- name: "ML-DSA | {{ inventory_hostname }} | issue the identity certificate"
+  when: not mldsa_id_cert_present
+  block:
+
+    # ESCAPE HATCH: network_cli. Verified on 26.2: with "enrollment terminal pem"
+    # this command asks NOTHING. It prints the subject lines it is going to use
+    # and then the PEM request. Observed verbatim before it was automated; if a
+    # future build starts prompting, this task times out and fails.
+    - name: "ML-DSA | {{ inventory_hostname }} | generate the CSR on the box"
+      cisco.ios.ios_command:
+        commands:
+          - "crypto pki enroll {{ pki_names.mldsa_trustpoint }}"
+      register: mldsa_enroll
+      changed_when: true
+
+    # IOS wraps at 64 characters and pads the block with its own prose. Cut on the
+    # PEM boundaries and drop everything else, including any "%"-prefixed status
+    # line that landed in the middle of the block.
+    #
+    # [\s\S] RATHER THAN "." AND IT IS NOT A STYLE CHOICE.
+    #
+    # Ansible's regex_search takes multiline= and ignorecase= and nothing else.
+    # multiline= sets re.M, which changes what "^" and "$" anchor to; it does NOT
+    # set re.S, so "." still refuses to cross a newline. A PEM block is nothing but
+    # newlines, so ".*?" between the BEGIN and END markers can never match one and
+    # this returned an empty string on every run.
+    #
+    # Measured on 26.02.01eftr2: "crypto pki enroll" printed a perfectly good
+    # ML-DSA-65 PKCS#10 with real -----BEGIN/END CERTIFICATE REQUEST----- markers,
+    # and the assertion below still failed with "No PEM certificate request found
+    # in the output". The router was right and the regex was wrong. [\s\S] is the
+    # portable way to say "any character including a newline" when you cannot
+    # reach re.S.
+    - name: "ML-DSA | {{ inventory_hostname }} | extract the PKCS#10"
+      ansible.builtin.set_fact:
+        mldsa_csr_pem: >-
+          {{ (mldsa_enroll.stdout[0] | default(''))
+             | regex_search('-----BEGIN CERTIFICATE REQUEST-----[\s\S]*?-----END CERTIFICATE REQUEST-----', multiline=True, ignorecase=False)
+             | default('', true) }}
+
+    - name: "ML-DSA | {{ inventory_hostname }} | the CSR must actually be a CSR"
+      ansible.builtin.assert:
+        that:
+          - mldsa_csr_pem | length > 100
+        fail_msg: >-
+          No PEM certificate request found in the output of
+          "crypto pki enroll {{ pki_names.mldsa_trustpoint }}". The trustpoint
+          needs "enrollment terminal pem" for the BEGIN/END boundaries to appear.
+          Verbatim output: {{ mldsa_enroll.stdout[0] | default('(none)') }}
+        quiet: true
+
+    - name: "ML-DSA | {{ inventory_hostname }} | bring the CSR back to the control node"
+      ansible.builtin.copy:
+        content: "{{ mldsa_csr_pem }}\n"
+        dest: "{{ mldsa_csr_file }}"
+        mode: "0644"
+      delegate_to: localhost
+
+    # THE IKEv2 IDENTITY, made explicit. See the long note in defaults/main.yml:
+    # the router announces itself as an ID_IPV4_ADDR, so the address has to be in
+    # the SAN as an iPAddress or every negotiation logs
+    # IKMP_NO_ID_CERT_ADDR_MATCH. The router's own CSR carries no SAN at all, so
+    # this is where it gets attached, deliberately, from topology data.
+    #
+    # Both EKUs are load-bearing. An IKEv2 peer is initiator on one exchange and
+    # responder on the next and presents the same certificate for both, so a
+    # clientAuth-only leaf authenticates one direction and fails the other.
+    - name: "ML-DSA | {{ inventory_hostname }} | extensions for the signature"
+      ansible.builtin.copy:
+        content: |
+          basicConstraints=critical,CA:FALSE
+          keyUsage=critical,digitalSignature
+          extendedKeyUsage=clientAuth,serverAuth
+          subjectKeyIdentifier=hash
+          authorityKeyIdentifier=keyid,issuer
+          subjectAltName={{ mldsa_subject_alt_name }}
+        dest: "{{ mldsa_ext_file }}"
+        mode: "0644"
+      delegate_to: localhost
+
+    - name: "ML-DSA | {{ inventory_hostname }} | sign it with the offline ML-DSA CA"
+      ansible.builtin.command:
+        cmd: >-
+          {{ mldsa_openssl }} x509 -req
+          -in {{ mldsa_csr_file }}
+          -out {{ mldsa_crt_file }}
+          -CA {{ mldsa_ca_cert }}
+          -CAkey {{ mldsa_ca_key }}
+          -CAcreateserial
+          -days {{ mldsa_leaf_days }} -sha512
+          -extfile {{ mldsa_ext_file }}
+      delegate_to: localhost
+      changed_when: true
+
+    - name: "ML-DSA | {{ inventory_hostname }} | the issued certificate must be ML-DSA and carry the identity"
+      ansible.builtin.command:
+        cmd: "{{ mldsa_openssl }} x509 -in {{ mldsa_crt_file }} -noout -text"
+      delegate_to: localhost
+      register: mldsa_issued_text
+      changed_when: false
+
+    - name: "ML-DSA | {{ inventory_hostname }} | check it before it goes near the router"
+      ansible.builtin.assert:
+        that:
+          # QUOTED, and they have to be. An unquoted YAML scalar containing a
+          # colon-space is a mapping, not a string: "...search('Public Key
+          # Algorithm: ML-DSA-'..." parses as the key "...search('Public Key
+          # Algorithm" with the value "ML-DSA-'...". ansible-core then rejects the
+          # whole task with "Conditional expressions must be strings", pointing at
+          # the assert rather than at the two lines that are actually malformed.
+          - "mldsa_issued_text.stdout is search('Public Key Algorithm: ML-DSA-' ~ pq_signature_param_set)"
+          - "mldsa_issued_text.stdout is search('Signature Algorithm: ML-DSA-' ~ pq_signature_param_set)"
+          # Substring test per address, not a set difference over lines. openssl
+          # prints "IP Address:10.0.12.2, IP Address:10.0.23.1" on ONE line when a
+          # certificate has several, so comparing against stdout_lines can never
+          # match on the hub.
+          - mldsa_identity_addresses | map('regex_replace', '^(.*)$', 'IP Address:\\1')
+            | reject('in', mldsa_issued_text.stdout) | list | length == 0
+        fail_msg: >-
+          The certificate just signed for {{ inventory_hostname }} is not what the
+          IKEv2 profile needs. It must have an ML-DSA-{{ pq_signature_param_set }}
+          subject public key, an ML-DSA-{{ pq_signature_param_set }} issuer
+          signature, and an iPAddress SAN for each of
+          {{ mldsa_identity_addresses | join(', ') }}.
+        success_msg: >-
+          ML-DSA-{{ pq_signature_param_set }} identity for {{ inventory_hostname }},
+          SAN {{ mldsa_subject_alt_name }}
+        quiet: true
+
+    # ESCAPE HATCH plus a paste, same shape as authenticate.
+    #
+    # Prompt matched, exactly:
+    #   "End with a blank line or the word \"quit\" on a line by itself"
+    - name: "ML-DSA | {{ inventory_hostname }} | import the signed certificate"
+      ansible.netcommon.cli_command:
+        command: "crypto pki import {{ pki_names.mldsa_trustpoint }} certificate"
+        prompt:
+          - 'End with a blank line or the word "quit" on a line by itself'
+        answer:
+          # trim, for the same reason as in authenticate above: a trailing newline
+          # is a blank line, a blank line ends the paste, and "quit" would then be
+          # executed as an exec command and log the session out.
+          - "{{ lookup('file', mldsa_crt_file) | trim }}\nquit"
+        newline: true
+      register: mldsa_import
+      changed_when: true
+
+    - name: "ML-DSA | {{ inventory_hostname }} | the import must have been accepted"
+      ansible.builtin.assert:
+        that:
+          - mldsa_import.stdout is search('Router Certificate successfully imported')
+        fail_msg: >-
+          "crypto pki import {{ pki_names.mldsa_trustpoint }} certificate" did not
+          print "% Router Certificate successfully imported". Verbatim output:
+          {{ mldsa_import.stdout | default('(none)') }}
+        success_msg: "identity certificate imported into {{ pki_names.mldsa_trustpoint }}"
+        quiet: true

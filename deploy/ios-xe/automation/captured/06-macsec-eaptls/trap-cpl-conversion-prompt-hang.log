@@ -1,0 +1,201 @@
+### TAG=job3-eaptls-build
+### CMD=ansible-playbook macsec-eaptls.yml
+### START=2026-09-01T12:15:47Z
+
+PLAY [Stand up the certificate server] *****************************************
+
+TASK [Local IOS CA] ************************************************************
+included: common for r2
+
+TASK [common : CA | clock] *****************************************************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/common/tasks/assert-clock.yml for r2
+[WARNING]: Persistent connection logging is enabled for 198.18.154.203. This will log ALL interactions to /Users/jgomez2/pqc-captures/job3/raw-probe.log and WILL NOT redact sensitive configuration like passwords. USE WITH CAUTION!
+[WARNING]: ansible-pylibssh not installed, falling back to paramiko
+
+TASK [common : Clock | read] ***************************************************
+ok: [r2]
+
+TASK [common : Clock | must be authoritative] **********************************
+ok: [r2]
+
+TASK [common : CA | enable the HTTP server for SCEP] ***************************
+changed: [r2]
+
+TASK [common : CA | render certificate server] *********************************
+ok: [r2]
+
+TASK [common : CA | push certificate server] ***********************************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/common/tasks/netconf-edit.yml for r2
+
+TASK [common : NETCONF edit-config | certificate server CA_Server] *************
+changed: [r2]
+
+TASK [common : CA | current state] *********************************************
+ok: [r2]
+
+TASK [common : CA | passphrase must be set] ************************************
+ok: [r2]
+
+TASK [common : CA | no shutdown (strict prompt handling)] **********************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/common/tasks/exec-with-prompt.yml for r2
+
+TASK [common : Guard | crypto pki server CA_Server / no shutdown has one answer per prompt] ***
+ok: [r2]
+
+TASK [common : Exec | crypto pki server CA_Server / no shutdown | setup] *******
+ok: [r2] => (item=configure terminal)
+ok: [r2] => (item=crypto pki server CA_Server)
+
+TASK [common : Exec (strict prompt) | crypto pki server CA_Server / no shutdown] ***
+ok: [r2]
+
+TASK [common : Exec | crypto pki server CA_Server / no shutdown | teardown] ****
+ok: [r2] => (item=end)
+Pausing for 15 seconds
+
+TASK [common : CA | wait for the CA certificate to generate] *******************
+ok: [r2]
+
+TASK [common : CA | re-read state to pick up the fingerprint] ******************
+ok: [r2]
+
+TASK [common : CA | the certificate server must actually be running] ***********
+ok: [r2]
+
+TASK [common : CA | record the fingerprint] ************************************
+ok: [r2]
+
+TASK [common : CA | fingerprint must be readable] ******************************
+ok: [r2]
+
+PLAY [Build MACsec keyed by EAP-TLS] *******************************************
+
+TASK [macsec_eaptls : EAP-TLS | sanity] ****************************************
+ok: [r1]
+ok: [r2]
+
+TASK [Enrol the EAP-TLS identity certificate] **********************************
+included: common for r1, r2
+
+TASK [common : PKI | PQAUTO-CA-TP | the CA fingerprint must be pinned] *********
+ok: [r1]
+ok: [r2]
+
+TASK [common : PKI | PQAUTO-CA-TP | render trustpoint] *************************
+ok: [r1]
+ok: [r2]
+
+TASK [common : PKI | PQAUTO-CA-TP | push trustpoint] ***************************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/common/tasks/netconf-edit.yml for r1, r2
+[WARNING]: Persistent connection logging is enabled for 198.18.154.202. This will log ALL interactions to /Users/jgomez2/pqc-captures/job3/raw-probe.log and WILL NOT redact sensitive configuration like passwords. USE WITH CAUTION!
+
+TASK [common : NETCONF edit-config | trustpoint PQAUTO-CA-TP (rsa)] ************
+changed: [r1]
+changed: [r2]
+
+TASK [common : PKI | PQAUTO-CA-TP | already enrolled?] *************************
+ok: [r2]
+ok: [r1]
+
+TASK [common : PKI | PQAUTO-CA-TP | authenticate the CA] ***********************
+changed: [r2]
+changed: [r1]
+
+TASK [common : PKI | PQAUTO-CA-TP | enrol against the CA] **********************
+changed: [r2]
+changed: [r1]
+FAILED - RETRYING: [r1]: common : PKI | PQAUTO-CA-TP | wait for the certificate to be granted (11 retries left).
+FAILED - RETRYING: [r2]: common : PKI | PQAUTO-CA-TP | wait for the certificate to be granted (11 retries left).
+FAILED - RETRYING: [r1]: common : PKI | PQAUTO-CA-TP | wait for the certificate to be granted (10 retries left).
+
+TASK [common : PKI | PQAUTO-CA-TP | wait for the certificate to be granted] ****
+ok: [r2]
+FAILED - RETRYING: [r1]: common : PKI | PQAUTO-CA-TP | wait for the certificate to be granted (9 retries left).
+FAILED - RETRYING: [r1]: common : PKI | PQAUTO-CA-TP | wait for the certificate to be granted (8 retries left).
+FAILED - RETRYING: [r1]: common : PKI | PQAUTO-CA-TP | wait for the certificate to be granted (7 retries left).
+FAILED - RETRYING: [r1]: common : PKI | PQAUTO-CA-TP | wait for the certificate to be granted (6 retries left).
+ok: [r1]
+
+TASK [macsec_eaptls : AAA, EAP and subscriber policy] **************************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/macsec_eaptls/tasks/aaa-stack.yml for r1, r2
+[WARNING]: To ensure idempotency and correct diff the input configuration lines should be similar to how they appear if present in the running configuration on device
+
+TASK [macsec_eaptls : AAA | local authentication and authorization for dot1x] ***
+changed: [r1]
+changed: [r2]
+
+TASK [macsec_eaptls : AAA | linksec must-secure attribute list] ****************
+changed: [r2]
+changed: [r1]
+
+TASK [macsec_eaptls : AAA | bind the attribute list to the peer identity] ******
+changed: [r2]
+changed: [r1]
+
+TASK [macsec_eaptls : EAP | which certificate EAP-TLS presents, in both roles] ***
+changed: [r2]
+changed: [r1]
+
+TASK [macsec_eaptls : Subscriber | control policy | on session start, authenticate] ***
+changed: [r1]
+[ERROR]: Task failed: timeout value 180 seconds reached while trying to send command: b'policy-map type control subscriber PQAUTO-MACSEC-POLICY'
+Origin: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/macsec_eaptls/tasks/aaa-stack.yml:81:3
+
+79 # supplicant and authenticator on this link, and "both" is what lets it play both
+80 # roles. Drop it and one direction never authenticates.
+81 - name: Subscriber | control policy | on session start, authenticate
+     ^ column 3
+
+fatal: [r2]: FAILED! => {"changed": false, "msg": "Task failed: timeout value 180 seconds reached while trying to send command: b'policy-map type control subscriber PQAUTO-MACSEC-POLICY'"}
+
+TASK [macsec_eaptls : Subscriber | control policy | on success, demand a secured link] ***
+changed: [r1]
+
+TASK [macsec_eaptls : Render MKA policy and dot1x credentials] *****************
+ok: [r1]
+
+TASK [Push MKA policy and dot1x credentials] ***********************************
+included: common for r1
+
+TASK [common : NETCONF edit-config | MKA policy PQAUTO-MKA-EAP and dot1x credentials] ***
+changed: [r1]
+
+TASK [macsec_eaptls : Interface, last] *****************************************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/macsec_eaptls/tasks/interface.yml for r1
+
+TASK [macsec_eaptls : Interface | certificate must exist before closing the port] ***
+ok: [r1]
+
+TASK [macsec_eaptls : Interface | refuse to close the port without a certificate] ***
+ok: [r1]
+
+TASK [macsec_eaptls : Interface | EAP-TLS MACsec] ******************************
+changed: [r1]
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (17 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (16 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (15 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (14 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (13 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (12 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (11 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (10 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (9 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (8 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (7 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (6 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (5 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (4 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (3 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (2 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (1 retries left).
+FAILED - RETRYING: [r1]: macsec_eaptls : Wait for the MKA session to secure (0 retries left).
+
+TASK [macsec_eaptls : Wait for the MKA session to secure] **********************
+fatal: [r1]: FAILED! => {"attempts": 18, "changed": false, "changed_when_result": false, "stdout": ["Total MKA Sessions....... 0\n      Secured Sessions... 0\n      Pending Sessions... 0\n\n====================================================================================================\nInterface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            \nPort-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   \n===================================================================================================="], "stdout_lines": [["Total MKA Sessions....... 0", "      Secured Sessions... 0", "      Pending Sessions... 0", "", "====================================================================================================", "Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            ", "Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   ", "===================================================================================================="]]}
+
+PLAY RECAP *********************************************************************
+r1                         : ok=24   changed=11   unreachable=0    failed=1    skipped=1    rescued=0    ignored=0   
+r2                         : ok=35   changed=9    unreachable=0    failed=1    skipped=2    rescued=0    ignored=0   
+
+### END=2026-09-01T12:24:55Z
+### RC=2

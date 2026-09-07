@@ -291,10 +291,20 @@ tshark -r /tmp/hybrid.pcap -Y 'ssh.message_code==20' -V 2>/dev/null | grep -m1 '
 ```
 
 ```
-kex_algorithms string: mlkem768x25519-sha256,sntrup761x25519-sha512,sntrup761x25519-sha512@openssh.com,curve25519-sha256,...
+kex_algorithms string […]: mlkem768x25519-sha256,sntrup761x25519-sha512,
+sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org,
+ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,ext-info-s,kex-strict-s-v0
 ```
 
+(wrapped here to fit; tshark prints it as one long line, and the `[…]` is tshark's own
+marker for a field it had to shorten in the tree view, not a truncated value.)
+
 **`mlkem768x25519-sha256` is offered first**, so it is what both sides select (SSH picks the first algorithm the client lists that the server also supports). The hybrid ML-KEM key exchange is right there in the cleartext handshake.
+
+Note what *isn't* in that list: no finite-field `diffie-hellman-group*` and no `rsa*` key
+exchange. This build offers exactly three families, hybrid PQ first, then classical ECDH,
+and nothing older. `ext-info-s` and `kex-strict-s-v0` aren't key exchanges at all, they're
+signalling flags OpenSSH stuffs into the same name-list.
 
 **Step 3: Measure ML-KEM's size cost**
 
@@ -520,5 +530,5 @@ That is it. You watched a real SSH handshake negotiate hybrid ML-KEM key exchang
 **On real hardware:** [SSH on Cisco IOS XE](../../deploy/ios-xe/ssh.md) shows that same
 split with the dial turned one notch back. The hybrid KEX is one config line and you can
 prove it from your own laptop, but the composite ML-DSA keys you just generated have no
-counterpart on the router. The Internet-Draft behind them is not an RFC, and no vendor
-ships it.
+counterpart on the router, even on 26.2 where ML-DSA did arrive for IKEv2. The
+Internet-Draft behind composite SSH keys is not an RFC, and no vendor ships it.

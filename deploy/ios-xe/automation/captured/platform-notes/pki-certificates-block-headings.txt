@@ -1,0 +1,42 @@
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show crypto pki certificates PQAUTO-MLDSA65 ---
+Certificate
+  Status: Available
+  Certificate Serial Number (hex): 33D3CCD11D0A358C12CD15F7FA93AD80BCC6CF13
+  Certificate Usage: Signature
+  Issuer: 
+    cn=PQC-LAB-MLDSA65-CA
+    o=PQC-Lab
+    c=ES
+  Subject:
+    Name: bfl-cpoc-d14-8235-02.lab.local
+    IP Address: 10.0.23.1
+    unstructuredname=bfl-cpoc-d14-8235-02.lab.local
+    cn=R2
+  Validity Date: 
+    start date: 09:20:54 UTC Sep 1 2026
+    end   date: 09:20:54 UTC Dec 4 2028
+  Associated Trustpoints: PQAUTO-MLDSA65 
+
+CA Certificate
+  Status: Available
+  Certificate Serial Number (hex): 6DBC5A74A3EC3EF418663AB2B3E15922048A6674
+  Certificate Usage: Signature
+  Issuer: 
+    cn=PQC-LAB-MLDSA65-CA
+    o=PQC-Lab
+    c=ES
+  Subject: 
+    cn=PQC-LAB-MLDSA65-CA
+    o=PQC-Lab
+    c=ES
+  Validity Date: 
+    start date: 08:00:49 UTC Aug 31 2026
+    end   date: 08:00:49 UTC Aug 28 2036
+  Associated Trustpoints: PQAUTO-MLDSA65 
+
+

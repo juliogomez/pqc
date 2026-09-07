@@ -1,0 +1,84 @@
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show crypto pki certificates verbose PQAUTO-MLDSA65 ---
+Certificate
+  Status: Available
+  Version: 3
+  Certificate Serial Number (hex): 33D3CCD11D0A358C12CD15F7FA93AD80BCC6CF13
+  Certificate Usage: Signature
+  Issuer: 
+    cn=PQC-LAB-MLDSA65-CA
+    o=PQC-Lab
+    c=ES
+  Subject:
+    Name: bfl-cpoc-d14-8235-02.lab.local
+    IP Address: 10.0.23.1
+    unstructuredname=bfl-cpoc-d14-8235-02.lab.local
+    cn=R2
+  Validity Date: 
+    start date: 09:20:54 UTC Sep 1 2026
+    end   date: 09:20:54 UTC Dec 4 2028
+  Subject Key Info:
+    Public Key Algorithm: ML-DSA
+    Public Key Size: (1974 bytes)
+  Signature Algorithm: ML-DSA-65
+  Fingerprint MD5: 80656FE4 91296255 2C651ECD 730F6FFA 
+  Fingerprint SHA1: 6AEFCE24 C8237A52 F21A9DF1 6AC67D9F A4E5F78B 
+  X509v3 extensions:
+    X509v3 Key Usage: 80000000
+      Digital Signature
+    X509v3 Subject Key ID: 77F3A33A E9FAEBCB 75167758 F383F0BC A8B640BE 
+    X509v3 Basic Constraints:
+        CA: FALSE
+    X509v3 Subject Alternative Name:
+          
+        IP Address : 10.0.23.1 10.0.12.2 
+        OtherNames :    
+    X509v3 Authority Key ID: F0EA958C A5DFF342 60D4BCA0 568EDE75 3A00B4D3 
+    Authority Info Access:
+    Extended Key Usage:
+        Server Auth
+        Client Auth
+  Cert install time: 09:21:13 UTC Sep 1 2026 
+  Associated Trustpoints: PQAUTO-MLDSA65 
+  Key Label: PQAUTO-MLDSA65
+  Key storage device: private config
+
+CA Certificate
+  Status: Available
+  Version: 3
+  Certificate Serial Number (hex): 6DBC5A74A3EC3EF418663AB2B3E15922048A6674
+  Certificate Usage: Signature
+  Issuer: 
+    cn=PQC-LAB-MLDSA65-CA
+    o=PQC-Lab
+    c=ES
+  Subject: 
+    cn=PQC-LAB-MLDSA65-CA
+    o=PQC-Lab
+    c=ES
+  Validity Date: 
+    start date: 08:00:49 UTC Aug 31 2026
+    end   date: 08:00:49 UTC Aug 28 2036
+  Subject Key Info:
+    Public Key Algorithm: ML-DSA
+    Public Key Size: (1974 bytes)
+  Signature Algorithm: ML-DSA-65
+  Fingerprint MD5: C71F84AF 7C959E3B 22D7A2B1 CE46BAC9 
+  Fingerprint SHA1: 258DB5E2 0AC84902 1AD80B98 EE6B188D 4FF892AF 
+  X509v3 extensions:
+    X509v3 Key Usage: 6000000
+      Key Cert Sign
+      CRL Signature
+    X509v3 Subject Key ID: F0EA958C A5DFF342 60D4BCA0 568EDE75 3A00B4D3 
+    X509v3 Basic Constraints:
+        CA: TRUE
+    X509v3 Authority Key ID: F0EA958C A5DFF342 60D4BCA0 568EDE75 3A00B4D3 
+    Authority Info Access:
+  Cert install time: 09:20:48 UTC Sep 1 2026 
+  Associated Trustpoints: PQAUTO-MLDSA65 
+
+

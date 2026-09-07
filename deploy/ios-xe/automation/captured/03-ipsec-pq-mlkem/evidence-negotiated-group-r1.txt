@@ -1,0 +1,42 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show crypto ikev2 sa detailed ---
+ IPv4 Crypto IKEv2  SA 
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+1         10.0.12.1/500         10.0.12.2/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      PQC Key Exchange: ML-KEM-768
+      Life/Active Time: 86400/22 sec
+      CE id: 0, Session-id: 54
+      Local spi: F364ED3FC7C8A638       Remote spi: 4F056DE027454AC4
+      Status Description: Negotiation done
+      Local id: 10.0.12.1
+      Remote id: 10.0.12.2
+      Local req msg id:  3              Remote req msg id:  0         
+      Local next msg id: 3              Remote next msg id: 0         
+      Local req queued:  3              Remote req queued:  0         
+      Local window:      20             Remote window:      20        
+      DPD configured for 30 seconds, retry 5
+      IETF Std Fragmentation  enabled.
+      Quantum-safe Encryption using PQC: ML-KEM-768
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : Yes
+      PEER TYPE: IOS-XE
+
+ IPv6 Crypto IKEv2  SA 
+
+
+--- show running-config | section crypto ikev2 proposal ---
+crypto ikev2 proposal LAB-PROPOSAL 
+ pqc mlkem768 optional
+ encryption aes-cbc-256
+ integrity sha512
+ group 20

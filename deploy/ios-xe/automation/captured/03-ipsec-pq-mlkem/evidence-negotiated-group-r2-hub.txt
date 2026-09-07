@@ -1,0 +1,67 @@
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show crypto ikev2 sa detailed ---
+ IPv4 Crypto IKEv2  SA 
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+2         10.0.12.2/500         10.0.12.1/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      PQC Key Exchange: ML-KEM-768
+      Life/Active Time: 86400/22 sec
+      CE id: 0, Session-id: 32
+      Local spi: 4F056DE027454AC4       Remote spi: F364ED3FC7C8A638
+      Status Description: Negotiation done
+      Local id: 10.0.12.2
+      Remote id: 10.0.12.1
+      Local req msg id:  0              Remote req msg id:  3         
+      Local next msg id: 0              Remote next msg id: 3         
+      Local req queued:  0              Remote req queued:  3         
+      Local window:      20             Remote window:      20        
+      DPD configured for 30 seconds, retry 5
+      IETF Std Fragmentation  enabled.
+      Quantum-safe Encryption using PQC: ML-KEM-768
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : No
+      PEER TYPE: IOS-XE
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+1         10.0.23.1/500         10.0.23.2/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      PQC Key Exchange: ML-KEM-768
+      Life/Active Time: 86400/23 sec
+      CE id: 0, Session-id: 31
+      Local spi: CE52F0130F2F388F       Remote spi: 0DB1677AFD77B0A5
+      Status Description: Negotiation done
+      Local id: 10.0.23.1
+      Remote id: 10.0.23.2
+      Local req msg id:  0              Remote req msg id:  3         
+      Local next msg id: 0              Remote next msg id: 3         
+      Local req queued:  0              Remote req queued:  3         
+      Local window:      20             Remote window:      20        
+      DPD configured for 30 seconds, retry 5
+      IETF Std Fragmentation  enabled.
+      Quantum-safe Encryption using PQC: ML-KEM-768
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : No
+      PEER TYPE: IOS-XE
+
+ IPv6 Crypto IKEv2  SA 
+
+
+--- show running-config | section crypto ikev2 proposal ---
+crypto ikev2 proposal LAB-PROPOSAL 
+ pqc mlkem768 optional
+ encryption aes-cbc-256
+ integrity sha512
+ group 20

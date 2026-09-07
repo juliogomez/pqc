@@ -1,0 +1,71 @@
+---
+# Quantum-safe identity: ML-DSA certificate authentication for IKEv2.
+#
+#   ansible-playbook ipsec-pq-mldsa.yml
+#   ansible-playbook ipsec-pq-mldsa.yml -e state=absent
+#
+# First apply is slow (~10-15 min): serial: 1, per-router enrolment, and non-fatal
+# FAILED - RETRYING on tunnel re-trigger while peers migrate. See automation/README.md.
+#
+# Requires ipsec-baseline.yml. Pairs with ipsec-pq-mlkem.yml: ML-KEM keeps a
+# recorded handshake unreadable, ML-DSA stops anyone forging an identity. Run both
+# for a tunnel that is quantum-safe end to end.
+#
+# THE CERTIFICATE AUTHORITY IS NOT ON THE HUB ANY MORE.
+#
+# This playbook used to stand up "crypto pki server" on R2 and enrol over SCEP.
+# Before you go looking for the CA that used to be here: SCEP is dead for ML-DSA,
+# and it dies on the router rather than at the CA.
+#
+# Measured, with debugs on both ends. "crypto pki authenticate" over SCEP works,
+# because GetCACert is an unsigned GET. The "crypto pki enroll" that follows emits
+# nothing for 75 seconds and the CA never logs a PKCSReq arriving, so the request
+# is never built, let alone refused. Separately, an ML-DSA PKCS#10 handed to that
+# same IOS CA through "request pkcs10 terminal pem" was granted and issued, so the
+# CA's signer was never the problem.
+#
+# PKCSReq is the SCEP message RFC 8894 requires the requester to sign inside a CMS
+# SignedData. Terminal enrolment has no CMS layer, so that is what this uses, with
+# the CA moved to the machine running ansible-playbook where OpenSSL 3.5+ has
+# native ML-DSA. The routers still generate their own keys and their own requests.
+# Nothing but public material crosses the wire.
+#
+# One play, and the serial: 1 matters.
+#
+# This is the only serial: 1 in this directory. Swapping authentication is a
+# replacement of a YANG choice, not an addition: for the window between one end
+# switching and the other following, the peers disagree and the tunnel is down.
+# Rolling one router at a time keeps that window to one peer pair and makes the
+# drop something you can watch rather than something that takes the whole fabric
+# out at once.
+#
+# ML-DSA keys are generated ON THE BOX. No private key is created on your laptop
+# and no private key is ever copied onto a router.
+
+- name: Swap IKEv2 authentication to ML-DSA, one router at a time
+  hosts: routers
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  serial: 1
+  roles:
+    - role: ipsec_pq_mldsa
+
+# Separate play, and it has to be separate. The check below asks the box which
+# signature algorithm authenticated the SA, and an SA needs BOTH ends swapped
+# before it can come up. Inside the serial: 1 play above, R1 has switched to
+# ML-DSA while R2 is still on pre-shared key, so the tunnel is legitimately down
+# at that moment. Only once the loop has been all the way round is the question
+# answerable.
+- name: Confirm ML-DSA is what actually authenticated the tunnels
+  hosts: routers
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  tasks:
+    - name: Operational proof
+      ansible.builtin.include_role:
+        name: ipsec_pq_mldsa
+        tasks_from: verify-tunnel
+      when: state | default('present') == 'present'
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml

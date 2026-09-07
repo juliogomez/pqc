@@ -1,0 +1,271 @@
+### TAG=phaseC9-tlspq-non-pqc-experiment
+### CMD=ansible-playbook tls-pq.yml -e pq_https_pqc_type=non-pqc
+### START=2026-09-01T10:15:29Z
+
+PLAY [Set the post-quantum posture of the HTTPS server] ************************
+
+TASK [tls_pq : TLS PQ | sanity] ************************************************
+ok: [r3]
+ok: [r1]
+ok: [r2]
+
+TASK [TLS PQ | check the secure server is enabled] *****************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip http secure-server] ****************************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [tls_pq : TLS PQ | render] ************************************************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [TLS PQ | push] ***********************************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF edit-config | ip http secure-pqc-type non-pqc] **********
+changed: [r2]
+changed: [r1]
+changed: [r3]
+
+TASK [tls_pq : TLS PQ | how to prove it] ***************************************
+ok: [r2] => {
+    "msg": "Check it from the control node with \"openssl s_client -connect 198.18.154.203:443 -groups X25519MLKEM768\" and look at the \"Negotiated TLS1.3 group\" line. Needs OpenSSL 3.5 or later; anything older has never heard of the group and will tell you the server does not support it, which is a lie about your own client."
+}
+ok: [r1] => {
+    "msg": "Check it from the control node with \"openssl s_client -connect 198.18.154.202:443 -groups X25519MLKEM768\" and look at the \"Negotiated TLS1.3 group\" line. Needs OpenSSL 3.5 or later; anything older has never heard of the group and will tell you the server does not support it, which is a lie about your own client."
+}
+ok: [r3] => {
+    "msg": "Check it from the control node with \"openssl s_client -connect 198.18.154.204:443 -groups X25519MLKEM768\" and look at the \"Negotiated TLS1.3 group\" line. Needs OpenSSL 3.5 or later; anything older has never heard of the group and will tell you the server does not support it, which is a lie about your own client."
+}
+
+TASK [TLS PQ | save] ***********************************************************
+included: common for r2, r1, r3
+
+PLAY [Report the post-quantum posture] *****************************************
+
+TASK [Verify | negotiated ML-KEM group per IKEv2 SA] ***************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 SA operational data] ************************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [verify : Verify | record the negotiated groups] **************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | PPK quantum-resistance counters] ********************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 statistics] *********************************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [verify : Verify | record the PPK counters as YANG reports them] **********
+ok: [r2]
+ok: [r1]
+ok: [r3]
+[WARNING]: ansible-pylibssh not installed, falling back to paramiko
+
+TASK [verify : Verify | IKEv2 signature algorithm and PPK counters (show parsing, see comment)] ***
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [verify : Verify | record the signature algorithms] ***********************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [verify : Verify | record the PPK counters as the CLI reports them] *******
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | SSH key exchange algorithms] ************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip ssh server algorithm kex] **********************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [verify : Verify | record the SSH posture] ********************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | HTTPS PQC type] *************************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip http secure-pqc-type] **************************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [verify : Verify | record the HTTPS posture] ******************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | access-session PQ settings] *************************************
+included: common for r2, r1
+
+TASK [common : NETCONF get | access-session pqc-type / tls-version] ************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the access-session settings] ********************
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | MKA and MACsec state (show parsing, see comment)] ******
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the MACsec state] *******************************
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | PQ posture] ********************************************
+ok: [r2] => {
+    "msg": {
+        "host": "r2",
+        "https": {
+            "pqc_type": "non-pqc",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": false,
+            "ike_sa_count": 0,
+            "negotiated_pqc_group": [],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": []
+        },
+        "macsec": {
+            "cipher": "(none)",
+            "ckn": "(none)",
+            "mka_secured_sessions": "0",
+            "out_pkts_encrypted": "0",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": false
+        },
+        "ssh": {
+            "hostkey": [],
+            "kex_offer_order": []
+        }
+    }
+}
+ok: [r1] => {
+    "msg": {
+        "host": "r1",
+        "https": {
+            "pqc_type": "non-pqc",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": false,
+            "ike_sa_count": 0,
+            "negotiated_pqc_group": [],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": []
+        },
+        "macsec": {
+            "cipher": "(none)",
+            "ckn": "(none)",
+            "mka_secured_sessions": "0",
+            "out_pkts_encrypted": "0",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": false
+        },
+        "ssh": {
+            "hostkey": [],
+            "kex_offer_order": []
+        }
+    }
+}
+ok: [r3] => {
+    "msg": {
+        "host": "r3",
+        "https": {
+            "pqc_type": "non-pqc",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": false,
+            "ike_sa_count": 0,
+            "negotiated_pqc_group": [],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": []
+        },
+        "macsec": "not on the MACsec link",
+        "ssh": {
+            "hostkey": [],
+            "kex_offer_order": []
+        }
+    }
+}
+
+PLAY RECAP *********************************************************************
+r1                         : ok=29   changed=1    unreachable=0    failed=0    skipped=7    rescued=0    ignored=0   
+r2                         : ok=29   changed=1    unreachable=0    failed=0    skipped=7    rescued=0    ignored=0   
+r3                         : ok=24   changed=1    unreachable=0    failed=0    skipped=11   rescued=0    ignored=0   
+
+### END=2026-09-01T10:16:01Z
+### RC=0

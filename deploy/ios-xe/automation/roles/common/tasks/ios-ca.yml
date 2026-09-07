@@ -1,0 +1,193 @@
+---
+# Stand up the local IOS certificate server, or leave it alone if it is already
+# running.
+#
+# Shared, because two units need a CA on the hub: ipsec-pq-mldsa for the ML-DSA
+# identity certificates and macsec-eaptls for the EAP-TLS ones. Building it twice
+# in two roles is how you end up with two slightly different CAs.
+#
+# Idempotent in the way that matters: the config push is a merge, and the "no
+# shutdown" step is skipped entirely when the server already reports enabled. That
+# skip is important, not just tidy. Re-enabling a running CA is a shut/no shut,
+# and a shut CA cannot sign, so a second run would break enrollment for anything
+# in flight.
+
+- name: CA | clock
+  ansible.builtin.include_tasks: assert-clock.yml
+
+# SCEP rides the IOS HTTP server, so port 80 has to be listening on the CA. This
+# is modelled (Cisco-IOS-XE-http, leaf server), so it goes over NETCONF like
+# everything else.
+- name: CA | enable the HTTP server for SCEP
+  ansible.netcommon.netconf_config:
+    content: |
+      <config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+        <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+          <ip>
+            <http xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-http">
+              <server>true</server>
+            </http>
+          </ip>
+        </native>
+      </config>
+    target: running
+    default_operation: merge
+    lock: if-supported
+    error_option: rollback-on-error
+  vars:
+    ansible_connection: ansible.netcommon.netconf
+    ansible_network_os: ansible.netcommon.default
+    ansible_port: "{{ netconf_port }}"
+
+- name: CA | render certificate server
+  ansible.builtin.set_fact:
+    nc_label: "certificate server {{ pki_names.ca_server }}"
+    nc_operation: merge
+    nc_payload: "{{ lookup('template', 'ios-ca.xml.j2') }}"
+
+- name: CA | push certificate server
+  ansible.builtin.include_tasks: netconf-edit.yml
+
+# SCREEN-SCRAPE. "show crypto pki server" has no operational YANG behind it on this
+# platform, so both the enabled/disabled state and the CA fingerprint come off show
+# output.
+#
+# Matched literals:
+#   "Status: enabled"        to decide whether to start it
+#   "CA cert fingerprint:"   to pin in every trustpoint below
+- name: CA | current state
+  cisco.ios.ios_command:
+    commands:
+      - show crypto pki server
+  register: ca_state
+  changed_when: false
+  failed_when: false
+
+# The only interactive step in the whole PKI flow.
+#
+# "no shutdown" on a certificate server asks for a passphrase to protect the CA's
+# private key, twice. The YANG model has shutdown-config but no passphrase leaf, so
+# there is nowhere to put the secret in a NETCONF payload; this genuinely cannot be
+# done over the modelled interface.
+#
+# Prompts matched, in order and exactly:
+#   "Password:"
+#   "Re-enter password:"
+#
+# Two things to know about this prompt. Pressing Return aborts the whole command
+# with "% Aborted." ("or type Return to exit" means exit the no shutdown, not "no
+# passphrase"), which is why lab_ca_passphrase is asserted non-empty. And if the
+# router asks anything else, nothing is sent, the command times out, and the play
+# fails. That is the correct outcome.
+- name: CA | start the certificate server
+  when: not ((ca_state.stdout[0] | default('')) is search('Status:\s*enabled'))
+  block:
+
+    - name: CA | passphrase must be set
+      ansible.builtin.assert:
+        that:
+          - lab_ca_passphrase | default('') | length > 0
+          - lab_ca_passphrase | length > 7
+        fail_msg: >-
+          lab_ca_passphrase is empty or too short. IOS XE requires more than 7
+          characters at the CA passphrase prompt; shorter values loop forever on
+          "Password:" and never reach "Re-enter password:". Set a longer value in
+          group_vars/all/lab.yml.
+        quiet: true
+
+    - name: CA | no shutdown (strict prompt handling)
+      ansible.builtin.include_tasks: exec-with-prompt.yml
+      vars:
+        exec_label: "crypto pki server {{ pki_names.ca_server }} / no shutdown"
+        exec_pre_commands:
+          - configure terminal
+          - "crypto pki server {{ pki_names.ca_server }}"
+        exec_command: no shutdown
+        exec_post_commands:
+          - end
+        exec_prompt:
+          - "Password:"
+          - "Re-enter password:"
+        exec_answer:
+          - "{{ lab_ca_passphrase }}"
+          - "{{ lab_ca_passphrase }}"
+        exec_check_all: true
+
+    - name: CA | no shutdown must not abort
+      ansible.builtin.assert:
+        that:
+          - exec_with_prompt_result.stdout is not search('% Aborted')
+          - exec_with_prompt_result.stdout is search('Certificate Server enabled')
+        fail_msg: >-
+          "crypto pki server {{ pki_names.ca_server }} / no shutdown" did not
+          enable the CA on {{ inventory_hostname }}. Output:
+          {{ exec_with_prompt_result.stdout | default('(none)') | trim }}.
+          Common causes: wrong lab_ca_passphrase in lab.yml, or the router asked a
+          prompt this role does not handle.
+        quiet: true
+
+    - name: CA | wait for the CA certificate to generate
+      ansible.builtin.pause:
+        seconds: 15
+      # "% Certificate Server enabled." comes back before the CA certificate
+      # exists. Authenticating a trustpoint against a CA that has not finished
+      # generating its own certificate fails in a way that looks like a network
+      # problem.
+
+# The interactive step can leave network_cli inside the passphrase prompt. The
+# next command on the same persistent session is then consumed as the password
+# (see captured/06-macsec-eaptls/trap-ca-passphrase-prompt-verbatim.txt). meta
+# tasks cannot use when:, so reset unconditionally before the re-read.
+- name: CA | reset CLI session before re-read
+  ansible.builtin.meta: reset_connection
+
+- name: CA | re-read state to pick up the fingerprint
+  cisco.ios.ios_command:
+    commands:
+      - show crypto pki server
+  register: ca_state_after
+  changed_when: false
+
+# Do not trust the edit, read the box.
+#
+# The certificate server is the one object in this layer that cannot be created
+# over NETCONF end to end: pushing the container works, but there is no leaf for
+# the passphrase "no shutdown" demands, and a NETCONF attempt to start it returns
+# <ok/> while the CA stays down. The "no shutdown" above therefore goes over the
+# CLI, and this is the task that proves it took. Without it the only evidence the
+# CA is running is the fingerprint read below, and a CA that was started once,
+# generated its certificate and has since been shut still prints one of those.
+#
+# Same literal the skip decision above matches: "Status: enabled".
+- name: CA | the certificate server must actually be running
+  ansible.builtin.assert:
+    that:
+      - (ca_state_after.stdout[0] | default('')) is search('Status:\s*enabled')
+    fail_msg: >-
+      "show crypto pki server" on {{ inventory_hostname }} does not report
+      "Status: enabled" for {{ pki_names.ca_server }}. Nothing can enrol against a
+      CA that is not running, and enrolment failures against a down CA look like
+      network problems. Common causes: the clock is not set ("Status: disabled,
+      Time has not been set"), or the passphrase was rejected. Output as read:
+      {{ ca_state_after.stdout[0] | default('(none)') | trim }}
+    success_msg: "{{ pki_names.ca_server }} is enabled"
+    quiet: true
+
+- name: CA | record the fingerprint
+  ansible.builtin.set_fact:
+    ca_fingerprint: >-
+      {{ ((ca_state_after.stdout[0] | default(''))
+          | regex_findall('CA cert fingerprint:\s*([0-9A-Fa-f ]+)')
+          + ['']) | first | replace(' ', '') }}
+
+- name: CA | fingerprint must be readable
+  ansible.builtin.assert:
+    that:
+      - ca_fingerprint | length >= 32
+    fail_msg: >-
+      Could not read the CA certificate fingerprint from "show crypto pki server".
+      Every trustpoint below has to pin it, and without it IOS XE rejects the CA
+      certificate with "Trustpoint fingerprint must be supplied". Check
+      "show crypto pki server" by hand; a CA that is enabled but still generating
+      its certificate will not print one yet.
+    quiet: true

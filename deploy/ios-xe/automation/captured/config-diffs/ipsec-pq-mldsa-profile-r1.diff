@@ -1,0 +1,20 @@
+# ipsec-pq-mldsa-profile-r1.diff
+#
+# The authentication swap ipsec-pq-mldsa.yml performs on a spoke's IKEv2 profile. Note it REPLACES a YANG choice rather than adding to it, which is why the tunnel is legitimately down between one end switching and the other following.
+#
+# command: show running-config | section crypto ikev2 profile
+# router:  first block in the file
+
+--- BEFORE: without the unit (state after teardown)   [phaseB-verify-teardown/r1-teardown-independent.txt]
++++ AFTER:  with the unit applied   [00-preflight/r1-config.txt]
+@@ -1,7 +1,8 @@
+ crypto ikev2 profile PQAUTO-SPOKE-R2
+  match identity remote address 10.0.12.2 255.255.255.255 
+  identity local address 10.0.12.1
+- authentication remote pre-share
+- authentication local pre-share
++ authentication remote mldsa-sig
++ authentication local mldsa-sig
+  keyring local LAB-KEYRING
++ pki trustpoint PQAUTO-MLDSA65
+  dpd 30 5 periodic

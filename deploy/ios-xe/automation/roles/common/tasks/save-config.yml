@@ -1,0 +1,37 @@
+---
+# Write the running config to startup, only if asked.
+#
+# Gated on save_config so the default run leaves nothing behind a reload. Flip it
+# with -e save_config=true when you actually want the state to survive.
+#
+# "write memory" is exec mode and does not prompt on IOS XE, which is why this is
+# an ios_command and not one of the strict-prompt wrappers. If a future release
+# starts prompting, this task will time out rather than answer, and that is the
+# behaviour we want.
+#
+# changed_when is deliberately false. Two earlier attempts both broke idempotency:
+#
+#   changed_when: save_config | bool   -> reported changed on every single run
+#   ios_config + save_when: modified   -> also reported changed on every run
+#
+# The second one fails for a platform reason worth writing down: cisco.ios decides
+# "modified" by diffing show running-config against show startup-config, and on
+# IOS XE those two never match on a box that holds any certificate. running-config
+# prints the cert as an inline hex blob, startup-config prints it as a filename:
+#
+#   running:  certificate self-signed 01
+#             30820430 30820298 ... 	quit
+#   startup:  certificate self-signed 01 nvram:IOS-Self-Sig#3.cer
+#
+# Measured on R1: 1263 differing lines, every one of them that artefact and not a
+# real config delta. So running-vs-startup comparison cannot be used for change
+# detection on this platform at all.
+#
+# Saving is an action, not a piece of desired state, so it does not participate in
+# the changed contract. The run still saves; it just does not claim a change.
+- name: Save running config to startup
+  cisco.ios.ios_command:
+    commands:
+      - write memory
+  when: save_config | bool
+  changed_when: false

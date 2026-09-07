@@ -1,0 +1,12 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show running-config | include ^ip ssh server algorithm ---
+ip ssh server algorithm kex mlkem768x25519-sha256 mlkem768nistp256-sha256 curve25519-sha256 ecdh-sha2-nistp256
+ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256
+
+--- show running-config | include ^ip http ---
+ip http secure-server
+ip http secure-trustpoint TP-self-signed-3526832631

@@ -1,0 +1,99 @@
+---
+# The offline ML-DSA root CA, on the control node.
+#
+# Idempotent by construction: every step carries "creates:", so a second run
+# skips the lot and reports changed=false. Do not replace that with a state
+# check that regenerates the key, because reissuing the CA silently invalidates
+# every identity certificate already on a router.
+#
+# Runs once for the whole play, not once per router. There is one CA.
+
+- name: CA | OpenSSL must expose ML-DSA natively
+  ansible.builtin.command:
+    cmd: "{{ mldsa_openssl }} list -signature-algorithms"
+  register: mldsa_openssl_algs
+  changed_when: false
+  check_mode: false
+
+- name: CA | assert the parameter set is actually available
+  ansible.builtin.assert:
+    that:
+      - mldsa_openssl_algs.stdout is search('id-ml-dsa-' ~ pq_signature_param_set)
+    fail_msg: >-
+      "{{ mldsa_openssl }}" does not advertise id-ml-dsa-{{ pq_signature_param_set }}.
+      ML-DSA landed natively in OpenSSL 3.5. Point the role at a newer build with
+      -e mldsa_openssl=/opt/homebrew/bin/openssl. Checked with
+      "openssl list -signature-algorithms".
+    success_msg: "{{ mldsa_openssl_algs.stdout_lines | select('search', 'id-ml-dsa') | list | join(', ') | truncate(90) }}"
+    quiet: true
+
+- name: CA | directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ mldsa_ca_dir }}"
+    - "{{ mldsa_ca_dir }}/state"
+
+# The CA private key. 0600, gitignored, and it never leaves this directory.
+- name: CA | private key (ML-DSA-{{ pq_signature_param_set }})
+  ansible.builtin.command:
+    cmd: >-
+      {{ mldsa_openssl }} genpkey
+      -algorithm mldsa{{ pq_signature_param_set }}
+      -out {{ mldsa_ca_key }}
+    creates: "{{ mldsa_ca_key }}"
+
+- name: CA | lock the private key down
+  ansible.builtin.file:
+    path: "{{ mldsa_ca_key }}"
+    mode: "0600"
+
+# Self-signed root. The -sha512 is inert for ML-DSA (the scheme carries its own
+# hashing) but it is what the trustpoint's "hash sha512" expects to see and it
+# costs nothing to keep the two consistent.
+- name: CA | self-signed root certificate
+  ansible.builtin.command:
+    cmd: >-
+      {{ mldsa_openssl }} req -new -x509
+      -key {{ mldsa_ca_key }}
+      -out {{ mldsa_ca_cert }}
+      -days {{ mldsa_ca_days }} -sha512
+      -subj "{{ mldsa_ca_subject }}"
+      -addext "basicConstraints=critical,CA:TRUE,pathlen:0"
+      -addext "keyUsage=critical,keyCertSign,cRLSign"
+      -addext "subjectKeyIdentifier=hash"
+    creates: "{{ mldsa_ca_cert }}"
+
+# IOS XE pins a trustpoint by the MD5 fingerprint of the DER CA certificate.
+# Pinning it is what keeps "crypto pki authenticate" from asking
+# "% Do you accept this certificate? [yes/no]:", which is a question this layer
+# is not allowed to answer blind.
+- name: CA | MD5 fingerprint of the CA certificate, the way IOS computes it
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      {{ mldsa_openssl }} x509 -in {{ mldsa_ca_cert }} -outform DER
+      | {{ mldsa_openssl }} dgst -md5 -r
+      | cut -d' ' -f1
+    executable: /bin/bash
+  register: mldsa_ca_fp
+  changed_when: false
+  check_mode: false
+
+# Written to a file rather than carried in a fact. This task file runs once for
+# the whole play, and a fact set under run_once only reaches the other hosts by a
+# side effect that is easy to break; a file is read the same way by every host.
+- name: CA | record the fingerprint for the trustpoints to pin
+  ansible.builtin.copy:
+    content: "{{ mldsa_ca_fp.stdout | trim | upper }}"
+    dest: "{{ mldsa_ca_fingerprint_file }}"
+    mode: "0644"
+
+- name: CA | summary
+  ansible.builtin.debug:
+    msg: >-
+      ML-DSA-{{ pq_signature_param_set }} root CA at {{ mldsa_ca_cert }},
+      fingerprint {{ mldsa_ca_fp.stdout | trim | upper }}. Private key
+      {{ mldsa_ca_key }} (0600, gitignored, never leaves the control node).

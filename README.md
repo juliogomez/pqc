@@ -10,7 +10,7 @@ the same RFCs meet Cisco's CLI, licensing, and platform capabilities.
 
 Two stages, in order:
 
-- **[Stage 1 - Learn](learn/README.md)**: hands-on labs with containers and real packet captures. No hardware required, nothing to loose, break and rerun as often as you like.
+- **[Stage 1 - Learn](learn/README.md)**: hands-on labs with containers and real packet captures. No hardware required, nothing to lose, break and rerun as often as you like.
 - **[Stage 2 - Deploy](deploy/README.md)**: the same protocols on Cisco routers.
 
 ---
@@ -62,22 +62,23 @@ Same protocols, same RFCs, on Cisco devices you use in your network.
 See [the deploy guide](deploy/README.md) for the platforms covered and how to navigate the
 docs without hardware.
 
-## What changes when you leave the lab
+## Important stuff
 
-This is the reason the repo has two halves instead of one. In Stage 1, every protocol goes
-post-quantum, because the container images are built from the newest strongSwan, OpenSSL,
-and OpenSSH there is. Stage 2 is where you meet the things no container can teach you:
+In Stage 1, every protocol goes
+post-quantum, because the container images are built from the newest open-source software there is. Stage 2 is where you meet reality:
 
-- **Cisco's roadmap is part of your design.** For example, ML-DSA authentication for IKEv2 is
-  planned for IOS XE 26.2, not shipping in 26.1. Your migration plan has release numbers
-  in it, not just algorithm names.
-- **Not every surface moves at once.** The same box does ML-KEM for IPsec and SSH while
-  its own HTTPS management server still only offers classical curves. "Does platform X
-  support PQC?" is never a yes/no question.
-- **The CLI hides distinctions the RFCs don't have.** `macsec network-link` starts an MKA
-  session between two routers; plain `macsec` silently doesn't.
+- **Release numbers are part of your design.** ML-DSA authentication for IKEv2 wasn't in
+  IOS XE 26.1 and is in 26.2, so a migration plan written six months earlier had a gap in
+  it that closed on a schedule you didn't control. Your plan has release numbers in it,
+  not just algorithm names.
+- **Shipping isn't the same as free.** ML-DSA-65 authentication works on 26.2, and it
+  makes the IKEv2 handshake **six times bigger**: 7 frames and 7 KB becomes 20 frames and
+  24 KB, measured on the wire. You only find that out by running it.
+- **Not every surface moves at once.** The same box does ML-KEM for IPsec, SSH, MACsec and
+  now its own HTTPS server, but ML-DSA only for IKEv2. "Does platform X support PQC?" is
+  never a yes/no question.
 - **Standards maturity sets the ceiling.** Composite ML-DSA SSH keys work in the lab
-  because OpenSSH ships an experimental implementation of an Internet-Draft. No vendor
+  because OpenSSH ships an experimental implementation of an internet draft. No vendor
   ships that in a supported release, and that's the correct call.
 
 ---
@@ -90,7 +91,7 @@ rerun the labs as many times as you like. A few of the images compile their tool
 source. Each lab's README has its own short Prerequisites
 and Build-and-start section.
 
-**Stage 2** needs real gear: three Cisco 8000 Series Secure Routers on IOS XE 26.1 with the
+**Stage 2** needs real gear: three Cisco 8000 Series Secure Routers on IOS XE 26.2 with the
 "advantage" license, wired back-to-back. No RADIUS or ISE needed, even for MACsec: one
 router runs a local CA and IOS XE does the EAP-TLS itself. You can read Stage 2 without any
 of it (the captured output and running configs are all in the repo).

@@ -1,0 +1,95 @@
+---
+# RFC 8784: make the tunnel quantum-safe without a single new algorithm.
+#
+# This is the "no new primitives" path. Nothing about the negotiation changes and
+# neither end needs ML-KEM support; an out-of-band secret is mixed into the IKEv2
+# key schedule so recording the handshake today and breaking DH in 2035 still
+# leaves the attacker without the session keys.
+#
+# The cost is that you now have a secret to distribute, rotate and store on every
+# pair of peers. ipsec-pq-mlkem is the other answer to the same problem: nothing
+# to distribute, but both ends have to speak ML-KEM.
+#
+# Idempotent. Merging the same PPK leaves twice is a no-op.
+
+- name: PPK | sanity
+  ansible.builtin.assert:
+    that:
+      - my_peers | length > 0
+      - lab_ppk_hex | default('') | length > 0
+      - lab_ppk_hex is match('^[0-9A-Fa-f]+$')
+      - (lab_ppk_hex | length) is divisibleby(2)
+    fail_msg: >-
+      lab_ppk_hex must be an even-length hex string, and the same value has to be
+      set on both peers of a pair. Set it in group_vars/all/lab.yml.
+    quiet: true
+
+- name: PPK | build
+  when: state == 'present'
+  block:
+
+    - name: Render PPK
+      ansible.builtin.set_fact:
+        nc_label: "PPK {{ pq_ppk_id }} toward {{ my_peers | map(attribute='name') | join(', ') }}"
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'ppk.xml.j2') }}"
+
+    - name: Push PPK
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    # Gated, because "clear crypto ikev2 sa" is an action and an action task is
+    # always "changed". Unconditional, it alone made changed=0 impossible on a
+    # second run, and it drops every tunnel on the box while it is at it. Fire it
+    # only when the push above really moved something.
+    - name: Force renegotiation so the new key schedule is used
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: clear-ikev2-sa
+      when: netconf_edit_result.changed | default(false)
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config
+
+# --- Teardown ----------------------------------------------------------------
+#
+# Removes the ppk container from each keyring peer and the "keyring ppk" reference
+# from each profile, leaving the classical tunnel intact. This is the teardown that
+# has to work for the PPK -> ML-KEM -> PPK round trip.
+- name: PPK | tear down
+  when: state == 'absent'
+  block:
+
+    - name: Render PPK removal
+      ansible.builtin.set_fact:
+        nc_label: remove PPK
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'ppk.xml.j2') }}"
+
+    - name: Push PPK removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    # Same gate as the build side. A repeated teardown has nothing to remove, so it
+    # has no business tearing every SA on the box down again.
+    - name: Force renegotiation so the tunnel drops back to classical keying
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: clear-ikev2-sa
+      when: netconf_edit_result.changed | default(false)
+
+    # Unconditional, and deliberately after the SA clear. The whole point is to
+    # read the box rather than to trust the reply, so it runs even when the edit
+    # reported no change: "nothing to remove" and "the remove was ignored" look
+    # identical from here, and only the show output tells them apart.
+    - name: Verify the teardown actually happened
+      ansible.builtin.include_tasks: verify-teardown.yml
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config

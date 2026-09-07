@@ -1,0 +1,46 @@
+{#
+  The local IOS certificate server.
+
+  /native/crypto/pki/server[name]/database/archive        (absent = "no database archive")
+  /native/crypto/pki/server[name]/grant/auto/auto-alone
+  /native/crypto/pki/server[name]/eku/{server-auth,client-auth}
+
+  Both EKUs are load-bearing, not belt and braces. Each router is simultaneously a
+  TLS client (its supplicant role) and a TLS server (its authenticator role), and
+  it presents the same certificate for both. A certificate with only client-auth
+  authenticates one direction and fails the other, and you cannot fix that after
+  issuance without re-enrolling.
+
+  "grant auto" is what makes the whole enrollment non-interactive: with it, IOS XE
+  26.2 asks nothing at all during "crypto pki enroll". No challenge password, no
+  serial-number question, no final confirmation. It is also completely
+  inappropriate outside a lab, since the CA signs whatever asks.
+
+  What is NOT here: enabling the server. shutdown-config defaults to true and the
+  model carries no leaf for the passphrase that "no shutdown" demands, so that step
+  has to go over the CLI. See the comment in ios-ca.yml.
+-#}
+{% set op = ' nc:operation="remove"' if state == 'absent' else '' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <pki xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <server{{ op }}>
+          <name>{{ pki_names.ca_server }}</name>
+{% if state == 'present' %}
+          <grant>
+            <auto>
+              <auto-alone/>
+            </auto>
+          </grant>
+          <eku>
+            <server-auth/>
+            <client-auth/>
+          </eku>
+{% endif %}
+        </server>
+      </pki>
+    </crypto>
+  </native>
+</config>

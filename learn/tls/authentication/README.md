@@ -338,8 +338,9 @@ So just like the IKEv2 story, the building blocks are here and worth getting han
 
 ---
 
-**On real hardware:**
-[IOS XE 26.1](../../../deploy/ios-xe/tls.md#tls-authentication-not-covered) has neither half
-of PQ TLS on its management plane (no ML-KEM key exchange, so no ML-DSA certificates
-either. Where TLS *does* go post-quantum on that platform is inside EAP-TLS, which the
-[MACsec lab](../../macsec/README.md) covers.
+**On real hardware:** the two halves moved at different speeds.
+[IOS XE 26.2](../../../deploy/ios-xe/tls.md#tls-authentication-still-classical) negotiates
+X25519MLKEM768 on its management HTTPS server by default, so the key exchange half is
+done, but the server certificate is still classical RSA and there's no ML-DSA equivalent
+of what you just built. TLS also goes post-quantum on that platform inside EAP-TLS, which
+the [MACsec lab](../../macsec/README.md) covers.

@@ -1,0 +1,669 @@
+### TAG=phaseA-run2-mldsa
+### CMD=ansible-playbook ipsec-pq-mldsa.yml
+### START=2026-09-01T09:20:03Z
+
+PLAY [Swap IKEv2 authentication to ML-DSA, one router at a time] ***************
+
+TASK [ipsec_pq_mldsa : ML-DSA | sanity] ****************************************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | offline certificate authority on the control node] ***
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/workstation-ca.yml for r2
+
+TASK [ipsec_pq_mldsa : CA | OpenSSL must expose ML-DSA natively] ***************
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | assert the parameter set is actually available] ****
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | directory] *****************************************
+ok: [r2 -> localhost] => (item=/Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca)
+ok: [r2 -> localhost] => (item=/Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca/state)
+
+TASK [ipsec_pq_mldsa : CA | private key (ML-DSA-65)] ***************************
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | lock the private key down] *************************
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | self-signed root certificate] **********************
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | MD5 fingerprint of the CA certificate, the way IOS computes it] ***
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | record the fingerprint for the trustpoints to pin] ***
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | summary] *******************************************
+ok: [r2 -> localhost] => {
+    "msg": "ML-DSA-65 root CA at /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca/pqc-lab-mldsa65-ca.crt, fingerprint C71F84AF7C959E3B22D7A2B1CE46BAC9. Private key /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca/pqc-lab-mldsa65-ca-key.pem (0600, gitignored, never leaves the control node)."
+}
+
+TASK [ipsec_pq_mldsa : ML-DSA | pick up the CA fingerprint to pin] *************
+ok: [r2]
+[WARNING]: ansible-pylibssh not installed, falling back to paramiko
+
+TASK [ipsec_pq_mldsa : ML-DSA | read the prior "service internal" setting] *****
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | record it so teardown can restore it] **********
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | enable service internal] ***********************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | enrol an identity certificate] *****************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/enroll.yml for r2
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | look for an existing key] *****************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | render the trustpoint] ********************
+ok: [r2]
+
+TASK [ML-DSA | r2 | push the trustpoint] ***************************************
+included: common for r2
+
+TASK [common : NETCONF edit-config | trustpoint PQAUTO-MLDSA65 (ML-DSA-65, enrollment terminal)] ***
+changed: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | remember whether the trustpoint moved] ****
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | what is already in the trustpoint?] *******
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | classify what is present] *****************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | authenticate the CA (paste the root)] *****
+changed: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | the CA must have been accepted] ***********
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | generate the CSR on the box] **************
+changed: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | extract the PKCS#10] **********************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | the CSR must actually be a CSR] ***********
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | bring the CSR back to the control node] ***
+changed: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | extensions for the signature] *************
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | sign it with the offline ML-DSA CA] *******
+changed: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | the issued certificate must be ML-DSA and carry the identity] ***
+ok: [r2 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | check it before it goes near the router] ***
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | import the signed certificate] ************
+changed: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | the import must have been accepted] *******
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | verify the identity certificate] ***************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/verify-cert.yml for r2
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | read the trustpoint in full] **************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | isolate the identity certificate block] ***
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | the identity certificate is present and is ML-DSA] ***
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | the bound key is ML-DSA in the key store too] ***
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | key store agrees] *************************
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | render the authentication swap] ****************
+ok: [r2]
+
+TASK [ML-DSA | push the authentication swap] ***********************************
+included: common for r2
+
+TASK [common : NETCONF edit-config | authentication -> ML-DSA-65] **************
+changed: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | did anything actually change?] *****************
+ok: [r2]
+
+TASK [ML-DSA | force renegotiation onto the new authentication method] *********
+included: common for r2
+
+TASK [common : Clear IKEv2 SAs] ************************************************
+changed: [r2]
+FAILED - RETRYING: [r2]: common : Re-trigger the tunnel so a new SA is negotiated (5 retries left).
+
+TASK [common : Re-trigger the tunnel so a new SA is negotiated] ****************
+ok: [r2] => (item=Tunnel101 to r1)
+ok: [r2] => (item=Tunnel102 to r3)
+
+TASK [ipsec_pq_mldsa : ML-DSA | note the handshake cost] ***********************
+ok: [r2] => {
+    "msg": "ML-DSA-65 puts roughly 21 KB of certificate and signature into IKE_AUTH, spread across a dozen or more fragments. That is why ipsec-baseline sets IKE fragmentation to 1400. The SA will report a slightly smaller MTU in use because the router subtracts ESP overhead; that is expected."
+}
+
+TASK [ML-DSA | save] ***********************************************************
+included: common for r2
+
+PLAY [Swap IKEv2 authentication to ML-DSA, one router at a time] ***************
+
+TASK [ipsec_pq_mldsa : ML-DSA | sanity] ****************************************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | offline certificate authority on the control node] ***
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/workstation-ca.yml for r1
+
+TASK [ipsec_pq_mldsa : CA | OpenSSL must expose ML-DSA natively] ***************
+ok: [r1 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | assert the parameter set is actually available] ****
+ok: [r1 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | directory] *****************************************
+ok: [r1 -> localhost] => (item=/Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca)
+ok: [r1 -> localhost] => (item=/Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca/state)
+
+TASK [ipsec_pq_mldsa : CA | private key (ML-DSA-65)] ***************************
+ok: [r1 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | lock the private key down] *************************
+ok: [r1 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | self-signed root certificate] **********************
+ok: [r1 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | MD5 fingerprint of the CA certificate, the way IOS computes it] ***
+ok: [r1 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | record the fingerprint for the trustpoints to pin] ***
+ok: [r1 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | summary] *******************************************
+ok: [r1 -> localhost] => {
+    "msg": "ML-DSA-65 root CA at /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca/pqc-lab-mldsa65-ca.crt, fingerprint C71F84AF7C959E3B22D7A2B1CE46BAC9. Private key /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca/pqc-lab-mldsa65-ca-key.pem (0600, gitignored, never leaves the control node)."
+}
+
+TASK [ipsec_pq_mldsa : ML-DSA | pick up the CA fingerprint to pin] *************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | read the prior "service internal" setting] *****
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | record it so teardown can restore it] **********
+ok: [r1 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | enable service internal] ***********************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | enrol an identity certificate] *****************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/enroll.yml for r1
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | look for an existing key] *****************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | render the trustpoint] ********************
+ok: [r1]
+
+TASK [ML-DSA | r1 | push the trustpoint] ***************************************
+included: common for r1
+
+TASK [common : NETCONF edit-config | trustpoint PQAUTO-MLDSA65 (ML-DSA-65, enrollment terminal)] ***
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | remember whether the trustpoint moved] ****
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | what is already in the trustpoint?] *******
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | classify what is present] *****************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | verify the identity certificate] ***************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/verify-cert.yml for r1
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | read the trustpoint in full] **************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | isolate the identity certificate block] ***
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | the identity certificate is present and is ML-DSA] ***
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | the bound key is ML-DSA in the key store too] ***
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r1 | key store agrees] *************************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | render the authentication swap] ****************
+ok: [r1]
+
+TASK [ML-DSA | push the authentication swap] ***********************************
+included: common for r1
+
+TASK [common : NETCONF edit-config | authentication -> ML-DSA-65] **************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | did anything actually change?] *****************
+ok: [r1]
+
+TASK [ipsec_pq_mldsa : ML-DSA | note the handshake cost] ***********************
+ok: [r1] => {
+    "msg": "ML-DSA-65 puts roughly 21 KB of certificate and signature into IKE_AUTH, spread across a dozen or more fragments. That is why ipsec-baseline sets IKE fragmentation to 1400. The SA will report a slightly smaller MTU in use because the router subtracts ESP overhead; that is expected."
+}
+
+TASK [ML-DSA | save] ***********************************************************
+included: common for r1
+
+PLAY [Swap IKEv2 authentication to ML-DSA, one router at a time] ***************
+
+TASK [ipsec_pq_mldsa : ML-DSA | sanity] ****************************************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | offline certificate authority on the control node] ***
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/workstation-ca.yml for r3
+
+TASK [ipsec_pq_mldsa : CA | OpenSSL must expose ML-DSA natively] ***************
+ok: [r3 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | assert the parameter set is actually available] ****
+ok: [r3 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | directory] *****************************************
+ok: [r3 -> localhost] => (item=/Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca)
+ok: [r3 -> localhost] => (item=/Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca/state)
+
+TASK [ipsec_pq_mldsa : CA | private key (ML-DSA-65)] ***************************
+ok: [r3 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | lock the private key down] *************************
+ok: [r3 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | self-signed root certificate] **********************
+ok: [r3 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | MD5 fingerprint of the CA certificate, the way IOS computes it] ***
+ok: [r3 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | record the fingerprint for the trustpoints to pin] ***
+ok: [r3 -> localhost]
+
+TASK [ipsec_pq_mldsa : CA | summary] *******************************************
+ok: [r3 -> localhost] => {
+    "msg": "ML-DSA-65 root CA at /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca/pqc-lab-mldsa65-ca.crt, fingerprint C71F84AF7C959E3B22D7A2B1CE46BAC9. Private key /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/.lab-ca/pqc-lab-mldsa65-ca-key.pem (0600, gitignored, never leaves the control node)."
+}
+
+TASK [ipsec_pq_mldsa : ML-DSA | pick up the CA fingerprint to pin] *************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | read the prior "service internal" setting] *****
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | record it so teardown can restore it] **********
+ok: [r3 -> localhost]
+
+TASK [ipsec_pq_mldsa : ML-DSA | enable service internal] ***********************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | enrol an identity certificate] *****************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/enroll.yml for r3
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | look for an existing key] *****************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | render the trustpoint] ********************
+ok: [r3]
+
+TASK [ML-DSA | r3 | push the trustpoint] ***************************************
+included: common for r3
+
+TASK [common : NETCONF edit-config | trustpoint PQAUTO-MLDSA65 (ML-DSA-65, enrollment terminal)] ***
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | remember whether the trustpoint moved] ****
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | what is already in the trustpoint?] *******
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | classify what is present] *****************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | verify the identity certificate] ***************
+included: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mldsa/tasks/verify-cert.yml for r3
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | read the trustpoint in full] **************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | isolate the identity certificate block] ***
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | the identity certificate is present and is ML-DSA] ***
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | the bound key is ML-DSA in the key store too] ***
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r3 | key store agrees] *************************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | render the authentication swap] ****************
+ok: [r3]
+
+TASK [ML-DSA | push the authentication swap] ***********************************
+included: common for r3
+
+TASK [common : NETCONF edit-config | authentication -> ML-DSA-65] **************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | did anything actually change?] *****************
+ok: [r3]
+
+TASK [ipsec_pq_mldsa : ML-DSA | note the handshake cost] ***********************
+ok: [r3] => {
+    "msg": "ML-DSA-65 puts roughly 21 KB of certificate and signature into IKE_AUTH, spread across a dozen or more fragments. That is why ipsec-baseline sets IKE fragmentation to 1400. The SA will report a slightly smaller MTU in use because the router subtracts ESP overhead; that is expected."
+}
+
+TASK [ML-DSA | save] ***********************************************************
+included: common for r3
+
+PLAY [Confirm ML-DSA is what actually authenticated the tunnels] ***************
+
+TASK [Operational proof] *******************************************************
+included: ipsec_pq_mldsa for r2, r1, r3
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | wait for an IKEv2 SA authenticated by ML-DSA] ***
+ok: [r3]
+ok: [r1]
+ok: [r2]
+
+TASK [ipsec_pq_mldsa : ML-DSA | r2 | report the authenticated SAs] *************
+ok: [r2] => {
+    "msg": [
+        "Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: MLDSA, Auth verify: MLDSA",
+        "Local spi: 3E5CEC3A442245FB       Remote spi: CCE20FB753770BF2",
+        "Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: MLDSA, Auth verify: MLDSA",
+        "Local spi: F80DC75A09692A0E       Remote spi: 63428F240E8FCD4F"
+    ]
+}
+ok: [r1] => {
+    "msg": [
+        "Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: MLDSA, Auth verify: MLDSA",
+        "Local spi: 63428F240E8FCD4F       Remote spi: F80DC75A09692A0E"
+    ]
+}
+ok: [r3] => {
+    "msg": [
+        "Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: MLDSA, Auth verify: MLDSA",
+        "Local spi: CCE20FB753770BF2       Remote spi: 3E5CEC3A442245FB"
+    ]
+}
+
+PLAY [Report the post-quantum posture] *****************************************
+
+TASK [Verify | negotiated ML-KEM group per IKEv2 SA] ***************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 SA operational data] ************************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [verify : Verify | record the negotiated groups] **************************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [Verify | PPK quantum-resistance counters] ********************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 statistics] *********************************
+ok: [r2]
+ok: [r3]
+ok: [r1]
+
+TASK [verify : Verify | record the PPK counters as YANG reports them] **********
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [verify : Verify | IKEv2 signature algorithm and PPK counters (show parsing, see comment)] ***
+ok: [r3]
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the signature algorithms] ***********************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [verify : Verify | record the PPK counters as the CLI reports them] *******
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | SSH key exchange algorithms] ************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip ssh server algorithm kex] **********************
+ok: [r2]
+ok: [r3]
+ok: [r1]
+
+TASK [verify : Verify | record the SSH posture] ********************************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [Verify | HTTPS PQC type] *************************************************
+included: common for r1, r2, r3
+
+TASK [common : NETCONF get | ip http secure-pqc-type] **************************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [verify : Verify | record the HTTPS posture] ******************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | access-session PQ settings] *************************************
+included: common for r2, r1
+
+TASK [common : NETCONF get | access-session pqc-type / tls-version] ************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the access-session settings] ********************
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | MKA and MACsec state (show parsing, see comment)] ******
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | record the MACsec state] *******************************
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | PQ posture] ********************************************
+ok: [r2] => {
+    "msg": {
+        "host": "r2",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": true,
+            "ike_sa_count": 2,
+            "negotiated_pqc_group": [
+                "pqc-gt-none",
+                "pqc-gt-none"
+            ],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": [
+                "MLDSA",
+                "MLDSA"
+            ]
+        },
+        "macsec": {
+            "cipher": "(none)",
+            "ckn": "(none)",
+            "mka_secured_sessions": "0",
+            "out_pkts_encrypted": "0",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": false
+        },
+        "ssh": {
+            "hostkey": [],
+            "kex_offer_order": []
+        }
+    }
+}
+ok: [r1] => {
+    "msg": {
+        "host": "r1",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": true,
+            "ike_sa_count": 1,
+            "negotiated_pqc_group": [
+                "pqc-gt-none"
+            ],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": [
+                "MLDSA"
+            ]
+        },
+        "macsec": {
+            "cipher": "(none)",
+            "ckn": "(none)",
+            "mka_secured_sessions": "0",
+            "out_pkts_encrypted": "0",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": false
+        },
+        "ssh": {
+            "hostkey": [
+                "rsa-sha2-512",
+                "rsa-sha2-256"
+            ],
+            "kex_offer_order": [
+                "mlkem768x25519-sha256",
+                "mlkem768nistp256-sha256",
+                "curve25519-sha256",
+                "ecdh-sha2-nistp256"
+            ]
+        }
+    }
+}
+ok: [r3] => {
+    "msg": {
+        "host": "r3",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": true,
+            "ike_sa_count": 1,
+            "negotiated_pqc_group": [
+                "pqc-gt-none"
+            ],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": [
+                "MLDSA"
+            ]
+        },
+        "macsec": "not on the MACsec link",
+        "ssh": {
+            "hostkey": [
+                "rsa-sha2-512",
+                "rsa-sha2-256"
+            ],
+            "kex_offer_order": []
+        }
+    }
+}
+
+PLAY RECAP *********************************************************************
+r1                         : ok=59   changed=0    unreachable=0    failed=0    skipped=39   rescued=0    ignored=0   
+r2                         : ok=74   changed=8    unreachable=0    failed=0    skipped=26   rescued=0    ignored=0   
+r3                         : ok=54   changed=0    unreachable=0    failed=0    skipped=43   rescued=0    ignored=0   
+
+### END=2026-09-01T09:23:24Z
+### RC=0

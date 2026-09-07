@@ -1,0 +1,109 @@
+---
+# The lab topology as data.
+#
+# This is tracked, not gitignored, because the topology is fixed by the repo: the
+# addresses below are the ones in ../README.md and in device-configs/. Your
+# management addresses are the only thing that varies, and those live in lab.yml.
+#
+# The underlay (VLANs, SVIs, static routes) is a PRECONDITION. Nothing in this
+# automation layer configures it. Build it by hand from ipsec.md Exercise 1, or
+# from the device configs, before you run anything here.
+#
+#   R1 Vlan12 10.0.12.1 ---- 10.0.12.2 Vlan12 R2 Vlan23 10.0.23.1 ---- 10.0.23.2 Vlan23 R3
+#
+# Hub and spoke: R2 is the hub and terminates one tunnel per spoke. That
+# asymmetry (one IKEv2 profile and one IPsec profile per spoke on the hub, one of
+# each on a spoke) is exactly the hand repetition the per-peer loops in the roles
+# exist to absorb, so it is expressed once, here, as a list.
+#
+# WHY THE TUNNEL NUMBERS START AT 101.
+#
+# tunnel_id is used verbatim as the interface number, and teardown runs
+# "no interface Tunnel<id>", which takes the whole interface with it. The
+# hand-driven exercises build Tunnel0, Tunnel1 and Tunnel2 (see ../ipsec.md and
+# device-configs/R1-mldsa.txt, R2-mldsa-hub.txt, R3-mldsa.txt), so numbering these
+# 1 and 2 meant "ipsec-baseline.yml -e state=absent" deleted the reader's own
+# tunnels. 101 and 102 are out of that range and line up with the 192.168.101.0/24
+# and 192.168.102.0/24 overlays below.
+
+lab_topology:
+
+  r1:
+    # Spoke. One leg, toward the hub.
+    underlay_interface: Vlan12
+    underlay_address: 10.0.12.1
+    peers:
+      - name: r2
+        role: hub
+        tunnel_id: 101
+        tunnel_address: 192.168.101.1
+        tunnel_mask: 255.255.255.0
+        source_interface: Vlan12
+        local_address: 10.0.12.1
+        remote_address: 10.0.12.2
+
+  r2:
+    # Hub. Two legs, one per spoke, each with its own source interface and its
+    # own local identity address.
+    underlay_interface: Vlan12
+    underlay_address: 10.0.12.2
+    peers:
+      - name: r1
+        role: spoke
+        tunnel_id: 101
+        tunnel_address: 192.168.101.2
+        tunnel_mask: 255.255.255.0
+        source_interface: Vlan12
+        local_address: 10.0.12.2
+        remote_address: 10.0.12.1
+      - name: r3
+        role: spoke
+        tunnel_id: 102
+        tunnel_address: 192.168.102.1
+        tunnel_mask: 255.255.255.0
+        source_interface: Vlan23
+        local_address: 10.0.23.1
+        remote_address: 10.0.23.2
+
+  r3:
+    # Spoke. One leg, toward the hub.
+    underlay_interface: Vlan23
+    underlay_address: 10.0.23.2
+    peers:
+      - name: r2
+        role: hub
+        tunnel_id: 102
+        tunnel_address: 192.168.102.2
+        tunnel_mask: 255.255.255.0
+        source_interface: Vlan23
+        local_address: 10.0.23.2
+        remote_address: 10.0.23.1
+
+# Convenience handles so roles read as "my peers" rather than as a dict lookup.
+# group_vars are templated lazily, so inventory_hostname resolves per host.
+my_topology: "{{ lab_topology[inventory_hostname] | default({}) }}"
+my_peers: "{{ lab_topology[inventory_hostname].peers | default([]) }}"
+
+# --- MACsec ------------------------------------------------------------------
+#
+# MACsec is hop-by-hop, so it needs a direct physical link. In these labs that is
+# the R1 to R2 wire, Tw0/0/0 on both ends, access VLAN 12.
+macsec_interface:
+  r1: TwoGigabitEthernet0/0/0
+  r2: TwoGigabitEthernet0/0/0
+
+my_macsec_interface: "{{ macsec_interface[inventory_hostname] | default('') }}"
+
+# R2 hosts the local IOS certificate server for the EAP-TLS path, reachable over
+# its Vlan12 address. SCEP rides the IOS HTTP server, so port 80 and
+# "ip http server" have to be up on the CA.
+macsec_ca_host: r2
+macsec_ca_url: "http://10.0.12.2:80"
+
+# The identity each router presents. It has to match the certificate CN, because
+# that CN is what EAP sends as its identity and what "dot1x credentials" claims.
+macsec_identity:
+  r1: R1
+  r2: R2
+
+my_macsec_identity: "{{ macsec_identity[inventory_hostname] | default(inventory_hostname | upper) }}"

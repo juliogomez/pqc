@@ -1,0 +1,144 @@
+---
+# The post-quantum posture of the whole lab, in one file.
+#
+# This is the file to read if you only read one. Every PQ decision the nine
+# playbooks make comes from here, and every one of these values lands in exactly
+# one YANG leaf on the router. Change a value, re-run the playbook, and the
+# posture changes. You should never have to open an XML template.
+#
+# Everything below was verified on IOS XE 26.02.01eftr2 on a C8235-G2.
+
+# --- IKEv2 key exchange (ML-KEM, RFC 9370 additional key exchange) ----------
+#
+# Which ML-KEM parameter set the IKEv2 proposal offers. This is one leaf of type
+# empty inside the "pqc" container under the proposal, so exactly one of these
+# names is valid:
+#
+#   mlkem512   NIST category 1. Cisco models it, NIST guidance treats it as the
+#              deliberate-downgrade option. Don't pick it by accident.
+#   mlkem768   NIST category 3. The baseline everyone converged on. Default.
+#   mlkem1024  NIST category 5. Costs more handshake bytes for margin you
+#              probably can't justify.
+#
+# The value is used verbatim as the YANG leaf name, so it has to match the
+# schema spelling.
+pq_key_exchange: mlkem768
+
+# Whether ML-KEM is negotiated opportunistically or demanded.
+#
+#   true   -> "pqc mlkem768 optional". The peer gets ML-KEM if it can do it and
+#            falls back to classical DH if it can't. This is what makes a
+#            hub-first rollout painless, and it is also how you silently lose
+#            your post-quantum protection without a single syslog message.
+#   false  -> no "optional" keyword. A peer that can't do ML-KEM is refused.
+#
+# Start at true while you migrate, flip to false once every peer is upgraded.
+pq_key_exchange_optional: true
+
+# IKEv2 fragmentation MTU. Not tuning, a hard requirement.
+#
+# ML-KEM-768 alone puts a 1,184-byte encapsulation key in an IKE_INTERMEDIATE
+# exchange, and ML-DSA-65 pushes IKE_AUTH to roughly 20 KB across 16 frames.
+# Without fragmentation the handshake never completes. The SA will report a
+# slightly smaller MTU in use (1372 for 1400) because the router subtracts ESP
+# overhead; that is expected, not a bug.
+pq_ike_fragmentation_mtu: 1400
+
+# --- IKEv2 authentication (ML-DSA, FIPS 204) ---------------------------------
+#
+# ML-DSA parameter set for the identity certificate. Maps straight to the
+# "parameter-set" leaf under the trustpoint's mldsakeypair container, whose YANG
+# range is literally "44 | 65 | 87".
+#
+#   44  category 2, ~15 KB of IKE_AUTH
+#   65  category 3, ~21 KB of IKE_AUTH.  Default, matches the container labs.
+#   87  category 5, ~28 KB of IKE_AUTH
+#
+# Flip this and the trustpoint name, the on-box key label and the signature
+# strength all move together.
+pq_signature_param_set: 65
+
+# 26.2 generates ML-DSA keys on the box. This is exec-mode only
+# ("crypto key generate mldsa param 65 label WORD"); config mode still shows
+# just ec and rsa, which is why the repo docs say it can't be done. It can.
+#
+# Keys are non-exportable unless you ask otherwise, and non-exportable is the
+# right answer for an identity key, so leave this false.
+pq_signature_key_exportable: false
+
+# On 26.2.1 the ML-DSA trustpoint CLI is gated behind "service internal": the
+# "mldsakeypair" line does not even parse without it. That is a debug-only
+# global you do not want left on a real box, so the ML-DSA role adds it and the
+# teardown removes it. Set false once your build no longer needs it.
+pq_signature_requires_service_internal: true
+
+# --- SSH key exchange -------------------------------------------------------
+#
+# Ordered preference list for "ip ssh server algorithm kex". The YANG leaf-list
+# is "ordered-by user", so this order is the server's offer order. Push the whole
+# list as one replace so the order is deterministic instead of whatever merge
+# order the box picks. The client still picks the negotiated KEX from the overlap;
+# a default OpenSSH login often stays on ecdh-sha2-nistp256 even with ML-KEM first
+# here. Force the hybrid from the client with -o KexAlgorithms=mlkem768x25519-sha256.
+#
+# 26.2 offers three hybrids and no pure ML-KEM, which is the right call: a break
+# in either half still leaves you the other. The two classical entries are the
+# fallback for clients that have never heard of ML-KEM.
+pq_ssh_kex:
+  - mlkem768x25519-sha256
+  - mlkem768nistp256-sha256
+  - curve25519-sha256
+  - ecdh-sha2-nistp256
+
+# Pin the SSH host key algorithms. This is not a PQ setting, it is the thing
+# that stops importing an EC keypair from locking you out of the box: the server
+# starts advertising ecdsa-sha2-nistp256 and then fails every handshake that
+# selects it. Pin it before you import anything.
+pq_ssh_hostkey:
+  - rsa-sha2-512
+  - rsa-sha2-256
+
+# --- MACsec / EAP-TLS -------------------------------------------------------
+#
+# "access-session pqc-type", which steers the key exchange inside the EAP-TLS
+# TLS 1.3 handshake. Four values, and the naming is misleading:
+#
+#   pqc      pure mode, lands on ML-KEM-512. The *weaker* PQ choice here.
+#   hybrid   x448 + ML-KEM-768. Strongest, and it fails closed: a peer that
+#            can't do ML-KEM is refused instead of downgraded. Default.
+#   non-pqc  classical secp521r1. Troubleshooting only.
+#   all      behaves like hybrid between two IOS XE peers, but silently drops
+#            to secp521r1 against a non-PQ peer and still reports "Secured".
+#            Only pick this if you have consciously decided that a link coming
+#            up matters more than that link being post-quantum.
+pq_macsec_type: hybrid
+
+# "access-session tls-version". Pin 1.3, because ML-KEM in EAP-TLS only exists
+# in the TLS 1.3 handshake. The shipped default is "all".
+pq_macsec_tls_version: "1.3"
+
+# --- Management HTTPS -------------------------------------------------------
+#
+# "ip http secure-pqc-type". Same four values as the MACsec knob and the same
+# meanings. 26.2 ships "all" and already negotiates X25519MLKEM768 with no
+# configuration at all, so setting this is about making the posture explicit and
+# about being able to prove the knob does something.
+#
+# Use "pqc" if you want the management interface to fail closed rather than fall
+# back to a classical group.
+pq_https_pqc_type: all
+
+# --- RFC 8784 post-quantum pre-shared key -----------------------------------
+#
+# The "no new primitives" answer: mix an out-of-band secret into the IKEv2 key
+# schedule so a broken DH exchange doesn't hand over the session keys. The key
+# itself lives in lab.yml (lab_ppk_hex); only the shape of the deployment is
+# here.
+#
+# PPK ID must match on both ends. Both peers of a pair use the same ID.
+pq_ppk_id: PPK-LAB
+
+# "required" means the tunnel will not come up without PPK. Leave it true: the
+# whole point is that a peer without the PPK gets refused, not quietly accepted
+# with classical-only key derivation.
+pq_ppk_required: true

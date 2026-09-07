@@ -1,0 +1,24 @@
+---
+# How long to wait for the NETCONF subsystem after enabling it.
+#
+# Measured on a C8235-G2 running 26.02.01eftr2, from the moment "netconf-yang"
+# was accepted:
+#
+#   t+75s    port 830 closed, RESTCONF returns HTTP 502
+#   t+105s   port 830 closed, RESTCONF returns HTTP 502
+#   t+135s   port 830 OPEN,   RESTCONF returns HTTP 200
+#
+# So a fail-fast check is guaranteed to report a broken box that is merely
+# starting up. Wait, don't fail fast. 300s gives roughly double the measured
+# time, which covers a loaded box.
+bootstrap_netconf_wait_seconds: 300
+bootstrap_netconf_poll_seconds: 15
+
+# Whether to enable RESTCONF alongside NETCONF. Nothing in this layer drives
+# RESTCONF, but it costs one line and it is the other half of the standards story
+# (RFC 8040 over the same YANG), so it is on by default.
+#
+# Worth recording because the 26.1 research said otherwise: neither netconf-yang
+# nor restconf needs "system mode insecure" on 26.2. Verified on a box that has
+# no such line.
+bootstrap_enable_restconf: true

@@ -1,0 +1,72 @@
+---
+# Post-quantum SSH key exchange on the management plane.
+#
+# The one place in this lab where the post-quantum change is on the connection you are
+# using to make the change. Worth a moment's respect: get the algorithm list wrong and
+# the next handshake fails, and the next handshake is Ansible's.
+#
+# Idempotent. The push is a replace of two ordered leaf-lists with the same contents, so
+# a second run is a no-op.
+
+- name: SSH PQ | sanity
+  ansible.builtin.assert:
+    that:
+      - pq_ssh_kex | length > 0
+      - pq_ssh_hostkey | length > 0
+      - pq_ssh_kex | select('match', '^mlkem') | list | length > 0
+    fail_msg: >-
+      pq_ssh_kex must be a non-empty ordered list containing at least one ML-KEM hybrid,
+      and pq_ssh_hostkey must be non-empty. Both are in group_vars/all/pqc.yml.
+    quiet: true
+
+# The guard that matters. This list becomes the ONLY thing the server will negotiate, so
+# if it holds nothing your SSH client can do, the next connection fails and you are
+# reaching for the console cable. 26.2 offers ML-KEM hybrids that OpenSSH 9.x and later
+# support, but an older client on the control node knows none of them.
+#
+# Override with -e ssh_pq_allow_no_fallback=true if you genuinely want a server that only
+# talks post-quantum, and have checked your client first with "ssh -Q kex".
+- name: SSH PQ | insist on a classical fallback
+  ansible.builtin.assert:
+    that:
+      - (pq_ssh_kex | reject('match', '^mlkem') | list | length > 0)
+        or (ssh_pq_allow_no_fallback | default(false) | bool)
+    fail_msg: >-
+      pq_ssh_kex contains only ML-KEM hybrids. That list replaces what the server will
+      negotiate, so a control node whose SSH client does not know these algorithms loses
+      access to the box, including the access this playbook needs to undo it. Check with
+      "ssh -Q kex" on your control node, then either add a classical entry or pass
+      -e ssh_pq_allow_no_fallback=true to accept the risk.
+    quiet: true
+  when: state == 'present'
+
+- name: SSH PQ | render
+  ansible.builtin.set_fact:
+    nc_label: >-
+      {{ (state == 'present')
+         | ternary('SSH kex order: ' ~ (pq_ssh_kex | join(', ')),
+                   'SSH kex and hostkey back to platform defaults') }}
+    nc_operation: merge
+    nc_payload: "{{ lookup('template', 'ssh-pq.xml.j2') }}"
+
+# default_operation stays merge even for the teardown, because the removal is expressed
+# per node with nc:operation="remove" inside the payload. The parents on the way down
+# (ip, ssh, server, algorithm) must not be touched.
+- name: SSH PQ | push
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: netconf-edit
+
+- name: SSH PQ | note when this takes effect
+  ansible.builtin.debug:
+    msg: >-
+      Server KEX offer order is now {{ pq_ssh_kex | join(', ') }}. Your laptop's
+      next ssh -vv should show that list from the router; NEGOTIATED may still be
+      ecdh-sha2-nistp256 unless you force -o KexAlgorithms={{ pq_ssh_kex | first }}.
+      Ansible's network_cli session is unrelated to this handshake.
+  when: state == 'present'
+
+- name: SSH PQ | save
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: save-config

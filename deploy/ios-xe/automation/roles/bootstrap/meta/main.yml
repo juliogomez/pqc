@@ -1,0 +1,17 @@
+---
+# roles/common is this layer's shared library. Its defaults (state, netconf_port,
+# save_config, and the two blast-radius regexes) have to be in scope BEFORE the
+# first task runs, because tasks/main.yml gates its whole block on
+# "when: state == 'present'".
+#
+# include_role loads a role's defaults only from the point of inclusion onward,
+# and the include of common lives *inside* that block, so relying on it left
+# 'state' undefined and the play died before doing anything:
+#
+#   A 'when' expression failed: Error while evaluating conditional:
+#   'state' is undefined
+#
+# Declaring the dependency loads common's defaults ahead of this role while
+# still letting -e state=absent win, since extra vars outrank role defaults.
+dependencies:
+  - role: common

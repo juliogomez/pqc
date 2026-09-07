@@ -1,0 +1,60 @@
+---
+# Run one interactive command with an explicit, named prompt handler.
+#
+# READ THIS BEFORE ADDING A TASK THAT ANSWERS A CONFIRMATION.
+#
+# A blanket "answer yes to anything that looks like a question" handler destroyed a
+# router in this lab. So the rule here is absolute: every interactive command names
+# the exact prompt text it expects and the exact answer for that prompt. If the
+# router asks something that was not listed, nothing is sent, the command times out,
+# and the play fails. Failing is the correct outcome. Guessing is not.
+#
+# Callers pass:
+#   exec_label         short human name for the task line
+#   exec_command       the one command that prompts
+#   exec_prompt        list of regexes, one per expected prompt, in order
+#   exec_answer        list of answers, same order, same length
+#   exec_check_all     true if every listed prompt must appear, in order
+#   exec_pre_commands  optional commands to send first (e.g. entering config mode)
+#   exec_post_commands optional commands to send after (e.g. "end")
+#
+# The pre/post commands exist because some prompting commands live in config mode,
+# and no module can both enter config mode and handle a prompt. They are sent with
+# sendonly, so they never consume the prompt we are waiting for.
+#
+# Every caller also carries a comment naming the literal prompt string it is
+# matching, so you can check the regex against real router output without running
+# anything.
+
+- name: "Guard | {{ exec_label }} has one answer per prompt"
+  ansible.builtin.assert:
+    that:
+      - exec_prompt | length > 0
+      - exec_prompt | length == exec_answer | length
+    fail_msg: >-
+      Prompt and answer lists for "{{ exec_label }}" must be the same length. A
+      mismatch means some prompt would get an answer meant for a different question,
+      which is exactly the failure mode this wrapper exists to stop.
+    quiet: true
+
+- name: "Exec | {{ exec_label }} | setup"
+  ansible.netcommon.cli_command:
+    command: "{{ item }}"
+    sendonly: true
+  loop: "{{ exec_pre_commands | default([]) }}"
+  changed_when: false
+
+- name: "Exec (strict prompt) | {{ exec_label }}"
+  ansible.netcommon.cli_command:
+    command: "{{ exec_command }}"
+    prompt: "{{ exec_prompt }}"
+    answer: "{{ exec_answer }}"
+    check_all: "{{ exec_check_all | default(false) }}"
+  register: exec_with_prompt_result
+
+- name: "Exec | {{ exec_label }} | teardown"
+  ansible.netcommon.cli_command:
+    command: "{{ item }}"
+    sendonly: true
+  loop: "{{ exec_post_commands | default([]) }}"
+  changed_when: false

@@ -1,0 +1,204 @@
+---
+# MACsec with a pre-shared key. Quantum-safe by having no key exchange at all.
+#
+# This is the honest baseline for MACsec: there is nothing for a quantum computer to
+# break, because nothing is negotiated. The CAK is typed in at both ends and MKA
+# derives the per-frame key from it. Also the reason it is a dead end: one static
+# secret on two routers, no forward secrecy, and if it leaks every frame past and
+# future is readable until someone rotates it by hand.
+#
+# STANDALONE DEAD END. macsec-pq stacks on macsec-eaptls, not on this. Tear this down
+# before building the EAP-TLS path, or the port carries two conflicting key sources.
+#
+# NOT IDEMPOTENT on teardown, and this is the second of the two places in the layer
+# where that is true. Removing "macsec network-link" from a live interface drops the
+# secure channel immediately, and IOS XE will not let you change the MACsec mode
+# in place: you have to take it off before you can put a different one on. So the
+# teardown genuinely changes the state of the wire, and running it twice is not the
+# same as running it once (the second run has nothing to remove and the link is
+# already down).
+#
+# THE BUILD DIRECTION IS IDEMPOTENT, AND IT COSTS SOMETHING. Read the comment on
+# "Look for an existing key chain" below before you change anything here.
+
+- name: MACsec PSK | sanity
+  ansible.builtin.assert:
+    that:
+      - my_macsec_interface | length > 0
+      - lab_macsec_cak | default('') | length > 0
+      - lab_macsec_cak is match('^[0-9A-Fa-f]+$')
+      - (lab_macsec_cak | length) == ((macsec_key_algorithm == 'aes-256-cmac') | ternary(64, 32))
+    fail_msg: >-
+      lab_macsec_cak must be hex and exactly
+      {{ (macsec_key_algorithm == 'aes-256-cmac') | ternary(64, 32) }} characters for
+      {{ macsec_key_algorithm }}, and the same value on both ends. Generate one with
+      "openssl rand -hex 32". It IS the CAK, so keep it out of git.
+    quiet: true
+
+- name: MACsec PSK | build
+  when: state == 'present'
+  block:
+
+    # WHY THIS PROBE EXISTS. Re-running this unit used to FAIL, not merely report a
+    # spurious change, and the failure was ugly to read:
+    #
+    #   inconsistent value: Device refused one or more commands
+    #   <bad-command>key-string 7 1234...</bad-command>
+    #   <parser-response>Rejecting: Key must consist of hex digits</parser-response>
+    #
+    # The box stores the CAK encrypted. Once it has, the running config reads
+    # "key-string 7 <type-7 blob>", and the NETCONF-to-CLI layer renders our
+    # PLAINTEXT hex against the "7" it finds on the existing leaf. The "7" is not in
+    # our payload; the box adds it. "key-string 7 <plaintext hex>" is then rejected
+    # by the parser, so the very first edit dies before the interface task is even
+    # reached. Isolated with three separate ncclient edits against R1: the MKA policy
+    # re-pushes fine, the key chain without a key-string re-pushes fine, the key
+    # chain WITH the plaintext key-string is refused. The interface half is
+    # idempotent on its own.
+    #
+    # So: push the key-string exactly once, on the run that creates the key chain.
+    #
+    # THE HONEST COST. A CAK you rotate in group_vars will NOT be applied to a box
+    # that already has this key chain. It cannot be: the stored value is encrypted,
+    # so the role has no way to tell "same CAK" from "changed CAK" and nothing to
+    # compare against. This is not a silent skip, the next task says so out loud on
+    # every run. To rotate the CAK:
+    #
+    #   ansible-playbook macsec-psk.yml -e state=absent -e macsec_psk_remove_globals=true
+    #   ansible-playbook macsec-psk.yml
+    #
+    # The teardown drops the key chain, so the rebuild creates it again and the new
+    # value goes on. Both ends, and expect the link to drop in between.
+    - name: Look for an existing key chain
+      cisco.ios.ios_command:
+        commands:
+          - "show running-config | include ^key chain {{ macsec_names.psk_key_chain }}"
+      register: macsec_psk_keychain_probe
+      changed_when: false
+
+    - name: Record whether the key chain is already there
+      ansible.builtin.set_fact:
+        # Anchored and multiline, because "| include" can return more than one line
+        # and a "^" without multiline only ever matches the start of the whole
+        # string. Trailing (\s|$) so PQAUTO-MACSEC-KC does not match a longer name
+        # that merely starts the same way.
+        macsec_psk_keychain_exists: >-
+          {{ (macsec_psk_keychain_probe.stdout[0] | default(''))
+             is search('^key chain ' ~ macsec_names.psk_key_chain ~ '(\s|$)', multiline=True) }}
+
+    - name: Say plainly that the stored CAK is being left alone
+      ansible.builtin.debug:
+        msg: >-
+          Key chain {{ macsec_names.psk_key_chain }} already exists on
+          {{ inventory_hostname }}, so the key-string was NOT pushed and the CAK
+          currently on the box is untouched. IOS XE stores it encrypted, so a
+          rotated lab_macsec_cak cannot be compared or applied here. To rotate it:
+          "ansible-playbook macsec-psk.yml -e state=absent -e macsec_psk_remove_globals=true"
+          and then "ansible-playbook macsec-psk.yml".
+      when: macsec_psk_keychain_exists | bool
+
+    - name: Render MKA policy and key chain
+      ansible.builtin.set_fact:
+        nc_label: >-
+          MKA policy {{ macsec_names.psk_mka_policy }} and key chain
+          {{ macsec_names.psk_key_chain }}
+          {{ macsec_psk_keychain_exists | bool | ternary('(key-string skipped, chain exists)', '(with key-string)') }}
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'psk-globals.xml.j2') }}"
+      vars:
+        macsec_psk_push_key_string: "{{ not (macsec_psk_keychain_exists | bool) }}"
+
+    - name: Push MKA policy and key chain
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    # ESCAPE HATCH: network_cli, for the interface only.
+    #
+    # Cisco-IOS-XE-mka augments every physical interface type with mka policy and
+    # pre-shared-key nodes, so this IS modelled, but the copy of
+    # Cisco-IOS-XE-native pulled off the box is a partial with no interface
+    # containers, so there is no schema to validate a payload against. Writing a
+    # payload from a guess at the interface container name is how you get an edit
+    # that half applies.
+    #
+    # "macsec network-link", not plain "macsec". network-link is the peer-to-peer
+    # mode; plain "macsec" is the access (switch-to-host) mode and it gives you a
+    # session that reports Secured while encrypting exactly nothing.
+    - name: Probe for leftover EAP-TLS on the MACsec interface
+      cisco.ios.ios_command:
+        commands:
+          - "show running-config interface {{ my_macsec_interface }}"
+      register: macsec_psk_intf_probe
+      changed_when: false
+
+    - name: Refuse to stack PSK on an EAP-TLS interface
+      ansible.builtin.assert:
+        that:
+          - not (macsec_psk_intf_probe.stdout[0] | default('') is search('access-session closed'))
+          - not (macsec_psk_intf_probe.stdout[0] | default('') is search('dot1x pae'))
+          - not (macsec_psk_intf_probe.stdout[0] | default('') is search('mka policy ' ~ macsec_names.eaptls_mka_policy))
+        fail_msg: >-
+          {{ inventory_hostname }} still has EAP-TLS MACsec on {{ my_macsec_interface }}.
+          PSK and EAP-TLS use the same port with different key sources and will not
+          negotiate together. Tear the EAP-TLS chain down first:
+            ansible-playbook macsec-pq.yml -e state=absent
+            ansible-playbook macsec-eaptls.yml -e state=absent
+          then re-run macsec-psk.yml.
+        quiet: true
+
+    - name: Apply MACsec PSK to the interface
+      cisco.ios.ios_config:
+        parents: "interface {{ my_macsec_interface }}"
+        lines:
+          - macsec network-link
+          - "mka policy {{ macsec_names.psk_mka_policy }}"
+          - "mka pre-shared-key key-chain {{ macsec_names.psk_key_chain }}"
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config
+
+# --- Teardown ----------------------------------------------------------------
+#
+# The interface config comes off; the global MKA policy and key chain stay. That is
+# deliberate and it is what the doc does: once they are off the interface they cannot
+# interfere, and leaving them means the next build is a one-line change. Pass
+# -e macsec_psk_remove_globals=true if you want them gone too.
+#
+# That flag is also the CAK rotation path. The key chain is the thing holding the old
+# encrypted CAK, so it has to go before a new one can be put on.
+- name: MACsec PSK | tear down
+  when: state == 'absent'
+  block:
+
+    - name: Remove MACsec PSK from the interface
+      cisco.ios.ios_config:
+        parents: "interface {{ my_macsec_interface }}"
+        lines:
+          - "no mka pre-shared-key key-chain {{ macsec_names.psk_key_chain }}"
+          - "no mka policy {{ macsec_names.psk_mka_policy }}"
+          - no macsec network-link
+      # Order matters: take the key source off before the MACsec mode, so the port is
+      # never sitting in network-link mode with nothing to key it.
+
+    - name: Remove the global MKA policy and key chain
+      when: macsec_psk_remove_globals | default(false) | bool
+      block:
+
+        - name: Render removal
+          ansible.builtin.set_fact:
+            nc_label: remove MKA policy and key chain
+            nc_operation: none
+            nc_payload: "{{ lookup('template', 'psk-globals.xml.j2') }}"
+
+        - name: Push removal
+          ansible.builtin.include_role:
+            name: common
+            tasks_from: netconf-edit
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config

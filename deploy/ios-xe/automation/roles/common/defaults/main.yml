@@ -1,0 +1,40 @@
+---
+# Shared defaults for the helper task files in this role.
+
+# NETCONF listens on 830 once "netconf-yang" is enabled. Every netconf_config and
+# netconf_get call in this layer goes through roles/common/tasks/netconf-*.yml, so
+# this is the only place the port is named.
+netconf_port: 830
+
+# Every playbook takes -e state=absent to tear its own unit down. present is the
+# default so a bare run builds.
+state: present
+
+# MKA settle window for verify-macsec-proof.yml (separate play after build).
+macsec_proof_settle_retries: 18
+macsec_proof_settle_delay: 5
+
+# Save the running config to startup after a successful change. Off by default:
+# these are lab boxes you are going to tear down, and an unsaved change is one
+# reload away from being gone, which is a feature while you experiment.
+save_config: false
+
+# --- Blast radius guards ----------------------------------------------------
+#
+# Nothing in this layer may remove or zeroize key material or a trustpoint that
+# it did not create. These two patterns name the things that will break the box
+# if they go away, and roles/common/tasks/assert-safe-to-remove.yml refuses to
+# proceed on a match.
+#
+#   TP-self-signed-*      backs "ip http secure-trustpoint". Removing it wedges
+#                         the HTTPS server, which is also how RESTCONF answers.
+#   CISCO_IDEVID_SUDI*    the chassis identity burned in at manufacturing.
+#   SLA-TrustPoint        Smart Licensing.
+#   SLA-KeyPair           Smart Licensing key material.
+#   NETCONF_SSH_RSA_KEY   the host key the NETCONF SSH subsystem uses. Remove it
+#                         and you have cut the branch you are standing on.
+protected_trustpoint_regex: >-
+  ^(TP-self-signed-[0-9]+|CISCO_IDEVID_SUDI.*|SLA-TrustPoint|SLA-KeyPair|NETCONF_SSH_RSA_KEY)$
+
+protected_key_label_regex: >-
+  ^(TP-self-signed-[0-9]+|CISCO_IDEVID_SUDI.*|SLA-KeyPair|NETCONF_SSH_RSA_KEY)$

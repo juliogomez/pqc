@@ -1,0 +1,66 @@
+---
+# MACsec on the R1-R2 link, keyed by EAP-TLS against a local CA.
+#
+#   ansible-playbook macsec-eaptls.yml
+#   ansible-playbook macsec-eaptls.yml -e state=absent
+#
+# Tear macsec-psk.yml down first. Same interface, different key source, and they will
+# fight over it.
+#
+# This is scaffolding, not the payoff. On its own it gives you dynamic keying with a
+# classical TLS 1.3 handshake. macsec-pq.yml is the one-line change that puts ML-KEM
+# inside that handshake, and it stacks on this.
+#
+# Two plays. The CA has to exist before anything enrols against it, and the CA lives on
+# the hub, which is also one of the two MACsec ends, so ordering it inside a single play
+# would be luck rather than design.
+#
+# Both ends in parallel in the second play. EAP-TLS is symmetric here: each router is
+# supplicant and authenticator at once, and a cold start thrashes for about two minutes
+# before it settles. The role waits it out rather than failing.
+
+- name: Stand up the certificate server
+  hosts: macsec_ca
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  # This play has no role of its own, so it has to pull roles/common in here for
+  # the same reason every role in this layer declares it as a dependency: common's
+  # defaults are where "state" comes from. The "when" below is evaluated BEFORE the
+  # include_role under it loads anything, so without this the play died on the
+  # first task with
+  #
+  #   A 'when' expression failed: ... 'state' is undefined
+  #
+  # common/tasks/main.yml is a no-op, so this costs nothing but the defaults.
+  roles:
+    - role: common
+  tasks:
+    - name: Local IOS CA
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: ios-ca
+      when: state == 'present'
+
+- name: Build MACsec keyed by EAP-TLS
+  hosts: macsec_pair
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: macsec_eaptls
+
+- name: Confirm MACsec is secured with EAP-TLS
+  hosts: macsec_pair
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  tasks:
+    - name: Operational proof
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: verify-macsec-proof
+      vars:
+        macsec_proof_keying: eaptls
+      when: state | default('present') == 'present'
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

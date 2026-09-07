@@ -1,0 +1,57 @@
+---
+# Mutual-exclusion guard for the two IPsec PQ overlays (PPK vs ML-KEM).
+#
+# Include after a NETCONF probe whose reply is in netconf_fetch_result on each
+# host. One failure for the whole play, not one per router.
+#
+# Required vars:
+#   refuse_search_token   opening XML tag prefix, e.g. '<mlkem' or '<ppk'
+#                         (no closing '>' — the leaf is <mlkem768/>, not <mlkem>)
+#   refuse_other_path     human name of what is already there, e.g. 'ML-KEM'
+#   refuse_this_path      what the caller is trying to apply, e.g. 'PPK'
+#   refuse_teardown_cmd   exact command that clears the other path
+
+- name: "Record whether {{ refuse_other_path }} is still configured"
+  ansible.builtin.set_fact:
+    refuse_pq_probe_ok: >-
+      {{ netconf_fetch_result is defined
+         and not (netconf_fetch_result.failed | default(false)) }}
+    refuse_pq_conflict: >-
+      {{ (netconf_fetch_result.stdout | default('')) is search(refuse_search_token) }}
+  no_log: true
+
+- name: "Refused — {{ refuse_other_path }} is still configured (nothing changed)"
+  ansible.builtin.fail:
+    msg: >-
+      {{ refuse_this_path }} and {{ refuse_other_path }} are alternative paths in
+      this lab. They are never stacked on the same box.
+      {% if refuse_pq_probe_failures | length > 0 %}
+
+      Could not read the running config from: {{ refuse_pq_probe_failures | join(', ') }}.
+      An unanswered NETCONF probe is not evidence of a clean box. Fix connectivity
+      to those hosts and try again.
+      {% else %}
+
+      {{ refuse_other_path }} is still configured on: {{ refuse_pq_conflict_hosts | join(', ') }}.
+      Tear it down first, then re-run this playbook:
+        {{ refuse_teardown_cmd }}
+      {% endif %}
+
+      Nothing has been changed on any router.
+  vars:
+    refuse_pq_probe_failures: >-
+      {{ ansible_play_hosts | zip(
+           ansible_play_hosts | map('extract', hostvars, 'refuse_pq_probe_ok') | list
+         ) | rejectattr('1') | map('first') | list }}
+    refuse_pq_conflict_hosts: >-
+      {{ ansible_play_hosts | zip(
+           ansible_play_hosts | map('extract', hostvars, 'refuse_pq_conflict') | list
+         ) | selectattr('1') | map('first') | list }}
+  when: >-
+    (ansible_play_hosts | zip(
+       ansible_play_hosts | map('extract', hostvars, 'refuse_pq_probe_ok') | list
+     ) | rejectattr('1') | list | length > 0)
+    or (ansible_play_hosts | zip(
+          ansible_play_hosts | map('extract', hostvars, 'refuse_pq_conflict') | list
+        ) | selectattr('1') | list | length > 0)
+  run_once: true

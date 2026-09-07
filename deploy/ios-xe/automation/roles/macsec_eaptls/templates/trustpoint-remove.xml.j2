@@ -1,0 +1,21 @@
+{#
+  Remove the EAP-TLS trustpoint, by name, and nothing else.
+
+  /native/crypto/pki/trustpoint[id]
+
+  Short on purpose. A destructive payload should be readable in one glance, and the
+  list key is the only thing in it. The caller has already checked this name against
+  the protected-object patterns.
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <pki xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <trustpoint nc:operation="remove">
+          <id>{{ pki_names.eaptls_trustpoint }}</id>
+        </trustpoint>
+      </pki>
+    </crypto>
+  </native>
+</config>

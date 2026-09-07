@@ -223,9 +223,9 @@ docker compose ps
 
 Expected output (once the healthcheck passes, `STATUS` shows `Up (healthy)`):
 ```
-NAME            IMAGE                    STATUS
-ike-initiator   key-exchange-initiator   Up (healthy)
-ike-responder   key-exchange-responder   Up (healthy)
+NAME            STATUS
+ike-initiator   Up (healthy)
+ike-responder   Up (healthy)
 ```
 
 ---
@@ -857,13 +857,20 @@ swanctl --terminate --ike pqc-tunnel
 exit
 ```
 
-Then stop and remove the containers:
+Then, from your **host** in the `learn/ipsec/key-exchange/` directory, stop the containers
+and snap the config back:
 
 ```bash
 docker compose down
+git restore config/
 ```
 
 `docker compose down` stops and removes the containers and the `pqc_net` bridge network. The built images are kept, so the next `docker compose up -d` starts immediately without rebuilding.
+
+`git restore config/` undoes every `vi` edit you made during Exercises 2 and 3. Worth running
+even if you reverted each one by hand as you went, because `config/` is bind-mounted and those
+edits landed in your clone, not just in the container. It's a no-op if you're already clean.
+The captures lived in the containers' `/tmp`, so they're gone with the containers.
 
 And that's it. You stood up a hybrid post-quantum VPN tunnel, captured it, and showed, with your own packets, that quantum-safe IKEv2 is both practical and cheap. From here, go explore your own integrations and use cases.
 

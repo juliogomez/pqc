@@ -1,0 +1,215 @@
+---
+# MACsec keyed by EAP-TLS instead of by a static secret.
+#
+# This is what makes MACsec interesting for post-quantum work. The CAK stops being a
+# secret you typed in and becomes something derived from a TLS 1.3 handshake, which is
+# a handshake with a key exchange in it, which is a key exchange ML-KEM can go into.
+# macsec-pq is the one-line change that does that; this is the scaffolding it needs.
+#
+# What this builds, in order, and the order is not negotiable:
+#   1. the local CA on the hub (a separate play, before this one)
+#   2. an RSA identity certificate on each end, enrolled over SCEP
+#   3. the AAA / EAP / subscriber-policy stack
+#   4. the MKA policy and dot1x credentials
+#   5. LAST, the interface, because that is what locks the port
+#
+# Authentication here is RSA-2048 and stays that way on 26.2. Nothing on this path
+# makes the signature quantum-safe.
+#
+# Idempotent. The NETCONF pushes are merges, ios_config diffs against the running
+# config, and enrollment is skipped when the certificate is already Available.
+
+- name: EAP-TLS | sanity
+  ansible.builtin.assert:
+    that:
+      - my_macsec_interface | length > 0
+      - my_macsec_identity | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} has no MACsec interface or identity in
+      group_vars/all/topology.yml.
+    quiet: true
+
+- name: EAP-TLS | build
+  when: state == 'present'
+  block:
+
+    - name: Enrol the EAP-TLS identity certificate
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: pki-enroll
+      vars:
+        pki_tp_name: "{{ pki_names.eaptls_trustpoint }}"
+        pki_tp_subject: "{{ macsec_eaptls_subject }}"
+        pki_tp_url: "{{ macsec_eaptls_url }}"
+        pki_tp_keytype: rsa
+        pki_tp_key_label: "{{ pki_names.eaptls_trustpoint }}"
+        pki_tp_key_size: "{{ macsec_eaptls_key_size }}"
+        pki_tp_fingerprint: "{{ hostvars[macsec_ca_host].ca_fingerprint | default('') }}"
+
+    - name: AAA, EAP and subscriber policy
+      ansible.builtin.include_tasks: aaa-stack.yml
+
+    - name: Render MKA policy and dot1x credentials
+      ansible.builtin.set_fact:
+        nc_label: "MKA policy {{ macsec_names.eaptls_mka_policy }} and dot1x credentials"
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'mka-and-credentials.xml.j2') }}"
+
+    - name: Push MKA policy and dot1x credentials
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Interface, last
+      ansible.builtin.include_tasks: interface.yml
+
+    # SCREEN-SCRAPE. No MKA operational YANG on this platform.
+    # Matched literal: "Secured Sessions... <n>" from "show mka sessions".
+    #
+    # This waits rather than checking. A cold start has both ends acting as supplicant
+    # and authenticator simultaneously, both starting handshakes, one losing, EAPOL
+    # retrying. It settles in roughly two minutes. Checking once and failing would
+    # report a broken build that is merely mid-negotiation.
+    - name: Wait for the MKA session to secure
+      cisco.ios.ios_command:
+        commands:
+          - show mka sessions
+      register: mka_settle
+      until: (mka_settle.stdout[0] | default('')) is search('Secured Sessions\.*\s*[1-9]')
+      retries: "{{ macsec_eaptls_settle_retries }}"
+      delay: "{{ macsec_eaptls_settle_delay }}"
+      changed_when: false
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config
+
+# --- Teardown ----------------------------------------------------------------
+#
+# Interface first, so the port stops being closed before anything it depends on
+# disappears. Take the AAA stack away from under a live closed port and it stays
+# unauthorized with nothing left to authorize it.
+#
+# The trustpoint and its certificate stay. Removing a trustpoint is destructive and
+# guarded elsewhere in this layer; here it would also mean a fresh enrollment every
+# time you rebuild, for no benefit. Pass -e macsec_eaptls_remove_trustpoint=true if you
+# really want it gone.
+- name: EAP-TLS | tear down
+  when: state == 'absent'
+  block:
+
+    - name: Remove the interface configuration
+      cisco.ios.ios_config:
+        parents: "interface {{ my_macsec_interface }}"
+        lines:
+          - "no service-policy type control subscriber {{ macsec_names.control_policy }}"
+          - no access-session port-control auto
+          - no access-session closed
+          - no access-session host-mode multi-host
+          - no dot1x pae both
+          - "no dot1x credentials {{ macsec_names.dot1x_credentials }}"
+          - "no dot1x supplicant eap profile {{ macsec_names.eap_profile }}"
+          - "no dot1x authenticator eap profile {{ macsec_names.eap_profile }}"
+          - "no mka policy {{ macsec_names.eaptls_mka_policy }}"
+          - no authentication periodic
+          - "no authentication timer reauthenticate {{ macsec_reauth_seconds }}"
+          - no macsec network-link
+      # The removal list has to mirror interface.yml line for line. It did not:
+      # "authentication timer reauthenticate" and "access-session host-mode
+      # multi-host" were applied on build and never taken off, so a torn-down
+      # interface still read
+      #
+      #   authentication timer reauthenticate 1800
+      #   access-session host-mode multi-host
+      #
+      # Harmless on their own, with MACsec and dot1x gone, but they are exactly the
+      # kind of residue that makes the next run's "is this box clean?" check
+      # ambiguous. If you add a line to interface.yml, add its "no" here.
+
+    - name: Render MKA policy and dot1x credentials removal
+      ansible.builtin.set_fact:
+        nc_label: remove MKA policy and dot1x credentials
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'mka-and-credentials.xml.j2') }}"
+
+    - name: Push MKA policy and dot1x credentials removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Remove the AAA, EAP and subscriber policy stack
+      cisco.ios.ios_config:
+        lines:
+          - "no policy-map type control subscriber {{ macsec_names.control_policy }}"
+          - "no eap profile {{ macsec_names.eap_profile }}"
+          - "no aaa attribute list {{ macsec_names.linksec_attribute_list }}"
+      # "aaa new-model" is deliberately left on. Turning it off changes how every login
+      # to the box is authenticated, and doing that at the end of a MACsec teardown is a
+      # good way to lock yourself out.
+      #
+      # "dot1x system-auth-control" is left on for the same reason the AAA lines are:
+      # it is a global switch this role does not own. R1, R2 and R3 all carry it
+      # already (see ../device-configs/*.txt), macsec.md tells the reader to set it in
+      # Exercise 2, and it is unnamed, so there is no way to tell "mine" from "theirs".
+      # Removing it switched 802.1X off box-wide and killed the reader's hand-built
+      # MACsec session with no message. Leaving it enabled costs nothing.
+
+    # OPT-IN, and off by default, because this is the one teardown line in the layer
+    # that types "no username".
+    #
+    # The account is real. aaa-stack.yml runs "username R1 aaa attribute list
+    # PQAUTO-LINKSEC" so the identity EAP sends has somewhere to hang the
+    # must-secure attribute, and the identity has to equal the certificate CN, so it
+    # is "R1" and "R2" and cannot carry the PQAUTO- prefix the rest of the layer uses.
+    # An unprefixed name is exactly the case the prefix convention exists to prevent:
+    # nothing in the name tells you whether the layer created it or a human did.
+    #
+    # "no username <name> aaa attribute list <list>" reads as though it only detaches
+    # the attribute list, and on IOS XE 26.2 it does. But it is one typo, one variable
+    # that resolved to the wrong thing, or one IOS release away from being
+    # "no username <name>", which deletes the login account outright. On a box reached
+    # only over the network that is console recovery. The blast radius is not worth
+    # automating for a two-line residue.
+    #
+    # So the default leaves it. Pass -e macsec_eaptls_remove_identity_user=true to
+    # remove it, having first confirmed by hand that the name is not a login account:
+    #
+    #   show running-config | include ^username
+    #
+    # If you leave it, note what stays behind: a username with no secret and no
+    # privilege level. It is not a usable login on its own, but it is an entry in the
+    # local user database, so treat it as residue to clear rather than as harmless.
+    - name: Detach the attribute list from the peer identity
+      when: macsec_eaptls_remove_identity_user | default(false) | bool
+      cisco.ios.ios_config:
+        lines:
+          - "no username {{ my_macsec_identity }} aaa attribute list {{ macsec_names.linksec_attribute_list }}"
+
+    - name: Remove the EAP-TLS trustpoint
+      when: macsec_eaptls_remove_trustpoint | default(false) | bool
+      block:
+
+        - name: Guard the trustpoint before removing it
+          ansible.builtin.include_role:
+            name: common
+            tasks_from: assert-safe-to-remove
+          vars:
+            guard_kind: trustpoint
+            guard_name: "{{ pki_names.eaptls_trustpoint }}"
+
+        - name: Render trustpoint removal
+          ansible.builtin.set_fact:
+            nc_label: "remove trustpoint {{ pki_names.eaptls_trustpoint }}"
+            nc_operation: none
+            nc_payload: "{{ lookup('template', 'trustpoint-remove.xml.j2') }}"
+
+        - name: Push trustpoint removal
+          ansible.builtin.include_role:
+            name: common
+            tasks_from: netconf-edit
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config

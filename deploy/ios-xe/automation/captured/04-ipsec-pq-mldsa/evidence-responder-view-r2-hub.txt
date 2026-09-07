@@ -1,0 +1,56 @@
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show crypto ikev2 sa detailed ---
+ IPv4 Crypto IKEv2  SA 
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+1         10.0.23.1/500         10.0.23.2/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: MLDSA, Auth verify: MLDSA
+      Life/Active Time: 86400/114 sec
+      CE id: 1063, Session-id: 15
+      Local spi: 3E5CEC3A442245FB       Remote spi: CCE20FB753770BF2
+      Status Description: Negotiation done
+      Local id: 10.0.23.1
+      Remote id: 10.0.23.2
+      Local req msg id:  3              Remote req msg id:  5         
+      Local next msg id: 3              Remote next msg id: 5         
+      Local req queued:  3              Remote req queued:  5         
+      Local window:      20             Remote window:      20        
+      DPD configured for 30 seconds, retry 5
+      IETF Std Fragmentation  enabled.
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : No
+      PEER TYPE: IOS-XE
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+2         10.0.12.2/500         10.0.12.1/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: MLDSA, Auth verify: MLDSA
+      Life/Active Time: 86400/113 sec
+      CE id: 1064, Session-id: 16
+      Local spi: F80DC75A09692A0E       Remote spi: 63428F240E8FCD4F
+      Status Description: Negotiation done
+      Local id: 10.0.12.2
+      Remote id: 10.0.12.1
+      Local req msg id:  3              Remote req msg id:  5         
+      Local next msg id: 3              Remote next msg id: 5         
+      Local req queued:  3              Remote req queued:  5         
+      Local window:      20             Remote window:      20        
+      DPD configured for 30 seconds, retry 5
+      IETF Std Fragmentation  enabled.
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : No
+      PEER TYPE: IOS-XE
+
+ IPv6 Crypto IKEv2  SA 
+

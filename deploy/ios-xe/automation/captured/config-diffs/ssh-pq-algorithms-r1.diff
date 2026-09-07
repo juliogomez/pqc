@@ -1,0 +1,12 @@
+# ssh-pq-algorithms-r1.diff
+#
+# The two lines ssh-pq.yml owns. Order is the offer order, and the client still picks (see 08-ssh-pq/evidence-ssh-vv-negotiated-kex.txt).
+#
+# command: show running-config | include ^ip ssh server algorithm
+# router:  first block in the file
+
+--- BEFORE: without the unit (state after teardown)   [phaseC/r1-sshpq-teardown.txt]
++++ AFTER:  with the unit applied   [phaseC/r1-ssh-tls-prestate.txt]
+@@ -0,0 +1,2 @@
++ip ssh server algorithm kex mlkem768x25519-sha256 mlkem768nistp256-sha256 curve25519-sha256 ecdh-sha2-nistp256
++ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256

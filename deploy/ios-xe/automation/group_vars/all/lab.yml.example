@@ -1,0 +1,48 @@
+---
+# Copy this file to lab.yml and edit it:
+#
+#   cp group_vars/all/lab.yml.example group_vars/all/lab.yml
+#
+# lab.yml is gitignored. This example is not, so never put anything real in here.
+#
+# Every secret below is either a `replace-me` placeholder or a throwaway lab
+# value, exactly like the ones printed in the protocol docs. None of them are
+# secure and none are meant to be. Do not reuse any of them anywhere you care
+# about, and do not build them out of a password you actually use: a value in
+# here is a value in the repo.
+
+# Management addresses of the three routers. Reachable over SSH from wherever you
+# run ansible-playbook.
+lab_mgmt:
+  r1: 192.0.2.11
+  r2: 192.0.2.12
+  r3: 192.0.2.13
+
+lab_user: admin
+lab_password: changeme
+# Only needed if your enable secret differs from the login password.
+# lab_enable_password: changeme
+
+# --- Throwaway crypto material -----------------------------------------------
+
+# IKEv2 pre-shared key for the classical baseline. Replaced, not supplemented, by
+# ML-DSA certificate authentication in ipsec-pq-mldsa.
+lab_ikev2_psk: replace-me-ikev2-psk
+
+# RFC 8784 post-quantum pre-shared key, as hex. This is the "no new primitives"
+# answer to a quantum adversary: you distribute a strong secret out of band and
+# mix it into the IKEv2 key schedule.
+#
+# IOS XE wants the hex encoding of an ASCII string, not raw bytes from
+# "openssl rand -hex 32" (the router rejects that with "Invalid hex key. All
+# characters in hex string must be ASCII."). Generate with:
+#   python3 -c "import secrets,string; s=''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(32)); print(s, s.encode().hex())"
+lab_ppk_hex: 48656C6C6F506F737451756172746E756D
+
+# MACsec CAK for the PSK path, 64 hex characters for a 256-bit key.
+# Generate your own with:  openssl rand -hex 32
+lab_macsec_cak: "1234567890123456789012345678901234567890123456789012345678901234"
+
+# Password protecting the CA private key on the local IOS certificate server that
+# the MACsec EAP-TLS path stands up on R2. IOS XE requires more than 7 characters.
+lab_ca_passphrase: replace-me-ca-passphrase-8chars

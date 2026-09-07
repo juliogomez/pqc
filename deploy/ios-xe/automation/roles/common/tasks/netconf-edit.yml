@@ -1,0 +1,59 @@
+---
+# One NETCONF <edit-config> against the running datastore.
+#
+# Every configuration change in this layer comes through here, which buys two
+# things. The connection override lives in exactly one place, so no role has to
+# repeat it and no reader has to think about transports. And the merge/remove
+# split is expressed once: a payload that carries nc:operation="remove" nodes is
+# pushed with default_operation "none" so untagged parents are left alone.
+#
+# Callers pass:
+#   nc_label      a short human name for the task line
+#   nc_payload    the rendered <config> document
+#   nc_operation  merge (default) or none, for removals
+#
+# Idempotency is free on merge: pushing the same leaves twice is a no-op and the
+# module reports changed=false. The two places that is NOT true are called out in
+# the roles that own them (the ML-DSA authentication swap and the MACsec PSK
+# teardown).
+
+- name: "NETCONF edit-config | {{ nc_label }}"
+  ansible.netcommon.netconf_config:
+    content: "{{ nc_payload }}"
+    target: running
+    default_operation: "{{ nc_operation | default('merge') }}"
+    lock: if-supported
+    # IOS XE advertises :rollback-on-error, so a payload that fails half way
+    # leaves the box as it was rather than half configured.
+    error_option: rollback-on-error
+  vars:
+    ansible_connection: ansible.netcommon.netconf
+    # cisco.ios ships no netconf subplugin, so point at netcommon's generic one
+    # explicitly instead of letting it fall back with a warning.
+    ansible_network_os: ansible.netcommon.default
+    ansible_port: "{{ netconf_port }}"
+  register: netconf_edit_result
+  # Retry a locked datastore, and ONLY a locked datastore.
+  #
+  # Every teardown in this layer mixes transports: ios_config strips the interface
+  # over the CLI, then the very next task removes the global objects over NETCONF.
+  # The CLI session's lock is not always released by the time NETCONF asks for it,
+  # and the edit comes back with
+  #
+  #   the configuration database is locked by session 293 admin tcp
+  #   (system from 127.0.0.1) on since ...   IOS-XE YANG Infrastructure
+  #
+  # Seen on the macsec-psk teardown and again on the macsec-eaptls teardown, and
+  # both times an immediate manual re-run worked. It is contention, not a bad
+  # payload.
+  #
+  # The condition is deliberately narrow. "retry until it succeeds" would also sit
+  # there re-pushing a payload the box has genuinely rejected, turning a clear
+  # "inconsistent value" into a slow timeout with the real error buried. So this
+  # stops immediately on any failure that is not a lock, and gives a lock about
+  # thirty seconds to clear.
+  until: >-
+    netconf_edit_result is succeeded
+    or 'configuration database is locked' not in (netconf_edit_result.msg | default(''))
+  retries: 6
+  delay: 5

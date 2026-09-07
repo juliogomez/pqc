@@ -1,0 +1,20 @@
+# ipsec-pq-ppk-keyring-r2-hub.diff
+#
+# What ipsec-pq-ppk.yml adds inside the IKEv2 keyring peers on the hub, one line per peer. The PPK itself is redacted.
+#
+# command: show running-config | section crypto ikev2 keyring
+# router:  first block in the file
+
+--- BEFORE: without the unit (state after teardown)   [phaseC/r2-ppk-teardown.txt]
++++ AFTER:  with the unit applied   [phaseC/r2-ppk-applied.txt]
+@@ -2,8 +2,10 @@
+  peer R1
+   address 10.0.12.1
+   pre-shared-key <REDACTED-IKEV2-PSK>
++  ppk manual id PPK-LAB key hex <REDACTED-PPK-HEX> required
+  !
+  peer R3
+   address 10.0.23.2
+   pre-shared-key <REDACTED-IKEV2-PSK>
++  ppk manual id PPK-LAB key hex <REDACTED-PPK-HEX> required
+  !

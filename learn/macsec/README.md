@@ -741,12 +741,21 @@ That is *why* we stop at the handshake.
 
 ### Cleanup
 
+Run this from your **host**, in the `learn/macsec/` directory:
+
 ```bash
 docker compose down
 # Remove generated CA + certs/keys (written to host via bind mounts; include private keys)
 rm -rf config/authenticator/ca.crt config/authenticator/server.crt config/authenticator/server.key \
        config/supplicant/ca.crt config/supplicant/client.crt config/supplicant/client.key
+# Snap hostapd.conf / wpa_supplicant.conf back to the shipped state
+git restore config/
 ```
+
+That last one matters if you ran the downgrade test, because the `sed` that commented out
+`tls_flags=` wrote through the bind mount into your clone. It's a no-op if you already put the
+line back by hand. The logs and captures lived in the containers' `/tmp`, so they go with the
+containers.
 
 ---
 

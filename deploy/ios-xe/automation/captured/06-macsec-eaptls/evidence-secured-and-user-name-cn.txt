@@ -1,0 +1,252 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 1
+      Secured Sessions... 1
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+Tw0/0/0         2481.3b87.54e0/0002  PQAUTO-MKA-EAP    NO                 NO                                                    
+2               2481.3b87.5060/0002  1                 Secured            4974BCE68D541249A170D31D583D4EF7                                
+
+
+
+--- show mka sessions details ---
+                                             ^
+% Invalid input detected at '^' marker.
+
+
+--- show macsec status interface TwoGigabitEthernet0/0/0 ---
+ Capabilities
+
+  Ciphers Supported:        GCM-AES-128 GCM-AES-256
+  Cipher:                   GCM-AES-256
+  Confidentiality Offset:   0
+  Replay Window:            0
+  Delay Protect Enable:     FALSE
+  Include-SCI:              TRUE
+
+ Transmit SC:
+  SCI:                      24813B8754E00002
+  Transmitting:             TRUE
+ Transmit SA:
+  Next PN:                  51
+  Delay Protect AN/nextPN:  NA/0
+
+ Receive SC:
+  SCI:                      24813B8750600002
+  Receiving:                TRUE
+ Receive SA:
+  Next PN:                  52
+  AN:                       0 
+  Delay Protect AN/LPN:     0/0
+
+--- show macsec statistics interface TwoGigabitEthernet0/0/0 ---
+MACsec Statistics for TwoGigabitEthernet0/0/0
+ SecY Counters
+  Ingress Untag Pkts:       0
+  Ingress No Tag Pkts:      0
+  Ingress Bad Tag Pkts:     0
+  Ingress Unknown SCI Pkts: 0
+  Ingress No SCI Pkts:      0
+  Ingress Overrun Pkts:     0
+  Ingress Validated Octets: 0
+  Ingress Decrypted Octets: 7784
+  Egress Untag Pkts:        0
+  Egress Too Long Pkts:     0
+  Egress Protected Octets:  0
+  Egress Encrypted Octets:  7664
+
+ Controlled Port Counters
+  IF In Octets:             8396
+  IF In Packets:            51
+  IF In Discard:            0
+  IF In Errors:             0
+  IF Out Octets:            8276
+  IF Out Packets:           51
+  IF Out Errors:            0
+
+ Transmit SC Counters (SCI: 24813B8754E00002)
+  Out Pkts Protected:       0
+  Out Pkts Encrypted:       51
+ Transmit SA Counters (AN 0)
+  Out Pkts Protected:       0
+  Out Pkts Encrypted:       51
+
+ Receive SA Counters (SCI: 24813B8750600002  AN 0)
+  In Pkts Unchecked:        0
+  In Pkts Delayed:          0
+  In Pkts OK:               51
+  In Pkts Invalid:          0
+  In Pkts Not Valid:        0
+  In Pkts Not using SA:     0
+  In Pkts Unused SA:        0
+  In Pkts Late:             0
+
+
+
+--- show access-session interface TwoGigabitEthernet0/0/0 details ---
+            Interface:  TwoGigabitEthernet0/0/0
+               IIF-ID:  0x036D63A0
+          MAC Address:  2481.3b87.5060
+         IPv6 Address:  Unknown
+         IPv4 Address:  Unknown
+            User-Name:  R2
+               Status:  Authorized
+               Domain:  DATA
+       Oper host mode:  multi-host
+     Oper control dir:  both
+      Session timeout:  1800s (local), Remaining: 1754s
+       Timeout action:  Reauthenticate
+    Common Session ID:  000000000000002D5CFC2E5B
+      Acct Session ID:  0x00000010
+               Handle:  0xad000022
+       Current Policy:  PQAUTO-MACSEC-POLICY
+
+
+Local Policies:
+	Service Template: DEFAULT_LINKSEC_POLICY_MUST_SECURE (priority 150)
+      Security Policy:  Must Secure
+      Security Status:  Link Secured
+
+Server Policies:
+
+
+Method status list:
+       Method           State
+        dot1x           Authc Success
+     dot1xSup           Authc Success
+
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 1
+      Secured Sessions... 1
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+Tw0/0/0         2481.3b87.5060/0002  PQAUTO-MKA-EAP    NO                 YES                                                   
+2               2481.3b87.54e0/0002  1                 Secured            4974BCE68D541249A170D31D583D4EF7                                
+
+
+
+--- show mka sessions details ---
+                                             ^
+% Invalid input detected at '^' marker.
+
+
+--- show macsec status interface TwoGigabitEthernet0/0/0 ---
+ Capabilities
+
+  Ciphers Supported:        GCM-AES-128 GCM-AES-256
+  Cipher:                   GCM-AES-256
+  Confidentiality Offset:   0
+  Replay Window:            0
+  Delay Protect Enable:     FALSE
+  Include-SCI:              TRUE
+
+ Transmit SC:
+  SCI:                      24813B8750600002
+  Transmitting:             TRUE
+ Transmit SA:
+  Next PN:                  51
+  Delay Protect AN/nextPN:  NA/0
+
+ Receive SC:
+  SCI:                      24813B8754E00002
+  Receiving:                TRUE
+ Receive SA:
+  Next PN:                  52
+  AN:                       0 
+  Delay Protect AN/LPN:     0/0
+
+--- show macsec statistics interface TwoGigabitEthernet0/0/0 ---
+MACsec Statistics for TwoGigabitEthernet0/0/0
+ SecY Counters
+  Ingress Untag Pkts:       0
+  Ingress No Tag Pkts:      0
+  Ingress Bad Tag Pkts:     0
+  Ingress Unknown SCI Pkts: 0
+  Ingress No SCI Pkts:      0
+  Ingress Overrun Pkts:     0
+  Ingress Validated Octets: 0
+  Ingress Decrypted Octets: 7664
+  Egress Untag Pkts:        0
+  Egress Too Long Pkts:     0
+  Egress Protected Octets:  0
+  Egress Encrypted Octets:  7784
+
+ Controlled Port Counters
+  IF In Octets:             8276
+  IF In Packets:            51
+  IF In Discard:            0
+  IF In Errors:             0
+  IF Out Octets:            8396
+  IF Out Packets:           51
+  IF Out Errors:            0
+
+ Transmit SC Counters (SCI: 24813B8750600002)
+  Out Pkts Protected:       0
+  Out Pkts Encrypted:       51
+ Transmit SA Counters (AN 0)
+  Out Pkts Protected:       0
+  Out Pkts Encrypted:       51
+
+ Receive SA Counters (SCI: 24813B8754E00002  AN 0)
+  In Pkts Unchecked:        0
+  In Pkts Delayed:          0
+  In Pkts OK:               51
+  In Pkts Invalid:          0
+  In Pkts Not Valid:        0
+  In Pkts Not using SA:     0
+  In Pkts Unused SA:        0
+  In Pkts Late:             0
+
+
+
+--- show access-session interface TwoGigabitEthernet0/0/0 details ---
+            Interface:  TwoGigabitEthernet0/0/0
+               IIF-ID:  0x0ED5F65D
+          MAC Address:  2481.3b87.54e0
+         IPv6 Address:  Unknown
+         IPv4 Address:  Unknown
+            User-Name:  R1
+               Status:  Authorized
+               Domain:  DATA
+       Oper host mode:  multi-host
+     Oper control dir:  both
+      Session timeout:  1800s (local), Remaining: 1744s
+       Timeout action:  Reauthenticate
+    Common Session ID:  000000000000000B5CFBC839
+      Acct Session ID:  0x00000001
+               Handle:  0x10000001
+       Current Policy:  PQAUTO-MACSEC-POLICY
+
+
+Local Policies:
+	Service Template: DEFAULT_LINKSEC_POLICY_MUST_SECURE (priority 150)
+      Security Policy:  Must Secure
+      Security Status:  Link Secured
+
+Server Policies:
+
+
+Method status list:
+       Method           State
+        dot1x           Authc Success
+     dot1xSup           Authc Success
+

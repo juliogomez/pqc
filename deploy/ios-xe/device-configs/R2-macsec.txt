@@ -1,21 +1,18 @@
-! Working PQ MACsec (EAP-TLS + ML-KEM) config, verified on IOS XE 26.1.1 / C8235-G2
+! Working PQ MACsec (EAP-TLS + ML-KEM) config, verified on IOS XE 26.2 / C8235-G2
 ! MKA Secured, GCM-AES-256, CKN derived from the EAP-TLS MSK
-! R2 hosts the local CA (CA_Server) that issues both routers' identity certs
+! R2 runs the local CA; R1 is the CA client (see R1-macsec.txt)
 !
-! Deltas vs the EFT guide's appendix, both required (see macsec.md):
-!   - "10 authenticate using dot1x both"   (guide has it; easy to drop the 'both')
-!   - "macsec network-link" not "macsec"   (guide says 'macsec', which never encrypts here)
+! Two lines that are easy to get wrong, both required (see macsec.md):
+!   - "10 authenticate using dot1x both"   (without the 'both', MKA never secures)
+!   - "macsec network-link" not "macsec"   (plain 'macsec' never encrypts here)
 !
-version 26.1
+version 26.2
 service timestamps debug datetime msec
 service timestamps log datetime msec
 platform qfp utilization monitor load 80
 platform resource service-plane-heavy
-!
 hostname bfl-cpoc-d14-8235-02
-!
 boot-start-marker
-boot system bootflash:c8kg2be-universalk9.26.01.01.SPA.conf
 boot-end-marker
 !
 vrf definition Mgmt-intf
@@ -25,37 +22,31 @@ vrf definition Mgmt-intf
  exit-address-family
 !
 aaa new-model
-aaa local authentication default authorization default
-!
 aaa authentication login default local
 aaa authentication dot1x default local
-aaa authorization exec default local 
-aaa authorization network default local 
-aaa authorization credential-download default local 
+aaa authorization exec default local
+aaa authorization network default local
+aaa authorization credential-download default local
 !
 aaa attribute list LINKSEC_POLICY
  attribute type linksec-policy must-secure
 !
 aaa session-id common
-!
 ip domain name lab.local
-!
 login on-success log
-!
 subscriber templating
 !
 eap profile EAP-PROFILE
  method tls
  pki-trustpoint CA_TP
 !
-access-session mac-move deny
 access-session tls-version 1.3
 access-session pqc-type hybrid
 !
 crypto pki server CA_Server
  no database archive
  grant auto
- eku server-auth client-auth 
+ eku server-auth client-auth
 !
 crypto pki trustpoint CA_Server
  revocation-check crl
@@ -64,16 +55,15 @@ crypto pki trustpoint CA_Server
 !
 crypto pki trustpoint CA_TP
  enrollment url http://10.0.12.2:80
- fingerprint C26AD7815B245A847FDD0E64CF835C24
+ fingerprint 4E5658EA99350A9A5AFF2EB9C8114485
  subject-name CN=R2
  revocation-check none
  rsakeypair CA_TP 2048
  hash sha512
 !
 license udi pid C8235-G2 sn FGL2950L4DL
-license boot level advantage
-!
 dot1x system-auth-control
+!
 dot1x credentials DOT1X-CREDS
  username R2
  pki-trustpoint CA_TP
@@ -122,12 +112,21 @@ interface GigabitEthernet0
 interface Vlan12
  ip address 10.0.12.2 255.255.255.252
 !
-ip route vrf Mgmt-intf 0.0.0.0 0.0.0.0 198.18.128.1
+interface Vlan23
+ ip address 10.0.23.1 255.255.255.252
+!
 ip http server
 ip http secure-server
+ip route vrf Mgmt-intf 0.0.0.0 0.0.0.0 198.18.128.1
 ip ssh bulk-mode 131072
+ip scp server enable
 !
-line vty 0 14
+line vty 0 4
+ activation-character 13
+ transport input ssh
+!
+line vty 5 14
+ activation-character 13
  transport input ssh
 !
 end

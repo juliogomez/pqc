@@ -1,0 +1,31 @@
+=== Job 3 unit 2: CA passphrase prompt, captured VERBATIM with no answer sent ===
+Technique: exec-with-prompt driven with a deliberately non-matching prompt regex
+  exec_prompt: THIS-REGEX-MUST-NEVER-MATCH-ANY-IOS-PROMPT
+  exec_answer: SENTINEL-MUST-NEVER-BE-SENT   (never appears on the wire)
+
+--- sent ---
+configure terminal
+crypto pki server CA_Server
+no shutdown
+
+--- router replied, verbatim (response-13) ---
+%Some server settings cannot be changed after CA certificate generation.
+% Please enter a passphrase to protect the private key
+% or type Return to exit
+Password: 
+
+--- second prompt, verbatim ---
+Re-enter password: 
+
+=== HAZARD FOUND ===
+The strict-prompt abort is non-destructive for the CA (Status stayed disabled,
+State initial) but it leaves the CLI sitting AT the Password: prompt. The next
+command sent on the same persistent connection is consumed as the passphrase:
+
+  send command: b'show crypto pki server
+'
+  response-1:   b'
+
+Re-enter password: '
+
+So after any such abort the connection MUST be reset before another command.

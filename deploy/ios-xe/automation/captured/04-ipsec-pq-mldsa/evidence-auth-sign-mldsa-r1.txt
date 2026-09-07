@@ -1,0 +1,33 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show crypto ikev2 sa detailed ---
+ IPv4 Crypto IKEv2  SA 
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+1         10.0.12.1/500         10.0.12.2/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: MLDSA, Auth verify: MLDSA
+      Life/Active Time: 86400/183 sec
+      CE id: 1247, Session-id: 49
+      Local spi: 2527452F8EE43697       Remote spi: 5C8A5F9045C5907D
+      Status Description: Negotiation done
+      Local id: 10.0.12.1
+      Remote id: 10.0.12.2
+      Local req msg id:  8              Remote req msg id:  6         
+      Local next msg id: 8              Remote next msg id: 6         
+      Local req queued:  8              Remote req queued:  6         
+      Local window:      20             Remote window:      20        
+      DPD configured for 30 seconds, retry 5
+      IETF Std Fragmentation  enabled.
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : Yes
+      PEER TYPE: IOS-XE
+
+ IPv6 Crypto IKEv2  SA 
+

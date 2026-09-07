@@ -1,0 +1,21 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show running-config | section crypto ikev2 ---
+
+
+--- show running-config | section crypto ipsec ---
+
+
+--- show running-config | include ^interface Tunnel ---
+
+
+--- show crypto ikev2 sa ---
+
+
+--- show ip interface brief | include Vlan|GigabitEthernet0 ---
+GigabitEthernet0       198.18.154.202  YES NVRAM  up                    up      
+Vlan1                  unassigned      YES unset  up                    down    
+Vlan12                 10.0.12.1       YES NVRAM  up                    up      

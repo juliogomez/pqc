@@ -1,0 +1,31 @@
+---
+# Path B to a quantum-safe tunnel: native hybrid ML-KEM key exchange (RFC 9370).
+#
+#   ansible-playbook ipsec-pq-mlkem.yml
+#   ansible-playbook ipsec-pq-mlkem.yml -e state=absent
+#
+# Requires ipsec-baseline.yml first. Refuses to run if a PPK is still configured,
+# and tells you the exact command to clear it.
+#
+# The entire change is two YANG leaves under one proposal, driven by
+# pq_key_exchange in group_vars/all/pqc.yml. Change that value, re-run, and the
+# whole fabric moves parameter set.
+#
+# Parallel across all three hosts. With pq_key_exchange_optional true a
+# half-upgraded fabric still works, which is the point of the flag and also its
+# danger.
+
+- name: Add ML-KEM to the IKEv2 key exchange
+  hosts: routers
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  pre_tasks:
+    - name: Pre-flight — refuse if a PPK is still configured
+      ansible.builtin.import_tasks:
+        file: "{{ playbook_dir }}/roles/common/tasks/guard-mlkem-vs-ppk.yml"
+      when: state | default('present') == 'present'
+  roles:
+    - role: ipsec_pq_mlkem
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml

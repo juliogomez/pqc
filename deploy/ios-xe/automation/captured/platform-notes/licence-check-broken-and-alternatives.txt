@@ -1,0 +1,48 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show version | include Technology|Current ---
+Technology Package License Information: 
+Technology     Type         Technology-package Technology-package
+                            Current            Next Reboot       
+
+--- show version | begin Technology ---
+Technology Package License Information: 
+
+-----------------------------------------------------------------
+Technology     Type         Technology-package Technology-package
+                            Current            Next Reboot       
+-----------------------------------------------------------------
+Smart License  Subscription advantage          advantage         
+
+The current crypto throughput level is unthrottled 
+
+
+Smart Licensing Status: Smart Licensing Using Policy
+
+cisco C8235-G2 (1RU) processor with 7788650K/6147K bytes of memory.
+Processor board ID FGL2950L4DF
+Router operating mode: Autonomous
+2 Virtual Ethernet interfaces
+8 2.5 Gigabit Ethernet interfaces
+2 Ten Gigabit Ethernet interfaces
+32768K bytes of non-volatile configuration memory.
+16777216K bytes of physical memory.
+20249599K bytes of flash memory at bootflash:.
+
+Configuration register is 0x2102
+
+
+--- show license summary ---
+Account Information:
+  Smart Account: Cisco Systems CPOC As of Aug 30 09:56:34 2026 UTC
+  Virtual Account: cpoc-london
+
+License Usage:
+  License                 Entitlement Tag               Count Status
+  -----------------------------------------------------------------------------
+  advantage               (C8K_MEDIUM_ROUTING_A)            1 AUTHORIZED
+
+

@@ -1,0 +1,15 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show running-config | section key chain ---
+key chain PQAUTO-MACSEC-KC macsec
+ key 01
+  cryptographic-algorithm aes-256-cmac
+  key-string 7 <REDACTED-CAK>
+
+--- show running-config | section mka policy ---
+mka policy PQAUTO-MKA-PSK
+ macsec-cipher-suite gcm-aes-256 
+ mka policy PQAUTO-MKA-PSK

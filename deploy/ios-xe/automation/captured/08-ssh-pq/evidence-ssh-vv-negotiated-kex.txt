@@ -1,0 +1,15 @@
+######## r1 (198.18.154.202) ########
+  client offers : ecdh-sha2-nistp256,mlkem768x25519-sha256,sntrup761x25519-sha...
+  server offers : mlkem768x25519-sha256,mlkem768nistp256-sha256,curve25519-sha256,ecdh-sha2-nistp256,kex-strict-s-v00@openssh.com
+  NEGOTIATED    : ecdh-sha2-nistp256
+  FORCED mlkem  : mlkem768x25519-sha256
+######## r2 (198.18.154.203) ########
+  client offers : ecdh-sha2-nistp256,mlkem768x25519-sha256,sntrup761x25519-sha...
+  server offers : mlkem768x25519-sha256,mlkem768nistp256-sha256,curve25519-sha256,ecdh-sha2-nistp256,kex-strict-s-v00@openssh.com
+  NEGOTIATED    : ecdh-sha2-nistp256
+  FORCED mlkem  : mlkem768x25519-sha256
+######## r3 (198.18.154.204) ########
+  client offers : ecdh-sha2-nistp256,mlkem768x25519-sha256,sntrup761x25519-sha...
+  server offers : mlkem768x25519-sha256,mlkem768nistp256-sha256,curve25519-sha256,ecdh-sha2-nistp256,kex-strict-s-v00@openssh.com
+  NEGOTIATED    : ecdh-sha2-nistp256
+  FORCED mlkem  : mlkem768x25519-sha256

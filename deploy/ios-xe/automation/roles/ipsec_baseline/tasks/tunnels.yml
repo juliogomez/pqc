@@ -1,0 +1,44 @@
+---
+# ESCAPE HATCH: network_cli, because the interface model is not there.
+#
+# Everything else in this role is NETCONF against Cisco-IOS-XE-crypto. Tunnel
+# interfaces are not, and the reason is worth writing down: the tunnel nodes live
+# in Cisco-IOS-XE-tunnel, which the crypto module augments at
+#
+#   /native/interface/Tunnel/tunnel/protection
+#
+# for "tunnel protection ipsec profile". That module was not among the schemas
+# pulled off the box, and the copy of Cisco-IOS-XE-native we have is a partial
+# that carries no interface containers at all. So the model very likely exists;
+# we just cannot prove the leaf names against a schema, and inventing them is how
+# you end up with a payload that half applies.
+#
+# ios_config still compares against the running config, so this is idempotent
+# even though it is CLI. It is not interactive, so it does not go through the
+# strict-prompt wrapper.
+
+- name: Tunnel interface per peer
+  cisco.ios.ios_config:
+    parents: "interface Tunnel{{ item.tunnel_id }}"
+    lines:
+      - "ip address {{ item.tunnel_address }} {{ item.tunnel_mask }}"
+      - "tunnel source {{ item.source_interface }}"
+      - tunnel mode ipsec ipv4
+      - "tunnel destination {{ item.remote_address }}"
+      - "tunnel protection ipsec profile {{ crypto_names.ipsec_profile_prefix }}{{ item.name | upper }}"
+  loop: "{{ my_peers }}"
+  loop_control:
+    label: "Tunnel{{ item.tunnel_id }} to {{ item.name }}"
+  when: state == 'present'
+
+# "no interface Tunnel<id>" is the bluntest instrument in this layer: it takes the
+# whole interface, not just the lines above. That is only safe because the ids come
+# from topology.yml, which numbers them 101 and 102 precisely so they cannot be the
+# Tunnel0/1/2 the hand-driven exercises build. See the note in topology.yml.
+- name: Remove tunnel interface per peer
+  cisco.ios.ios_config:
+    lines: "no interface Tunnel{{ item.tunnel_id }}"
+  loop: "{{ my_peers }}"
+  loop_control:
+    label: "Tunnel{{ item.tunnel_id }}"
+  when: state == 'absent'

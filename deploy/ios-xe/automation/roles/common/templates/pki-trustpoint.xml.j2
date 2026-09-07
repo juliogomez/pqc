@@ -1,0 +1,68 @@
+{#
+  One trustpoint, enrolled over SCEP against the local CA.
+
+  /native/crypto/pki/trustpoint[id]/enrollment/enrollment-method/url
+  /native/crypto/pki/trustpoint[id]/subject-name
+  /native/crypto/pki/trustpoint[id]/revocation-check
+  /native/crypto/pki/trustpoint[id]/hash
+  /native/crypto/pki/trustpoint[id]/fingerprint
+  /native/crypto/pki/trustpoint[id]/mldsakeypair/{key-label,parameter-set}   <-- PQ
+  /native/crypto/pki/trustpoint[id]/rsakeypair/{key-label,gen-key}
+
+  The only difference between the ML-DSA identity used for IPsec and the RSA
+  identity used for EAP-TLS is which keypair container appears. That is the whole
+  reason this is one template with a pki_tp_keytype variable instead of two.
+
+  mldsakeypair is the 26.2 addition: leaf key-label plus leaf parameter-set, whose
+  YANG range is literally "44 | 65 | 87". The key itself is generated on the box
+  beforehand in exec mode, and this binds the trustpoint to that label.
+
+  Note what is deliberately NOT used: enrollment-method/selfsigned. On these boxes
+  a self-signed enrollment prompts that it will destroy the existing device
+  self-signed trustpoint, which is the one behind "ip http secure-trustpoint" and
+  therefore behind RESTCONF. Enrolling against a CA is the only safe route.
+
+  revocation-check none is a lab answer. The trustpoint default is crl, and these
+  certificates carry no CRL distribution point, so the router would go looking for
+  a CRL it can never find and stall the handshake.
+
+  fingerprint has to be pinned before authenticate, or IOS XE refuses the CA
+  certificate with "Trustpoint fingerprint must be supplied".
+-#}
+{% set op = ' nc:operation="remove"' if state == 'absent' else '' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <pki xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <trustpoint{{ op }}>
+          <id>{{ pki_tp_name }}</id>
+{% if state == 'present' %}
+          <enrollment>
+            <enrollment-method>
+              <url>{{ pki_tp_url }}</url>
+            </enrollment-method>
+          </enrollment>
+          <subject-name>{{ pki_tp_subject }}</subject-name>
+          <revocation-check>{{ pki_revocation_check }}</revocation-check>
+          <hash>{{ pki_hash }}</hash>
+{% if pki_tp_fingerprint | default('') | length > 0 %}
+          <fingerprint>{{ pki_tp_fingerprint }}</fingerprint>
+{% endif %}
+{% if pki_tp_keytype == 'mldsa' %}
+          <mldsakeypair>
+            <key-label>{{ pki_tp_key_label }}</key-label>
+            <parameter-set>{{ pki_tp_param_set }}</parameter-set>
+          </mldsakeypair>
+{% else %}
+          <rsakeypair>
+            <key-label>{{ pki_tp_key_label }}</key-label>
+            <gen-key>{{ pki_tp_key_size }}</gen-key>
+          </rsakeypair>
+{% endif %}
+{% endif %}
+        </trustpoint>
+      </pki>
+    </crypto>
+  </native>
+</config>

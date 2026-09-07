@@ -1,0 +1,55 @@
+### TAG=phaseC2-mlkem-must-abort-with-ppk
+### CMD=ansible-playbook ipsec-pq-mlkem.yml
+### START=2026-09-01T10:01:10Z
+
+PLAY [Add ML-KEM to the IKEv2 key exchange] ************************************
+
+TASK [ipsec_pq_mlkem : ML-KEM | sanity] ****************************************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [Probe for an existing PPK] ***********************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | probe for an existing PPK] ************************
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [ipsec_pq_mlkem : Abort if a PPK is still configured] *********************
+[ERROR]: Task failed: Action failed: A post-quantum pre-shared key is still configured on r1. PPK and ML-KEM are alternative paths in this lab and are never stacked. Tear the PPK down first, then come back: "ansible-playbook ipsec-pq-ppk.yml -e state=absent". Nothing has been changed. If the probe itself failed rather than finding a PPK, this says so too: an unanswered probe is not evidence of a clean box.
+Origin: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mlkem/tasks/main.yml:54:7
+
+52     # probe as "no PPK configured" is how you end up stacking the two paths. So the
+53     # probe has to be proved to have answered before its content means anything.
+54     - name: Abort if a PPK is still configured
+         ^ column 7
+
+fatal: [r1]: FAILED! => {"assertion": "(netconf_fetch_result.stdout | default('')) is not search('<ppk>')", "changed": false, "evaluated_to": false, "msg": "A post-quantum pre-shared key is still configured on r1. PPK and ML-KEM are alternative paths in this lab and are never stacked. Tear the PPK down first, then come back: \"ansible-playbook ipsec-pq-ppk.yml -e state=absent\". Nothing has been changed. If the probe itself failed rather than finding a PPK, this says so too: an unanswered probe is not evidence of a clean box."}
+[ERROR]: Task failed: Action failed: A post-quantum pre-shared key is still configured on r2. PPK and ML-KEM are alternative paths in this lab and are never stacked. Tear the PPK down first, then come back: "ansible-playbook ipsec-pq-ppk.yml -e state=absent". Nothing has been changed. If the probe itself failed rather than finding a PPK, this says so too: an unanswered probe is not evidence of a clean box.
+Origin: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mlkem/tasks/main.yml:54:7
+
+52     # probe as "no PPK configured" is how you end up stacking the two paths. So the
+53     # probe has to be proved to have answered before its content means anything.
+54     - name: Abort if a PPK is still configured
+         ^ column 7
+
+fatal: [r2]: FAILED! => {"assertion": "(netconf_fetch_result.stdout | default('')) is not search('<ppk>')", "changed": false, "evaluated_to": false, "msg": "A post-quantum pre-shared key is still configured on r2. PPK and ML-KEM are alternative paths in this lab and are never stacked. Tear the PPK down first, then come back: \"ansible-playbook ipsec-pq-ppk.yml -e state=absent\". Nothing has been changed. If the probe itself failed rather than finding a PPK, this says so too: an unanswered probe is not evidence of a clean box."}
+[ERROR]: Task failed: Action failed: A post-quantum pre-shared key is still configured on r3. PPK and ML-KEM are alternative paths in this lab and are never stacked. Tear the PPK down first, then come back: "ansible-playbook ipsec-pq-ppk.yml -e state=absent". Nothing has been changed. If the probe itself failed rather than finding a PPK, this says so too: an unanswered probe is not evidence of a clean box.
+Origin: /Users/jgomez2/dev/pqc/deploy/ios-xe/automation/roles/ipsec_pq_mlkem/tasks/main.yml:54:7
+
+52     # probe as "no PPK configured" is how you end up stacking the two paths. So the
+53     # probe has to be proved to have answered before its content means anything.
+54     - name: Abort if a PPK is still configured
+         ^ column 7
+
+fatal: [r3]: FAILED! => {"assertion": "(netconf_fetch_result.stdout | default('')) is not search('<ppk>')", "changed": false, "evaluated_to": false, "msg": "A post-quantum pre-shared key is still configured on r3. PPK and ML-KEM are alternative paths in this lab and are never stacked. Tear the PPK down first, then come back: \"ansible-playbook ipsec-pq-ppk.yml -e state=absent\". Nothing has been changed. If the probe itself failed rather than finding a PPK, this says so too: an unanswered probe is not evidence of a clean box."}
+
+PLAY RECAP *********************************************************************
+r1                         : ok=3    changed=0    unreachable=0    failed=1    skipped=1    rescued=0    ignored=0   
+r2                         : ok=3    changed=0    unreachable=0    failed=1    skipped=1    rescued=0    ignored=0   
+r3                         : ok=3    changed=0    unreachable=0    failed=1    skipped=1    rescued=0    ignored=0   
+
+### END=2026-09-01T10:01:13Z
+### RC=2

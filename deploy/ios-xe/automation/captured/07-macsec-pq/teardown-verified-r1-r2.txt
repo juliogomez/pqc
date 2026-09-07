@@ -1,0 +1,52 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show running-config | include ^access-session ---
+
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 1
+      Secured Sessions... 1
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+Tw0/0/0         2481.3b87.54e0/0002  PQAUTO-MKA-EAP    NO                 NO                                                    
+2               2481.3b87.5060/0002  1                 Secured            4BED054510AB61E4ED76AF79DB5C4253                                
+
+
+
+--- show macsec status interface TwoGigabitEthernet0/0/0 | include Transmitting|Cipher: ---
+  Cipher:                   GCM-AES-256
+  Transmitting:             TRUE
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show running-config | include ^access-session ---
+access-session mac-move deny
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 1
+      Secured Sessions... 1
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+Tw0/0/0         2481.3b87.5060/0002  PQAUTO-MKA-EAP    NO                 YES                                                   
+2               2481.3b87.54e0/0002  1                 Secured            4BED054510AB61E4ED76AF79DB5C4253                                
+
+
+
+--- show macsec status interface TwoGigabitEthernet0/0/0 | include Transmitting|Cipher: ---
+  Cipher:                   GCM-AES-256
+  Transmitting:             TRUE

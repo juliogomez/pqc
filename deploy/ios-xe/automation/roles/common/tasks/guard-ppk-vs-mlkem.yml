@@ -1,0 +1,22 @@
+---
+# Pre-flight for ipsec-pq-ppk.yml (present only). Refuses if ML-KEM is configured.
+
+- ansible.builtin.import_tasks: netconf-fetch.yml
+  vars:
+    nc_label: probe for an existing ML-KEM proposal
+    nc_source: running
+    nc_filter: |
+      <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+        <crypto>
+          <ikev2 xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+            <proposal/>
+          </ikev2>
+        </crypto>
+      </native>
+
+- ansible.builtin.import_tasks: refuse-stacked-pq-path.yml
+  vars:
+    refuse_search_token: '<mlkem'
+    refuse_other_path: ML-KEM
+    refuse_this_path: PPK
+    refuse_teardown_cmd: ansible-playbook ipsec-pq-mlkem.yml -e state=absent

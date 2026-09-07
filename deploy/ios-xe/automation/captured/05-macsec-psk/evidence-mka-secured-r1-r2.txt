@@ -1,0 +1,88 @@
+
+============================================================
+  R1 (198.18.154.202)
+============================================================
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 1
+      Secured Sessions... 1
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+Tw0/0/0         2481.3b87.54e0/0009  PQAUTO-MKA-PSK    NO                 NO                                                    
+9               2481.3b87.5060/0009  1                 Secured            01                                                              
+
+
+
+--- show macsec status interface TwoGigabitEthernet0/0/0 ---
+ Capabilities
+
+  Ciphers Supported:        GCM-AES-128 GCM-AES-256
+  Cipher:                   GCM-AES-256
+  Confidentiality Offset:   0
+  Replay Window:            0
+  Delay Protect Enable:     FALSE
+  Include-SCI:              TRUE
+
+ Transmit SC:
+  SCI:                      24813B8754E00009
+  Transmitting:             TRUE
+ Transmit SA:
+  Next PN:                  49
+  Delay Protect AN/nextPN:  NA/0
+
+ Receive SC:
+  SCI:                      24813B8750600009
+  Receiving:                TRUE
+ Receive SA:
+  Next PN:                  51
+  AN:                       0 
+  Delay Protect AN/LPN:     0/0
+
+============================================================
+  R2 (198.18.154.203)
+============================================================
+
+--- show mka sessions ---
+
+Total MKA Sessions....... 1
+      Secured Sessions... 1
+      Pending Sessions... 0
+
+====================================================================================================
+Interface       Local-TxSCI          Policy-Name       Inherited          Key-Server                                            
+Port-ID         Peer-RxSCI           MACsec-Peers      Status             CKN                                                   
+====================================================================================================
+Tw0/0/0         2481.3b87.5060/0009  PQAUTO-MKA-PSK    NO                 YES                                                   
+9               2481.3b87.54e0/0009  1                 Secured            01                                                              
+
+
+
+--- show macsec status interface TwoGigabitEthernet0/0/0 ---
+ Capabilities
+
+  Ciphers Supported:        GCM-AES-128 GCM-AES-256
+  Cipher:                   GCM-AES-256
+  Confidentiality Offset:   0
+  Replay Window:            0
+  Delay Protect Enable:     FALSE
+  Include-SCI:              TRUE
+
+ Transmit SC:
+  SCI:                      24813B8750600009
+  Transmitting:             TRUE
+ Transmit SA:
+  Next PN:                  50
+  Delay Protect AN/nextPN:  NA/0
+
+ Receive SC:
+  SCI:                      24813B8754E00009
+  Receiving:                TRUE
+ Receive SA:
+  Next PN:                  50
+  AN:                       0 
+  Delay Protect AN/LPN:     0/0

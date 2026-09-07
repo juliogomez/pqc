@@ -1,0 +1,53 @@
+{#
+  Post-quantum SSH key exchange.
+
+  /native/ip/ssh/server/algorithm/kex/kex-options        (ordered-by user)
+  /native/ip/ssh/server/algorithm/hostkey/hostkey-options (ordered-by user)
+
+  Note there is no separate namespace here. Cisco-IOS-XE-ip is a SUBMODULE of
+  Cisco-IOS-XE-native, not a module that augments it, so these nodes are in the native
+  namespace and the payload carries one xmlns.
+
+  Both leaf-lists are ordered-by user, which means the order in this document is the
+  offer order and the first entry is what a capable client lands on. So the whole
+  container is pushed with nc:operation="replace" rather than merged: a merge would add
+  entries in whatever position the box felt like, and "which algorithm did we actually
+  negotiate" would become a coin flip.
+
+  26.2 offers three hybrids and no pure ML-KEM, which is the right call: a break in
+  either half still leaves you the other. The pure-PQ option does not exist, so you
+  cannot accidentally pick it.
+
+  The hostkey list is not a PQ setting. It is the thing that stops importing an EC
+  keypair from locking you out of the box: the server starts advertising
+  ecdsa-sha2-nistp256 and then fails every handshake that selects it. Pin it before you
+  import anything.
+-#}
+{% set op = 'remove' if state == 'absent' else 'replace' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <ip>
+      <ssh>
+        <server>
+          <algorithm>
+            <kex nc:operation="{{ op }}">
+{% if state == 'present' %}
+{% for algo in pq_ssh_kex %}
+              <kex-options>{{ algo }}</kex-options>
+{% endfor %}
+{% endif %}
+            </kex>
+            <hostkey nc:operation="{{ op }}">
+{% if state == 'present' %}
+{% for algo in pq_ssh_hostkey %}
+              <hostkey-options>{{ algo }}</hostkey-options>
+{% endfor %}
+{% endif %}
+            </hostkey>
+          </algorithm>
+        </server>
+      </ssh>
+    </ip>
+  </native>
+</config>

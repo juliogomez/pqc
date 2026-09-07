@@ -1,0 +1,304 @@
+
+PLAY [Build MACsec with a pre-shared key] **************************************
+
+TASK [macsec_psk : MACsec PSK | sanity] ****************************************
+ok: [r1]
+ok: [r2]
+[WARNING]: ansible-pylibssh not installed, falling back to paramiko
+
+TASK [macsec_psk : Look for an existing key chain] *****************************
+ok: [r1]
+ok: [r2]
+
+TASK [macsec_psk : Record whether the key chain is already there] **************
+ok: [r2]
+ok: [r1]
+
+TASK [macsec_psk : Say plainly that the stored CAK is being left alone] ********
+ok: [r1] => {
+    "msg": "Key chain PQAUTO-MACSEC-KC already exists on r1, so the key-string was NOT pushed and the CAK currently on the box is untouched. IOS XE stores it encrypted, so a rotated lab_macsec_cak cannot be compared or applied here. To rotate it: \"ansible-playbook macsec-psk.yml -e state=absent -e macsec_psk_remove_globals=true\" and then \"ansible-playbook macsec-psk.yml\"."
+}
+ok: [r2] => {
+    "msg": "Key chain PQAUTO-MACSEC-KC already exists on r2, so the key-string was NOT pushed and the CAK currently on the box is untouched. IOS XE stores it encrypted, so a rotated lab_macsec_cak cannot be compared or applied here. To rotate it: \"ansible-playbook macsec-psk.yml -e state=absent -e macsec_psk_remove_globals=true\" and then \"ansible-playbook macsec-psk.yml\"."
+}
+
+TASK [macsec_psk : Render MKA policy and key chain] ****************************
+ok: [r2]
+ok: [r1]
+
+TASK [Push MKA policy and key chain] *******************************************
+included: common for r1, r2
+
+TASK [common : NETCONF edit-config | MKA policy PQAUTO-MKA-PSK and key chain PQAUTO-MACSEC-KC (key-string skipped, chain exists)] ***
+ok: [r1]
+ok: [r2]
+
+TASK [macsec_psk : Apply MACsec PSK to the interface] **************************
+ok: [r2]
+ok: [r1]
+
+TASK [Save] ********************************************************************
+included: common for r1, r2
+
+PLAY [Report the post-quantum posture] *****************************************
+
+TASK [Verify | negotiated ML-KEM group per IKEv2 SA] ***************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 SA operational data] ************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [verify : Verify | record the negotiated groups] **************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | PPK quantum-resistance counters] ********************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | IKEv2 statistics] *********************************
+ok: [r3]
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | record the PPK counters as YANG reports them] **********
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [verify : Verify | IKEv2 signature algorithm and PPK counters (show parsing, see comment)] ***
+ok: [r1]
+ok: [r3]
+ok: [r2]
+
+TASK [verify : Verify | record the signature algorithms] ***********************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [verify : Verify | record the PPK counters as the CLI reports them] *******
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | SSH key exchange algorithms] ************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip ssh server algorithm kex] **********************
+ok: [r1]
+ok: [r2]
+ok: [r3]
+
+TASK [verify : Verify | record the SSH posture] ********************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | HTTPS PQC type] *************************************************
+included: common for r2, r1, r3
+
+TASK [common : NETCONF get | ip http secure-pqc-type] **************************
+ok: [r3]
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the HTTPS posture] ******************************
+ok: [r2]
+ok: [r1]
+ok: [r3]
+
+TASK [Verify | access-session PQ settings] *************************************
+included: common for r2, r1
+
+TASK [common : NETCONF get | access-session pqc-type / tls-version] ************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | record the access-session settings] ********************
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | MKA and MACsec state (show parsing, see comment)] ******
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | record the MACsec state] *******************************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | is MACsec actually enabled on this interface] **********
+ok: [r2]
+ok: [r1]
+
+TASK [verify : Verify | MACsec delta | push a known number of frames across the secured link] ***
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | MACsec delta | second read of the counters] ************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | MACsec delta | record it] ******************************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | MACsec delta | the delta itself] ***********************
+ok: [r1]
+ok: [r2]
+
+TASK [verify : Verify | PQ posture] ********************************************
+ok: [r2] => {
+    "msg": {
+        "host": "r2",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": false,
+            "ike_sa_count": 0,
+            "negotiated_pqc_group": [],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": []
+        },
+        "macsec": {
+            "cipher": "GCM-AES-256",
+            "ckn": "01",
+            "delta_pings_succeeded": "20",
+            "mka_secured_sessions": "1",
+            "out_pkts_encrypted_DELTA": 40,
+            "out_pkts_encrypted_after_ping": "91",
+            "out_pkts_encrypted_cumulative": "51",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": true
+        },
+        "ssh": {
+            "hostkey": [
+                "rsa-sha2-512",
+                "rsa-sha2-256"
+            ],
+            "kex_offer_order": []
+        }
+    }
+}
+ok: [r1] => {
+    "msg": {
+        "host": "r1",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": false,
+            "ike_sa_count": 0,
+            "negotiated_pqc_group": [],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": []
+        },
+        "macsec": {
+            "cipher": "GCM-AES-256",
+            "ckn": "01",
+            "delta_pings_succeeded": "20",
+            "mka_secured_sessions": "1",
+            "out_pkts_encrypted_DELTA": 40,
+            "out_pkts_encrypted_after_ping": "90",
+            "out_pkts_encrypted_cumulative": "50",
+            "pqc_type": "(default: non-pqc)",
+            "tls_version": "(default: all)",
+            "transmitting": true
+        },
+        "ssh": {
+            "hostkey": [
+                "rsa-sha2-512",
+                "rsa-sha2-256"
+            ],
+            "kex_offer_order": [
+                "mlkem768x25519-sha256",
+                "mlkem768nistp256-sha256",
+                "curve25519-sha256",
+                "ecdh-sha2-nistp256"
+            ]
+        }
+    }
+}
+ok: [r3] => {
+    "msg": {
+        "host": "r3",
+        "https": {
+            "pqc_type": "(default: all)",
+            "tls_version": "(unset)"
+        },
+        "ipsec": {
+            "expected_pqc_group": "pqc-gt-mlkem768",
+            "ike_fragmentation": false,
+            "ike_sa_count": 0,
+            "negotiated_pqc_group": [],
+            "ppk_counters": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "ppk_retrieve_fail": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_counters_yang_broken_on_26_2": {
+                "dynamic_ppk": "0",
+                "manual_ppk": "0",
+                "ppk_auth_fail": "0",
+                "ppk_id_mismatch": "0",
+                "quantum_resistant_sessions": "0"
+            },
+            "ppk_secured_sas": [],
+            "signature_algorithm": []
+        },
+        "macsec": "not on the MACsec link",
+        "ssh": {
+            "hostkey": [
+                "rsa-sha2-512",
+                "rsa-sha2-256"
+            ],
+            "kex_offer_order": []
+        }
+    }
+}
+
+PLAY RECAP *********************************************************************
+r1                         : ok=35   changed=0    unreachable=0    failed=0    skipped=15   rescued=0    ignored=0   
+r2                         : ok=35   changed=0    unreachable=0    failed=0    skipped=15   rescued=0    ignored=0   
+r3                         : ok=16   changed=0    unreachable=0    failed=0    skipped=17   rescued=0    ignored=0   
+
