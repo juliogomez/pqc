@@ -4,8 +4,8 @@
 !   Tunnel1 -> R2  (10.0.12.2)  profile HUB-MLDSA,     hub leg,               ipsec.md Exercise 7
 !
 ! Three things here are not obvious and are the whole point of ipsec.md:
-!   - "service internal" gates every ML-DSA CLI on 26.2.1. Without it
-!     "mldsakeypair" does not parse at all.
+!   - On some early 26.2.x images "mldsakeypair" is gated behind "service internal".
+!     That gate should disappear at GA; see ipsec.md "Things that will bite you".
 !   - "pqc mlkem768 optional" stays in the proposal. ML-DSA replaces the *authentication*
 !     method, it does not touch the key exchange.
 !   - "crypto ikev2 fragmentation mtu 1400" is mandatory, not tuning. ML-DSA-65 IKE_AUTH
@@ -26,7 +26,6 @@ version 26.2
 system mode insecure
 service timestamps debug datetime msec
 service timestamps log datetime msec
-service internal
 platform qfp utilization monitor load 80
 platform resource service-plane-heavy
 !

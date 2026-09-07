@@ -8,8 +8,9 @@
 ! to change "authentication local" together, even with both methods listed under
 ! "authentication remote".
 !
-! Mirror of R1 otherwise. Same "service internal" prerequisite, same mandatory
-! "crypto ikev2 fragmentation mtu 1400", same unbound comparison trustpoints.
+! Mirror of R1 otherwise. Same mandatory "crypto ikev2 fragmentation mtu 1400", same
+! unbound comparison trustpoints. On early 26.2.x images see ipsec.md troubleshooting if
+! "mldsakeypair" won't parse.
 !
 ! Sanitized: password hashes, PSKs, PPKs, the chassis serial and every
 ! certificate body have been replaced with <removed>. Regenerate the PKI with
@@ -22,7 +23,6 @@ Current configuration : 98573 bytes
 version 26.2
 service timestamps debug datetime msec
 service timestamps log datetime msec
-service internal
 platform qfp utilization monitor load 80
 !
 hostname bfl-cpoc-d14-8235-03

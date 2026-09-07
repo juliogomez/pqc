@@ -1,4 +1,4 @@
-# IPsec / IKEv2 on IOS XE
+# IPsec on IOS XE
 
 > **Pre-req:** this doc assumes you have reviewed the container labs on
 > [IPsec key exchange](../../learn/ipsec/key-exchange/README.md) and
@@ -17,78 +17,10 @@ emulates a real WAN where crypto endpoints are not directly connected.
 
 ## Exercise 1: Classical IKEv2 baseline
 
-First, set up the underlay. Create VLANs and SVIs for L3 routing.
+Set up the [underlay](README.md#set-up-the-underlay) first if you haven't already. You need
+end-to-end reachability between R1 and R3 before the tunnel will come up.
 
-**On R1:**
-
-```
-vlan 12
- name R1-to-R2
-
-interface TwoGigabitEthernet0/0/0
- switchport mode access
- switchport access vlan 12
-
-interface Vlan12
- ip address 10.0.12.1 255.255.255.252
- no shutdown
-
-ip route 10.0.23.0 255.255.255.252 10.0.12.2
-```
-
-**On R2 (transit):**
-
-```
-vlan 12
- name R1-to-R2
-vlan 23
- name R2-to-R3
-
-interface TwoGigabitEthernet0/0/0
- switchport mode access
- switchport access vlan 12
-
-interface TwoGigabitEthernet0/0/1
- switchport mode access
- switchport access vlan 23
-
-interface Vlan12
- ip address 10.0.12.2 255.255.255.252
- no shutdown
-
-interface Vlan23
- ip address 10.0.23.1 255.255.255.252
- no shutdown
-
-ip routing
-```
-
-**On R3:**
-
-```
-vlan 23
- name R2-to-R3
-
-interface TwoGigabitEthernet0/0/0
- switchport mode access
- switchport access vlan 23
-
-interface Vlan23
- ip address 10.0.23.2 255.255.255.252
- no shutdown
-
-ip route 10.0.12.0 255.255.255.252 10.0.23.1
-```
-
-Verify end-to-end reachability:
-
-```
-R1# traceroute 10.0.23.2
-  1 10.0.12.2 0 msec 0 msec 0 msec
-  2 10.0.23.2 4 msec 0 msec *
-```
-
-Two hops. R2 is forwarding. Now build the tunnel.
+Now build the tunnel.
 
 **On R1:**
 
@@ -426,29 +358,6 @@ that carries the private key, its certificate and the issuing CA chain together.
 path verified end to end on this hardware.
 [automation/DESIGN.md](automation/DESIGN.md#q1-the-ml-dsa-certificate-path) has the full
 experiment written up.
-
-### Second surprise: the CLI is hidden
-
-The ML-DSA commands don't exist until you turn on `service internal`:
-
-```
-R1(config)# crypto pki trustpoint TP-MLDSA65
-R1(ca-trustpoint)# mldsakeypair TP-MLDSA65 65
-                    ^
-% Invalid input detected at '^' marker.
-```
-
-Add the knob and the same command parses:
-
-```
-R1(config)# service internal
-R1(config)# crypto pki trustpoint TP-MLDSA65
-R1(ca-trustpoint)# mldsakeypair TP-MLDSA65 65
-R1(ca-trustpoint)#
-```
-
-`service internal` is a 26.2.1 requirement for this feature. Expect it to disappear once
-ML-DSA is GA, but on this build nothing works without it.
 
 ### Build the PKI
 
@@ -902,6 +811,32 @@ silently accepted.
 
 A few findings from running this on 26.2:
 
+**`mldsakeypair` fails with "Invalid input" on early 26.2.x builds.** On some pre-GA
+images the ML-DSA trustpoint CLI is gated behind `service internal`, a debug-only global
+that should not be required once ML-DSA is GA. If you see this:
+
+```
+R1(config)# crypto pki trustpoint TP-MLDSA65
+R1(ca-trustpoint)# mldsakeypair TP-MLDSA65 65
+                    ^
+% Invalid input detected at '^' marker.
+```
+
+turn it on for the session, retry, and turn it back off when you're done:
+
+```
+R1(config)# service internal
+R1(config)# crypto pki trustpoint TP-MLDSA65
+R1(ca-trustpoint)# mldsakeypair TP-MLDSA65 65
+R1(ca-trustpoint)#
+...
+R1(config)# no service internal
+```
+
+The PKCS#12 import path in Exercise 5 above did not need this on the build we verified,
+but the automation layer and any hand-edited `mldsakeypair` line can hit it on earlier
+images.
+
 **Importing a certificate can lock you out of SSH.** During testing, importing a
 PKCS#12 bundle caused the router to start advertising a new SSH host key
 algorithm and then fail every handshake that selected it:
@@ -973,9 +908,8 @@ interesting bit: the config is all modelled, and every exec-mode verb you typed 
 
 ---
 
-**Cleanup:** nothing here undoes itself, and two of the settings you just made
-(`service internal` and `revocation-check none`) are ones you don't want to leave on a real
-box. [Putting the routers back](README.md#putting-the-routers-back) has the full teardown in
-dependency order. Do it after the other docs if you're carrying on, since they build on this
-underlay. Next: [SSH](ssh.md).
+**Cleanup:** nothing here undoes itself, and `revocation-check none` is a setting you don't
+want to leave on a real box. [Putting the routers back](README.md#putting-the-routers-back)
+has the full teardown in dependency order. Do it after the other docs if you're carrying on,
+since they build on this underlay. Next: [SSH](ssh.md).
 

@@ -36,26 +36,108 @@ site-to-site tunnel can now be quantum-safe end to end.
 
 ```
 
-Every doc below shares this topology. The IPsec doc builds the underlay configs from scratch.
+Every doc below shares this topology.
+
+## Set up the underlay
+
+Before you touch any protocol doc, wire up VLANs, SVIs, and static routes so the three
+routers can reach each other. IPsec needs end-to-end reachability between R1 and R3; MACsec
+needs the R1–R2 link up. SSH and TLS only need management reachability from your laptop.
+
+**On R1:**
+
+```
+vlan 12
+ name R1-to-R2
+
+interface TwoGigabitEthernet0/0/0
+ switchport mode access
+ switchport access vlan 12
+
+interface Vlan12
+ ip address 10.0.12.1 255.255.255.252
+ no shutdown
+
+ip route 10.0.23.0 255.255.255.252 10.0.12.2
+```
+
+**On R2 (transit):**
+
+```
+vlan 12
+ name R1-to-R2
+vlan 23
+ name R2-to-R3
+
+interface TwoGigabitEthernet0/0/0
+ switchport mode access
+ switchport access vlan 12
+
+interface TwoGigabitEthernet0/0/1
+ switchport mode access
+ switchport access vlan 23
+
+interface Vlan12
+ ip address 10.0.12.2 255.255.255.252
+ no shutdown
+
+interface Vlan23
+ ip address 10.0.23.1 255.255.255.252
+ no shutdown
+
+ip routing
+```
+
+**On R3:**
+
+```
+vlan 23
+ name R2-to-R3
+
+interface TwoGigabitEthernet0/0/0
+ switchport mode access
+ switchport access vlan 23
+
+interface Vlan23
+ ip address 10.0.23.2 255.255.255.252
+ no shutdown
+
+ip route 10.0.12.0 255.255.255.252 10.0.23.1
+```
+
+Verify end-to-end reachability:
+
+```
+R1# traceroute 10.0.23.2
+  1 10.0.12.2 0 msec 0 msec 0 msec
+  2 10.0.23.2 4 msec 0 msec *
+```
+
+Two hops. R2 is forwarding. You're ready for whichever protocol doc you want.
 
 ## The docs
 
-The order here isn't the same as [Stage 1's](../../learn/README.md#recommended-order), and
-that's deliberate. In containers you can start anywhere because each lab builds its own
-world. On hardware the config accumulates, so the order follows the dependencies: IPsec
-first because it builds the underlay everything else sits on, SSH next because it's a single
-line on a box you're already logged into, MACsec third because it needs the VLANs and SVIs
-IPsec created, and TLS last because it's the one where the interesting finding is that the
-router was already post-quantum before you typed anything.
+Once the underlay is in place, pick any doc. They don't depend on each other: IPsec, SSH,
+MACsec, and TLS each stand alone. The order here isn't the same as
+[Stage 1's](../../learn/README.md#recommended-order), and that's fine. In containers each
+lab builds its own world; on hardware you build the underlay once and then run whatever
+interests you.
 
-| # | Doc | What you do |
-|---|-----|-------------|
-| 1 | [**IPsec / IKEv2**](ipsec.md) | Classical baseline, RFC 8784 PPK, native ML-KEM-768 hybrid, a phased hub-and-spoke migration, then ML-DSA certificate authentication and what it costs on the wire |
-| 2 | [**SSH**](ssh.md) | Enable a PQ hybrid KEX on the SSH server and prove it from your laptop |
-| 3 | [**MACsec**](macsec.md) | PSK-based MKA end to end, then EAP-TLS with ML-KEM on a local CA (no RADIUS needed) |
-| 4 | [**TLS**](tls.md) | Prove the management HTTPS server is already negotiating hybrid PQ key exchange, and steer it |
+| Doc | What you do |
+|-----|-------------|
+| [**IPsec**](ipsec.md) | Classical baseline, RFC 8784 PPK, native ML-KEM-768 hybrid, a phased hub-and-spoke migration, then ML-DSA certificate authentication and what it costs on the wire |
+| [**SSH**](ssh.md) | Enable a PQ hybrid KEX on the SSH server and prove it from your laptop |
+| [**MACsec**](macsec.md) | PSK-based MKA end to end, then EAP-TLS with ML-KEM on a local CA (no RADIUS needed) |
+| [**TLS**](tls.md) | Prove the management HTTPS server is already negotiating hybrid PQ key exchange, and steer it |
 
-Everything in those docs was run and verified on real hardware. 
+Everything in those docs was run and verified on real hardware.
+
+## Automation
+
+The same four protocols exist as Ansible playbooks over NETCONF. Start with
+[`automation/README.md`](automation/README.md) for what to install, what to run, and what
+goes wrong; [`automation/DESIGN.md`](automation/DESIGN.md) if you want the YANG-vs-CLI
+accounting. Do the CLI docs first so a failed assertion makes sense when you see it.
 
 ## Support summary
 
@@ -69,7 +151,7 @@ Everything in those docs was run and verified on real hardware.
 | SSH | Authentication | ML-DSA user key | Not available |
 | MACsec | Key exchange | PSK-based MKA + GCM-AES-256 | Working |
 | MACsec | Key exchange | ML-KEM EAP-TLS MKA | Working |
-| MACsec | Authentication | ML-DSA certificates | Not supported |
+| MACsec | Authentication | ML-DSA certificates | Not available |
 | TLS | Key exchange | ML-KEM-768 hybrid for mgmt HTTPS | Working |
 | TLS | Authentication | ML-DSA certificate auth | Not available |
 
@@ -131,14 +213,11 @@ without owning the hardware:
 
 ### Clean after yourself
 
-None of these break a tunnel, so nothing reminds you they're still there. Three of them
-(`service internal`, `ip http server`, and the `revocation-check none` below) are real
-security regressions to leave behind on a box that isn't a lab.
+None of these break a tunnel, so nothing reminds you they're still there. Two of them
+(`ip http server` and the `revocation-check none` below) are real security regressions to
+leave behind on a box that isn't a lab.
 
 ```
-! debug-only global that unlocked the ML-DSA CLI in ipsec.md
-no service internal
-
 ! the packet capture from the IKE_AUTH size measurement, on R2
 R2# no monitor capture CAP
 
@@ -178,8 +257,16 @@ show crypto ipsec sa | include peer     ! expect no output
 show mka sessions                       ! expect Total MKA Sessions 0
 show access-session                     ! expect no sessions
 show crypto pki trustpoints | include Trustpoint
-show run | include service internal|pqc-type|monitor capture
+show run | include pqc-type|monitor capture
 ```
+
+### Troubleshooting
+
+**`mldsakeypair` won't parse.** On some early 26.2.x images the ML-DSA trustpoint CLI is
+gated behind `service internal`. That gate should disappear at GA. See
+[Things that will bite you](ipsec.md#things-that-will-bite-you) in the IPsec doc for the
+symptom and the one-session workaround. If you enabled it during a lab run, take it back
+out with `no service internal` before you walk away.
 
 ### On your workstation
 

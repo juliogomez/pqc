@@ -57,7 +57,9 @@ See [the full lab guide](learn/README.md) for the recommended order, timing, and
 
 ## Stage 2 - Deploy on Cisco hardware
 
-Same protocols, same RFCs, on Cisco devices you use in your network.
+Same protocols, same RFCs, on Cisco devices you use in your network. Every exercise also
+has Ansible playbooks that push the same posture over NETCONF, with captured output from
+real hardware runs if you want to read the automation path without running it.
 
 See [the deploy guide](deploy/README.md) for the platforms covered and how to navigate the
 docs without hardware.

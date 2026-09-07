@@ -123,11 +123,11 @@ In general terms: **a successful edit is not a working
 feature.** That's why every unit in this layer asserts against the box after configuring it,
 rather than trusting the reply. A NETCONF remove of a node the server chose not to remove still answers `<ok/>`.
 
-### `service internal` gates a modelled node
+### `service internal` gates a modelled node (early 26.2.x; expect removal at GA)
 
-The `mldsakeypair` container is in the schema, published, with proper types. On 26.2.1 CLI an
-edit against it needs `service internal` on the box, and **NETCONF does not bypass the
-gate**.
+The `mldsakeypair` container is in the schema, published, with proper types. On some
+pre-GA 26.2.x builds, a CLI edit against it needs `service internal` on the box, and
+**NETCONF does not bypass the gate**.
 
 Which tells you something about the implementation: the YANG interface sits *below* the CLI
 parser's feature gating, not beside it. The node exists in the model and is still refused for

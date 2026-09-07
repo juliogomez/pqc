@@ -168,7 +168,7 @@ but that is not a Cisco source.
 
 ### 1e. Does the dashboard expose any crypto configuration?
 
-**No.** Not for IPsec/IKEv2 proposals, not cipher choices, not certificates.
+**No.** Not for IPsec proposals, not cipher choices, not certificates.
 
 The router intro page states plainly: "Features not explicitly listed here should be
 considered to be not supported." The entire configuration surface is WAN uplink settings,

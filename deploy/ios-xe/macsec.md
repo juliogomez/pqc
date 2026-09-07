@@ -52,8 +52,8 @@ middle of the topology.
 
 ### If you still have the IPsec tunnels up
 
-Nothing to undo. MACsec needs the VLANs and SVIs that
-[IPsec Exercise 1](ipsec.md#exercise-1-classical-ikev2-baseline) built, and the two
+Nothing to undo. MACsec needs the VLANs and SVIs from
+[Set up the underlay](README.md#set-up-the-underlay), and the two
 features sit at different layers on the same wire, so they compose without conflicting.
 IPsec is Layer 3 and end-to-end between the crypto endpoints; MACsec is Layer 2 and
 strictly hop-by-hop on one physical link. Neither knows the other exists.

@@ -29,7 +29,7 @@ Checking which tier you're on is easy with `show license summary`, or
 
 **Basic connectivity is a requirement and it is not automated.** VLANs, SVIs, addresses and
 routing have to exist before you run anything here. Build them from
-[ipsec.md Exercise 1](../ipsec.md#exercise-1-classical-ikev2-baseline) or from
+[Set up the underlay](../README.md#set-up-the-underlay) or from
 [`device-configs/`](../device-configs/). Nothing in this directory configures an SVI, an
 access VLAN or a static route, on purpose: automating the underlay would mean owning the
 thing you'd need working in order to fix a mistake.
