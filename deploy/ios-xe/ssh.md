@@ -170,4 +170,4 @@ fallback unless you explicitly tell it to.
 **Cleanup:** this doc leaves two lines behind and you should keep both. The hostkey pin above
 is what stops the lockout, and the hybrid KEX list is strictly better than the shipped
 default. [Putting the routers back](README.md#two-ssh-settings-worth-keeping) explains why,
-and what to remove first if you do want them gone. Next: [MACsec](macsec.md).
+and what to remove first if you do want them gone. Next: [MACsec / 802.1X](macsec.md).

@@ -127,7 +127,7 @@ interests you.
 |-----|-------------|
 | [**IPsec**](ipsec.md) | Classical baseline, RFC 8784 PPK, native ML-KEM-768 hybrid, a phased hub-and-spoke migration, then ML-DSA certificate authentication and what it costs on the wire |
 | [**SSH**](ssh.md) | Enable a PQ hybrid KEX on the SSH server and prove it from your laptop |
-| [**MACsec**](macsec.md) | PSK-based MKA end to end, then EAP-TLS with ML-KEM on a local CA (no RADIUS needed) |
+| [**MACsec / 802.1X**](macsec.md) | PSK-based MKA end to end, then EAP-TLS with ML-KEM on a local CA (no RADIUS needed) |
 | [**TLS**](tls.md) | Prove the management HTTPS server is already negotiating hybrid PQ key exchange, and steer it |
 
 Everything in those docs was run and verified on real hardware.

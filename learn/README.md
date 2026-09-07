@@ -1,6 +1,6 @@
 # Stage 1: learn the protocols in containers
 
-Take the security protocols you already run (IPsec, TLS, MACsec, SSH) all the way to
+Take the security protocols you already run (IPsec, TLS, MACsec / 802.1X, SSH) all the way to
 **post-quantum**, one piece of the handshake at a time. Spin up containers, capture real
 packets, and measure the trade-offs with your own eyes.
 
@@ -21,7 +21,7 @@ progression:
 
 | Protocol | What you learn |
 |----------|----------------|
-| [**IPsec / IKEv2**](#ipsec--ikev2-layer-3-vpns) | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
+| [**IPsec**](#ipsec-layer-3-vpns) | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
 | [**TLS 1.3**](#tls-13-the-webs-secure-channel) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
 | [**MACsec / 802.1X**](#macsec--8021x-layer-2-link-encryption) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
 | [**SSH**](#ssh-secure-remote-access) | PQ key exchange on by default; **loud** downgrade; composite ML-DSA auth |
@@ -37,7 +37,7 @@ to understand *why* lattice problems are hard (and attack one yourself), that's 
 
 ## The labs
 
-### IPsec / IKEv2 (Layer 3 VPNs)
+### IPsec (Layer 3 VPNs)
 
 Take a real IKEv2/IPsec VPN tunnel post-quantum.
 
@@ -71,14 +71,14 @@ certificate is still classical.
 
 ### MACsec / 802.1X (Layer 2 link encryption)
 
-Take MACsec post-quantum. Its entire quantum exposure lives in an EAP-TLS handshake.
+Take MACsec / 802.1X post-quantum. Its entire quantum exposure lives in an EAP-TLS handshake.
 
-- **[MACsec](macsec/README.md)** (50 min, intermediate):
+- **[MACsec / 802.1X](macsec/README.md)** (50 min, intermediate):
   Trace MACsec's key hierarchy, run a real EAP-TLS handshake and prove in the captured bytes that it negotiates hybrid **DH + ML-KEM**; watch how easily it silently downgrades to classical TLS 1.2; then swap the certificates from classical ECDSA to post-quantum **ML-DSA** and measure the size cost as EAP fragments the handshake across 3-4x more EAPOL frames.
 
 *Both pillars live in a **single** EAP-TLS handshake here, so this is one combined lab, at Layer 2 over a different control plane, a useful contrast for anyone running switching/access infrastructure.*
 
-**On Cisco hardware:** [MACsec on IOS XE](../deploy/ios-xe/macsec.md). The PQ key exchange
+**On Cisco hardware:** [MACsec / 802.1X on IOS XE](../deploy/ios-xe/macsec.md). The PQ key exchange
 is a supported feature and the write-up runs it end to end, PSK first and then EAP-TLS with
 ML-KEM, including the three config lines that decide whether frames are actually
 encrypted. ML-DSA certificates are the one open question left on 26.2.
@@ -122,7 +122,7 @@ Every lab ends with its own **Cleanup** section, and they're worth actually runn
 reasons, and neither is obvious from inside a container:
 
 **The keys land in your clone, not in the container.** The four labs that mint credentials
-(both authentication labs, MACsec, SSH) write their CA, host keys and certificates into
+(both authentication labs, MACsec / 802.1X, SSH) write their CA, host keys and certificates into
 `config/`, which is bind-mounted from your working copy. `docker compose down` removes the
 containers and leaves those private keys sitting on your disk. `.gitignore` keeps them out
 of commits, but that's not the same as deleting them, so each of those four cleanup sections

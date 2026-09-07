@@ -1,4 +1,4 @@
-# MACsec on IOS XE
+# MACsec / 802.1X on IOS XE
 
 > **Pre-req:** this doc assumes you have gone through the container [MACsec lab](../../learn/macsec/README.md), where an 802.1X/EAP-TLS handshake carried ML-KEM and ML-DSA at Layer 2.
 
