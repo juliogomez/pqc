@@ -11,7 +11,9 @@ the same RFCs meet Cisco's CLI, licensing, and platform capabilities.
 Two stages, in order:
 
 - **[Stage 1 - Learn](learn/README.md)**: hands-on labs with containers and real packet captures. No hardware required, nothing to lose, break and rerun as often as you like.
-- **[Stage 2 - Deploy](deploy/README.md)**: the same protocols on Cisco routers.
+- **[Stage 2 - Deploy](deploy/README.md)**: same protocols on real Cisco hardware,
+  built exercise by exercise in the protocol docs, plus a full automation layer that reproduces
+  every path with captured output from real hardware runs. 
 
 ---
 
