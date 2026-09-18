@@ -1,0 +1,42 @@
+---
+# verify is a reporter by default. It tells you what the posture is; it does not
+# decide whether you should be happy about it.
+verify_require_mlkem: false
+verify_require_macsec_secured: false
+verify_require_macsec_absent: false
+
+verify_macsec_only: false
+verify_ipsec_only: false
+
+verify_enforce: false
+verify_macsec_expect: secured
+verify_macsec_enforce: "{{ verify_macsec_only | bool }}"
+
+verify_effective_macsec_only: "{{ verify_macsec_only | bool }}"
+verify_effective_ipsec_only: "{{ verify_ipsec_only | bool }}"
+
+verify_collect_ipsec: "{{ not (verify_effective_macsec_only | bool) }}"
+verify_collect_ssh_https: >-
+  {{ not (verify_effective_macsec_only | bool)
+     and not (verify_effective_ipsec_only | bool) }}
+verify_collect_macsec: "{{ not (verify_effective_ipsec_only | bool) }}"
+verify_collect_full_fabric: >-
+  {{ not (verify_effective_macsec_only | bool)
+     and not (verify_effective_ipsec_only | bool) }}
+
+verify_effective_enforce: >-
+  {{ (verify_collect_full_fabric | bool)
+     or (verify_enforce | bool) }}
+
+verify_effective_require_macsec_secured: >-
+  {{ (verify_require_macsec_secured | bool)
+     or ((verify_macsec_enforce | bool) and verify_macsec_expect == 'secured') }}
+verify_effective_require_macsec_absent: >-
+  {{ (verify_require_macsec_absent | bool)
+     or ((verify_macsec_enforce | bool) and verify_macsec_expect == 'absent') }}
+
+verify_expected_pqc_group: "pqc-gt-{{ pq_key_exchange }}"
+
+verify_macsec_delta_pings: 20
+verify_macsec_peer: "{{ my_macsec_peer | default('') }}"
+verify_macsec_peer_address: "{{ my_macsec_peer_address | default('') }}"

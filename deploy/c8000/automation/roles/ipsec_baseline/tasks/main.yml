@@ -1,0 +1,204 @@
+---
+# Classical hub-and-spoke IPsec. The thing the PQ units are measured against.
+#
+# Straight to hub and spoke: R2 terminates one tunnel per spoke, R1 and R3
+# terminate one each toward the hub. No point-to-point stage to migrate away
+# from.
+#
+# Idempotent. Every configuration task is a NETCONF merge of named list entries,
+# so a second run pushes the same leaves and reports changed=false.
+#
+# The underlay is a precondition. Nothing here configures Vlan12, Vlan23, an SVI
+# address or a route.
+#
+# Note the shape of every NETCONF step: render the payload into nc_payload here,
+# in this role, then hand it to roles/common/tasks/netconf-edit.yml. The render
+# has to happen on this side because a template lookup resolves against the role
+# the task belongs to, and common has no templates directory.
+
+- name: IPsec baseline | sanity
+  ansible.builtin.assert:
+    that:
+      - my_peers | length > 0
+      - lab_ikev2_psk | default('') | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} has no peers in lab_topology, or lab_ikev2_psk is
+      not set. Copy group_vars/all/lab.yml.example to lab.yml and fill it in.
+    quiet: true
+
+- name: IPsec baseline | remove hand-built exercise objects
+  when: state == 'present'
+  block:
+    # The CLI exercises in ipsec.md use CLASSICAL-* names. If the reader ran those
+    # exercises before switching to automation, CLASSICAL-PROFILE matches the same
+    # peer addresses as the PQAUTO profiles, and IKEv2 may pick it (carrying
+    # whatever PQC state the exercises left behind) instead of the automation's
+    # profile. The symptom is verify reporting ML-KEM straight after a classical
+    # baseline run.
+    #
+    # The exercises also use Tunnel0, separate from the automation's Tunnel101/102
+    # numbering, but its CLASSICAL-IPSEC profile still needs to go.
+    #
+    # Scan before removing rather than firing "no ..." blind. IOS XE rejects a
+    # removal for an object that is not there, and ios_config surfaces that at the
+    # action-plugin layer where failed_when cannot reach it.
+    - name: Look for hand-built exercise objects
+      cisco.ios.ios_command:
+        commands:
+          - show running-config | include CLASSICAL-
+      register: ipsec_exercise_scan
+      changed_when: false
+
+    # Tunnel first: the profile below cannot go while the interface still names it.
+    - name: Release exercise Tunnel0 protection
+      cisco.ios.ios_config:
+        parents: interface Tunnel0
+        lines:
+          - no tunnel protection ipsec profile CLASSICAL-IPSEC
+      when: "'tunnel protection ipsec profile CLASSICAL-IPSEC' in _scan"
+      vars:
+        _scan: "{{ ipsec_exercise_scan.stdout[0] | default('') }}"
+
+    # Reverse dependency order: ipsec profile -> transform set -> ikev2 profile ->
+    # keyring -> policy -> proposal.
+    - name: Remove exercise IPsec objects
+      cisco.ios.ios_config:
+        lines: "no {{ item }}"
+      loop:
+        - crypto ipsec profile CLASSICAL-IPSEC
+        - crypto ipsec transform-set CLASSICAL-TS
+        - crypto ikev2 profile CLASSICAL-PROFILE
+        - crypto ikev2 keyring CLASSICAL-KEYRING
+        - crypto ikev2 policy CLASSICAL-POLICY
+        - crypto ikev2 proposal CLASSICAL-PROPOSAL
+      when: item in _scan
+      vars:
+        _scan: "{{ ipsec_exercise_scan.stdout[0] | default('') }}"
+
+- name: IPsec baseline | build
+  when: state == 'present'
+  block:
+
+    - name: Render IKEv2 global
+      ansible.builtin.set_fact:
+        nc_label: IKEv2 proposal, policy, keyring, fragmentation
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'ikev2-base.xml.j2') }}"
+
+    - name: Push IKEv2 global
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Render IKEv2 profiles
+      ansible.builtin.set_fact:
+        nc_label: "IKEv2 profiles ({{ my_peers | map(attribute='name') | join(', ') }})"
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'ikev2-profiles.xml.j2') }}"
+
+    - name: Push IKEv2 profiles
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Render IPsec transform set and profiles
+      ansible.builtin.set_fact:
+        nc_label: IPsec transform set and profiles
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'ipsec.xml.j2') }}"
+
+    - name: Push IPsec transform set and profiles
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Tunnel interfaces
+      ansible.builtin.include_tasks: tunnels.yml
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config
+
+# --- Teardown ----------------------------------------------------------------
+#
+# Reverse order, because the references run the other way: the tunnel points at
+# the IPsec profile, which points at the IKEv2 profile, which points at the
+# keyring. Remove a keyring while a profile still names it and the box refuses the
+# edit.
+- name: IPsec baseline | tear down
+  when: state == 'absent'
+  block:
+
+    - name: Tunnel interfaces
+      ansible.builtin.include_tasks: tunnels.yml
+
+    - name: Render IPsec removal
+      ansible.builtin.set_fact:
+        nc_label: remove IPsec transform set and profiles
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'ipsec.xml.j2') }}"
+
+    - name: Push IPsec removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Render IKEv2 profile removal
+      ansible.builtin.set_fact:
+        nc_label: remove IKEv2 profiles
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'ikev2-profiles.xml.j2') }}"
+
+    - name: Push IKEv2 profile removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Render IKEv2 global removal
+      ansible.builtin.set_fact:
+        nc_label: remove IKEv2 global
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'ikev2-base.xml.j2') }}"
+
+    - name: Push IKEv2 global removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    # Removing the config does not drop an SA that is already up, and the routers
+    # tear down in parallel, so whichever one finishes last can be left holding a
+    # stale SA against a peer that no longer has any crypto config. Verify then
+    # reports a live SA on one router and none on the others, which looks like a
+    # failed teardown and isn't.
+    #
+    # ESCAPE HATCH: network_cli. Cisco-IOS-XE-crypto has no rpc statements, so there
+    # is no modelled action for this. Not the shared clear-ikev2-sa.yml, because that
+    # one follows up with pings to re-trigger the tunnels and there are deliberately
+    # no tunnels left to re-trigger.
+    - name: Flush any SA left over from before the teardown
+      cisco.ios.ios_command:
+        commands:
+          - clear crypto ikev2 sa
+      changed_when: true
+
+    # "clear" returns before the SAs are actually gone, and verify.yml runs
+    # immediately after this role. Without the wait it samples a dying SA and
+    # reports a live SA count, which reads as a failed teardown. Poll instead of
+    # sleeping blind. Non-fatal: this is a teardown, and a lingering SA against a
+    # peer with no crypto config left will age out on its own.
+    - name: Wait for the SAs to clear
+      cisco.ios.ios_command:
+        commands:
+          - show crypto ikev2 sa
+      register: teardown_sa_check
+      until: (teardown_sa_check.stdout[0] | default('')) is not search('Tunnel-id')
+      retries: 6
+      delay: 5
+      failed_when: false
+      changed_when: false
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config

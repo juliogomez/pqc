@@ -1,0 +1,341 @@
+---
+# MACsec keyed by EAP-TLS instead of by a static secret.
+#
+# This is what makes MACsec interesting for post-quantum work. The CAK stops being
+# a secret you typed in and becomes something derived from a TLS 1.3 handshake,
+# which is a handshake with a key exchange in it, which is a key exchange ML-KEM
+# can go into. macsec-pq is the one-line change that does that; this is the
+# scaffolding it needs.
+#
+# C9300 TOPOLOGY: three links, all network-link (not textbook access-mode), and
+# you pick one per run with -e macsec_play_hosts=:
+#   macsec_s2r  sw1 ↔ rtr1  switch-to-router
+#   macsec_s2s      hx1 ↔ hx2   switch-to-switch
+#   macsec_h2s     sw1 ↔ sw2   host-to-switch
+# Self-signed certs with peer import, not SCEP/IOS CA like C8000. Each host
+# imports the cert of my_macsec_peer, never "whoever else is in the play".
+#
+# The identity certificate is the one the device already shipped with. This role
+# does not generate one, because IOS XE allows a single self-signed trustpoint
+# per box and enrolling a second deletes the first. cert-identity.yml has the
+# long version.
+#
+# What this builds, in order, and the order is not negotiable:
+#   1. find the shipped self-signed identity certificate on each device
+#   2. export and import certificates between the two peers
+#   3. the AAA / EAP / subscriber-policy stack
+#   4. the MKA policy and dot1x credentials (NETCONF)
+#   5. LAST, the interface, because that is what locks the port
+#
+# Authentication here is RSA-2048 and stays that way on 26.2. Nothing on this path
+# makes the signature quantum-safe.
+#
+# Idempotent. The NETCONF pushes are merges, ios_config diffs against the running
+# config, and the peer cert import is skipped when it is already Available.
+
+- name: EAP-TLS | skip devices with no management address
+  ansible.builtin.include_tasks: "{{ role_path }}/../common/tasks/skip-unaddressed.yml"
+
+- name: EAP-TLS | both ends of the link must be reachable
+  ansible.builtin.include_tasks: "{{ role_path }}/../common/tasks/assert-link-manageable.yml"
+
+- name: EAP-TLS | sanity
+  ansible.builtin.assert:
+    that:
+      - my_macsec_interface | length > 0
+      - my_macsec_identity | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} has no MACsec interface or identity in
+      group_vars/all/topology.yml.
+    quiet: true
+
+- name: EAP-TLS | build
+  when: state == 'present'
+  block:
+
+    # access-session pqc-type and tls-version are global, one setting per box, and
+    # they steer the EAP-TLS key exchange. If the two ends disagree, MKA starts and
+    # dies about two seconds later, forever, with both ends "Blocked On: User Profile
+    # Application". That looks exactly like a broken cert or a bad policy, so check it
+    # up front instead of burning the settle retries on it.
+    - name: PQ leaves | read what this box will offer
+      cisco.ios.ios_command:
+        commands:
+          - "show running-config | include ^access-session (pqc-type|tls-version)"
+      register: macsec_eaptls_pq_probe
+      changed_when: false
+
+    - name: PQ leaves | record them
+      ansible.builtin.set_fact:
+        macsec_eaptls_pqc_type: >-
+          {{ (macsec_eaptls_pq_probe.stdout[0] | default('')
+              | regex_search('access-session pqc-type (\S+)', '\1')
+              | default(['non-pqc'], true) | first) }}
+        macsec_eaptls_tls_version: >-
+          {{ (macsec_eaptls_pq_probe.stdout[0] | default('')
+              | regex_search('access-session tls-version (\S+)', '\1')
+              | default(['all'], true) | first) }}
+
+    - name: PQ leaves | both ends of the link must agree
+      ansible.builtin.assert:
+        that:
+          - macsec_eaptls_pqc_type == hostvars[my_macsec_peer].macsec_eaptls_pqc_type
+          - macsec_eaptls_tls_version == hostvars[my_macsec_peer].macsec_eaptls_tls_version
+        fail_msg: >-
+          {{ inventory_hostname }} and {{ my_macsec_peer }} disagree on the EAP-TLS key
+          exchange. {{ inventory_hostname }} offers pqc-type
+          {{ macsec_eaptls_pqc_type }} / TLS {{ macsec_eaptls_tls_version }};
+          {{ my_macsec_peer }} offers pqc-type
+          {{ hostvars[my_macsec_peer].macsec_eaptls_pqc_type }} / TLS
+          {{ hostvars[my_macsec_peer].macsec_eaptls_tls_version }}. MKA would start and
+          drop every few seconds. These leaves are global and this role does not set
+          them, so align the pair first:
+            ansible-playbook macsec-pq.yml -e macsec_play_hosts={{ macsec_play_hosts }}
+        success_msg: >-
+          both ends offer pqc-type {{ macsec_eaptls_pqc_type }}, TLS
+          {{ macsec_eaptls_tls_version }}
+        quiet: true
+      when: my_macsec_peer in ansible_play_hosts
+
+    - name: Find the identity certificate
+      ansible.builtin.include_tasks: cert-identity.yml
+
+    - name: Exchange certificates between peers
+      ansible.builtin.include_tasks: cert-exchange.yml
+
+    - name: Clean takeover of hand-built host-to-switch ports
+      ansible.builtin.include_tasks: interface-takeover.yml
+
+    - name: Isolated VLAN and SVI (host-to-switch only)
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: macsec-l2
+
+    - name: AAA, EAP and subscriber policy
+      ansible.builtin.include_tasks: aaa-stack.yml
+
+    - name: MKA and dot1x | inspect operational objects
+      cisco.ios.ios_command:
+        commands:
+          - "show mka policy {{ macsec_names.eaptls_mka_policy }}"
+          - >-
+            show running-config | section
+            ^dot1x credentials {{ my_macsec_dot1x_credentials }}
+      register: macsec_eaptls_objects
+      changed_when: false
+
+    - name: MKA and dot1x | record whether the objects already match
+      ansible.builtin.set_fact:
+        macsec_eaptls_objects_match: >-
+          {{
+            (macsec_eaptls_objects.stdout[0] | default('')
+             is search(macsec_names.eaptls_mka_policy ~ '\s+.*'
+                       ~ (macsec_cipher_suite | upper)))
+            and
+            (macsec_eaptls_objects.stdout[1] | default('')
+             is search('username ' ~ my_macsec_identity))
+            and
+            (macsec_eaptls_objects.stdout[1] | default('')
+             is search('pki-trustpoint ' ~ macsec_eaptls_identity_trustpoint))
+          }}
+
+    - name: Render MKA policy and dot1x credentials
+      ansible.builtin.set_fact:
+        nc_label: "MKA policy {{ macsec_names.eaptls_mka_policy }} and dot1x credentials"
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'mka-and-credentials.xml.j2') }}"
+
+    - name: Push MKA policy and dot1x credentials
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+      when: not (macsec_eaptls_objects_match | bool)
+
+    # NETCONF creates the policy, but the 24U running-config hides the cipher
+    # leaf. Verify the operational policy so a rerun does not report a false
+    # change for a command that is already active.
+    #
+    # Unlike the peer trustpoint and the dot1x credentials, this policy is NOT
+    # split per link, so building one of sw1's two links rewrites the priority the
+    # other one asked for. That is deliberate. Priority only decides which end wins
+    # the key-server election, and every peer of sw1 is configured below it, so sw1
+    # loses either way and both links key normally. Split the object if that ever
+    # stops being true.
+    - name: MKA | cipher suite and key-server priority
+      cisco.ios.ios_config:
+        parents: "mka policy {{ macsec_names.eaptls_mka_policy }}"
+        lines:
+          - "macsec-cipher-suite {{ macsec_cipher_suite }}"
+          - "key-server priority {{ my_macsec_key_server_priority }}"
+      when: >-
+        macsec_eaptls_objects.stdout[0] | default('')
+        is not search(
+          macsec_names.eaptls_mka_policy ~ '\s+'
+          ~ (my_macsec_key_server_priority | string)
+          ~ '.*' ~ (macsec_cipher_suite | upper)
+        )
+
+    # Every link uses the same stagger: first end applies, pause, second end
+    # applies. Both ends of a dot1x-pae-both link racing simultaneously causes
+    # MKA to fail before either side can negotiate SAKs, and once the C9300
+    # ASIC goes to "must secure / Cipher: Invalid" it blocks MKPDUs forever
+    # (only a reload clears it). The stagger gives the first authenticator
+    # time to listen before the second end joins.
+    - name: Interface on the first end
+      ansible.builtin.include_tasks: interface.yml
+      when: inventory_hostname == (ansible_play_hosts | sort | first)
+
+    - name: Pause so the first authenticator is listening
+      ansible.builtin.pause:
+        seconds: "{{ macsec_eaptls_peer_stagger_seconds | default(45) }}"
+      when: (ansible_play_hosts | length) > 1
+      run_once: true
+
+    - name: Interface on the second end
+      ansible.builtin.include_tasks: interface.yml
+      when:
+        - (ansible_play_hosts | length) > 1
+        - inventory_hostname != (ansible_play_hosts | sort | first)
+
+    # Also: a leftover Exercise 4 session (mka_128, already Secured) would
+    # satisfy a naive "\sSecured\s" wait, then die when PQAUTO replaces the
+    # policy. Wait for THIS policy name, and poke the session if it is missing.
+    - name: See whether PQAUTO MKA is already secured
+      cisco.ios.ios_command:
+        commands:
+          - "show mka sessions interface {{ my_macsec_interface }}"
+      register: mka_before_wait
+      changed_when: false
+
+    # SCREEN-SCRAPE. Scope to this hop. A box-wide "show mka sessions" would
+    # succeed on a leftover session on another port (hx1 Te1/0/5).
+    - name: Wait for the MKA session to secure
+      cisco.ios.ios_command:
+        commands:
+          - "show mka sessions interface {{ my_macsec_interface }}"
+      register: mka_settle
+      until:
+        - mka_settle.stdout[0] | default('') is search(macsec_names.eaptls_mka_policy)
+        - mka_settle.stdout[0] | default('') is search('\sSecured\s')
+      retries: "{{ macsec_eaptls_settle_retries }}"
+      delay: "{{ macsec_eaptls_settle_delay }}"
+      changed_when: false
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config
+
+# --- Teardown ----------------------------------------------------------------
+#
+# Interface first, so the port stops being closed before anything it depends on
+# disappears. Take the AAA stack away from under a live closed port and it stays
+# unauthorized with nothing left to authorize it.
+#
+# The identity trustpoint is the device's own TP-self-signed-<serial> or Self.
+# This role never created it and never removes it, at any setting. Both names
+# are in protected_trustpoint_regex.
+#
+# The peer trustpoint this role does own, but it stays by default: removing one is
+# destructive, and keeping it means a rebuild does not have to re-import. Pass
+# -e macsec_eaptls_remove_trustpoints=true if you really want it gone.
+- name: EAP-TLS | tear down
+  when: state == 'absent'
+  block:
+
+    - name: Remove the interface configuration
+      cisco.ios.ios_config:
+        parents: "interface {{ my_macsec_interface }}"
+        lines:
+          - "no service-policy type control subscriber {{ macsec_names.control_policy }}"
+          - no access-session port-control auto
+          # "no access-session closed" is here on purpose even though the build
+          # never sets it. Boxes that ran an earlier version of this role, or the
+          # hand-driven exercises, may still carry it.
+          - no access-session closed
+          - no access-session host-mode multi-host
+          - no dot1x pae both
+          - no dot1x pae authenticator
+          - no dot1x pae supplicant
+          - "no dot1x credentials {{ my_macsec_dot1x_credentials }}"
+          - "no dot1x supplicant eap profile {{ macsec_names.eap_profile }}"
+          - "no dot1x authenticator eap profile {{ macsec_names.eap_profile }}"
+          - "no mka policy {{ macsec_names.eaptls_mka_policy }}"
+          - no authentication periodic
+          - "no authentication timer reauthenticate {{ my_macsec_reauth_seconds }}"
+          - no authentication timer reauthenticate 1800
+          - "no {{ my_macsec_mode_line }}"
+      # The removal list mirrors interface.yml line for line. If you add a line
+      # to interface.yml, add its "no" here.
+
+    - name: Isolated VLAN and SVI teardown (host-to-switch only)
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: macsec-l2-absent
+
+    - name: Render MKA policy and dot1x credentials removal
+      ansible.builtin.set_fact:
+        nc_label: remove MKA policy and dot1x credentials
+        nc_operation: none
+        nc_payload: "{{ lookup('template', 'mka-and-credentials.xml.j2') }}"
+
+    - name: Push MKA policy and dot1x credentials removal
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+    - name: Remove the AAA, EAP and subscriber policy stack
+      cisco.ios.ios_config:
+        lines:
+          - "no policy-map type control subscriber {{ macsec_names.control_policy }}"
+          # This removes the session-started, authentication-failure and
+          # authentication-success events with it.
+          - "no eap profile {{ macsec_names.eap_profile }}"
+          - "no aaa attribute list {{ macsec_names.linksec_attribute_list | default('PQAUTO-LINKSEC') }}"
+      # "aaa new-model" is deliberately left on. Turning it off changes how every
+      # login to the box is authenticated, and doing that at the end of a MACsec
+      # teardown is a good way to lock yourself out.
+      #
+      # "dot1x system-auth-control" is left on for the same reason: it is a global
+      # switch this role does not own.
+
+    # OPT-IN, and off by default, because this is the one teardown line in the
+    # layer that types "no username".
+    - name: Detach the attribute list from both identities
+      when: macsec_eaptls_remove_identity_user | default(false) | bool
+      cisco.ios.ios_config:
+        lines:
+          - "no username {{ item }} aaa attribute list {{ macsec_names.linksec_attribute_list | default('PQAUTO-LINKSEC') }}"
+      loop:
+        - "{{ my_macsec_identity }}"
+        - "{{ my_macsec_peer_identity }}"
+
+    - name: Remove the peer trustpoint
+      when: macsec_eaptls_remove_trustpoints | default(false) | bool
+      block:
+
+        - name: Guard the peer trustpoint before removing it
+          ansible.builtin.include_role:
+            name: common
+            tasks_from: assert-safe-to-remove
+          vars:
+            guard_kind: trustpoint
+            guard_name: "{{ my_macsec_peer_trustpoint }}"
+
+        - name: Render peer trustpoint removal
+          ansible.builtin.set_fact:
+            nc_label: "remove trustpoint {{ my_macsec_peer_trustpoint }}"
+            nc_operation: none
+            nc_payload: "{{ lookup('template', 'trustpoint-remove.xml.j2') }}"
+          vars:
+            trustpoint_to_remove: "{{ my_macsec_peer_trustpoint }}"
+
+        - name: Push peer trustpoint removal
+          ansible.builtin.include_role:
+            name: common
+            tasks_from: netconf-edit
+
+    - name: Save
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: save-config

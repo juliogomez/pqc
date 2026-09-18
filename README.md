@@ -8,14 +8,8 @@ This repo takes you through it twice: first in throwaway containers on your lapt
 you can capture the packets and break things for free, then on real Cisco routers, where
 the same RFCs meet Cisco's CLI, licensing, and platform capabilities.
 
-Two stages, in order:
-
-- **[Stage 1 - Learn](learn/README.md)**: hands-on labs with containers and real packet captures. No hardware required, nothing to lose, break and rerun as often as you like.
-- **[Stage 2 - Deploy](deploy/README.md)**: same protocols on real Cisco hardware,
-  built exercise by exercise in the protocol docs, plus a full automation layer that reproduces
-  every path with captured output from real hardware runs. 
-
----
+Two stages, in order: **[Learn](learn/README.md)** (containers) →
+**[Deploy](deploy/README.md)** (Cisco hardware).
 
 ## The challenge
 
@@ -66,10 +60,10 @@ real hardware runs if you want to read the automation path without running it.
 See [the deploy guide](deploy/README.md) for the platforms covered and how to navigate the
 docs without hardware.
 
-## Important stuff
+## What Stage 2 teaches you that Stage 1 can't
 
-In Stage 1, every protocol goes
-post-quantum, because the container images are built from the newest open-source software there is. Stage 2 is where you meet reality:
+In Stage 1, every protocol goes post-quantum, because the container images are built from
+the newest open-source software there is. Stage 2 is where you meet reality:
 
 - **Release numbers are part of your design.** ML-DSA authentication for IKEv2 wasn't in
   IOS XE 26.1 and is in 26.2, so a migration plan written six months earlier had a gap in
@@ -95,10 +89,10 @@ rerun the labs as many times as you like. A few of the images compile their tool
 source. Each lab's README has its own short Prerequisites
 and Build-and-start section.
 
-**Stage 2** needs real gear: three Cisco 8000 Series Secure Routers on IOS XE 26.2 with the
-"advantage" license, wired back-to-back. No RADIUS or ISE needed, even for MACsec: one
-router runs a local CA and IOS XE does the EAP-TLS itself. You can read Stage 2 without any
-of it (the captured output and running configs are all in the repo).
+**Stage 2** needs real gear: Cisco C8000 Secure Routers and/or Cisco C9300 Smart Switches
+on IOS XE 26.2 or later. No RADIUS or ISE needed, even for MACsec: IOS XE does the
+EAP-TLS itself with local CAs and self-signed certs. You can read Stage 2 without any of
+it (the captured output and running configs are all in the repo).
 
 **Do I need a quantum computer for any of this?** No. 🙂 Everything runs on classical
 hardware. Both stages demonstrate the *defenses* being deployed today against a future

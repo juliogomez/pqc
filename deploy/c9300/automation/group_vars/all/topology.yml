@@ -1,0 +1,265 @@
+---
+# The C9300 lab topology as data.
+#
+# This is tracked, not gitignored, because the topology is fixed by the repo.
+# Your management addresses live in lab.yml.
+#
+# The underlay (IP addresses on physical ports, static routes) is a PRECONDITION
+# for IPsec. Build it by hand from ipsec.md before you run anything here.
+
+# --- MACsec ------------------------------------------------------------------
+#
+# Three independent links, one inventory group each. Same point-to-point MACsec
+# mode on all three (spelled differently on the router, see my_macsec_mode_line),
+# different ports:
+#   macsec_s2r   sw1 ↔ rtr1   switch-to-router (Gi1/0/48 ↔ Tw0/0/4)
+#   macsec_s2s       hx1 ↔ hx2    switch-to-switch (Te1/0/6 on both; also the
+#                                IPsec underlay)
+#   macsec_h2s      sw1 ↔ sw2    host-to-switch (Gi1/0/1 ↔ Gi2/0/1)
+#
+# The maps below are the first two links. Why does the third one need an overlay
+# instead of more entries? sw1 appears in two links, and a play can only drive one
+# my_macsec_interface per host. So macsec_h2s carries its own values and replaces
+# the defaults whenever you target it.
+
+macsec_interface:
+  sw1: GigabitEthernet1/0/48
+  rtr1: TwoGigabitEthernet0/0/4
+  hx1: TenGigabitEthernet1/0/6
+  hx2: TenGigabitEthernet1/0/6
+
+# Isolated VLAN + SVIs so the host-to-switch hop can ping without riding VLAN 1
+# (VLAN 1 leaked 802.1X onto other ports in this lab). Unused on the other links.
+macsec_h2s:
+  interface:
+    sw1: GigabitEthernet1/0/1
+    sw2: GigabitEthernet2/0/1
+  peer:
+    sw1: sw2
+    sw2: sw1
+  identity:
+    sw1: MUST
+    sw2: HOST
+  peer_address:
+    sw1: 10.10.10.2
+    sw2: 10.10.10.1
+  svi_address:
+    sw1: 10.10.10.1
+    sw2: 10.10.10.2
+  svi_mask: 255.255.255.0
+  access_vlan: 10
+  key_server_priority:
+    sw1: 5
+    sw2: 5
+  authentication_restart:
+    sw1: 7
+    sw2: 7
+  peer_trustpoint: "{{ macsec_names.peer_trustpoint_h2s }}"
+  dot1x_credentials: "{{ macsec_names.dot1x_credentials_h2s }}"
+
+# The MACsec playbooks require macsec_play_hosts, so it is always set when this
+# matters. The default keeps a bare verify.yml run (which checks everything and
+# names no link) from tripping over an undefined variable.
+macsec_h2s_play: "{{ (macsec_play_hosts | default('')) == 'macsec_h2s' }}"
+
+my_macsec_interface: >-
+  {{ (macsec_h2s.interface[inventory_hostname] if (macsec_h2s_play | bool)
+      else macsec_interface[inventory_hostname]) | default('') }}
+
+# The other end of THIS link, named explicitly. Not "whichever other host is in
+# the play": sw1 belongs to two links, so inferring the peer would mix them up.
+macsec_peer:
+  sw1: rtr1
+  rtr1: sw1
+  hx1: hx2
+  hx2: hx1
+
+my_macsec_peer: >-
+  {{ (macsec_h2s.peer[inventory_hostname] if (macsec_h2s_play | bool)
+      else macsec_peer[inventory_hostname]) | default('') }}
+
+# The identity each device presents in dot1x credentials. This is just a label,
+# it does NOT have to match the certificate CN: the certificate proves identity
+# on its own. With the shipped self-signed cert the CN is
+# IOS-Self-Signed-Certificate-<serial>, which is unreadable and per-device.
+macsec_identity:
+  sw1: SW1
+  rtr1: RTR1
+  hx1: HX1
+  hx2: HX2
+
+my_macsec_identity: >-
+  {{ (macsec_h2s.identity[inventory_hostname] if (macsec_h2s_play | bool)
+      else macsec_identity[inventory_hostname])
+     | default(inventory_hostname | upper) }}
+
+# What the far end will send as its EAP identity. With "dot1x pae both" each box
+# is also the authenticator for its peer's supplicant, and the authenticator
+# looks the received identity up in the LOCAL user database to find the
+# must-secure attribute list. So each box needs an entry for the peer's name too,
+# not only its own.
+my_macsec_peer_identity: >-
+  {{ (macsec_h2s.identity[my_macsec_peer] if (macsec_h2s_play | bool)
+      else macsec_identity[my_macsec_peer])
+     | default(my_macsec_peer | upper) }}
+
+# L3 address on the far side of this link, and it has to be an address that is
+# reached OVER the link. The proof pings this and measures the encrypted-packet
+# delta, so an out-of-band management IP is worse than useless here: the frames
+# leave via the management port, the MACsec counters do not move, and a perfectly
+# healthy link looks like it is encrypting nothing.
+#
+# HX pings the Te1/0/6 underlay, host-to-switch pings the VLAN 10 SVI, and the
+# router uplink pings the 14.14.14.0/24 underlay configured by hand in ipsec.md.
+# The fallback to lab_mgmt below is only for a device with no routed address on its
+# MACsec port at all; expect a meaningless delta if you land on it.
+macsec_peer_address:
+  sw1: 14.14.14.1
+  rtr1: 14.14.14.2
+
+my_macsec_peer_address: >-
+  {{ (macsec_h2s.peer_address[inventory_hostname] if (macsec_h2s_play | bool)
+      else macsec_peer_address[inventory_hostname])
+     | default(lab_mgmt[my_macsec_peer] | default('')) }}
+
+my_macsec_access_vlan: >-
+  {{ macsec_h2s.access_vlan if (macsec_h2s_play | bool) else '' }}
+
+my_macsec_svi_address: >-
+  {{ (macsec_h2s.svi_address[inventory_hostname] if (macsec_h2s_play | bool)
+      else '') | default('') }}
+
+my_macsec_svi_mask: "{{ macsec_h2s.svi_mask }}"
+
+# Distinct from PQAUTO-PEER so EAP-TLS on Gi1/0/1 does not overwrite the peer
+# cert imported for the router uplink on the same box.
+my_macsec_peer_trustpoint: >-
+  {{ macsec_h2s.peer_trustpoint if (macsec_h2s_play | bool)
+     else macsec_names.peer_trustpoint }}
+
+# Distinct for the same reason: this object holds my_macsec_identity, and sw1's
+# identity differs per link (SW1 to the router, MUST to sw2). See crypto.yml.
+my_macsec_dot1x_credentials: >-
+  {{ macsec_h2s.dot1x_credentials if (macsec_h2s_play | bool)
+     else macsec_names.dot1x_credentials }}
+
+my_macsec_key_server_priority: >-
+  {{ (macsec_h2s.key_server_priority[inventory_hostname] if (macsec_h2s_play | bool)
+      else macsec_key_server_priority[inventory_hostname]) | default(10) }}
+
+my_macsec_authentication_restart: >-
+  {{ (macsec_h2s.authentication_restart[inventory_hostname]
+      if (macsec_h2s_play | bool) else 7) | default(7) }}
+
+# Reauthentication stagger. Both ends of a dot1x-pae-both link carry the same
+# reauthentication timer. If both fire at the same instant, the two parallel
+# EAP-TLS handshakes race and both supplicants fail, permanently killing the
+# MKA session. Offsetting the alphabetically later hostname by 120 seconds
+# ensures the first end completes its reauth before the second one starts.
+my_macsec_reauth_seconds: >-
+  {{ macsec_reauth_seconds | int + (120 if (inventory_hostname > my_macsec_peer) else 0) }}
+
+# The two C9300 host-link endpoints negotiate ML-KEM in pure PQC mode.
+# Their IOS XE build accepts the global "hybrid" leaf but fails to create MKA.
+my_macsec_pq_type: "{{ 'pqc' if (macsec_h2s_play | bool) else pq_macsec_type }}"
+
+# --- Platform CLI differences ------------------------------------------------
+#
+# Every MACsec link in this lab is switch-to-switch except sw1 to rtr1, and the
+# C8000 router disagrees with the C9300 switches in two places. Both were found the
+# hard way, on hardware. Resolve them per host, because one link has one of each.
+my_macsec_is_router: >-
+  {{ inventory_hostname in (groups['routers'] | default([])) }}
+
+# 1. How the platform spells "MACsec on a point-to-point link".
+#
+# On a switch the port might have been an access port facing a NIC, so IOS makes you
+# say "macsec network-link" to get the inter-device mode. A router has no such
+# ambiguity and no such keyword: "macsec ?" on Fg0/0/3 offers only access-control,
+# disable-sci, dot1q-in-clear, replay-protection and <cr>. Plain "macsec" on a routed
+# port IS the network-link mode.
+#
+# Push the switch spelling to rtr1 and it fails with "% Invalid input detected at
+# '^' marker", after the play has already configured the global AAA, EAP, MKA and
+# subscriber-policy objects.
+my_macsec_mode_line: >-
+  {{ 'macsec' if (my_macsec_is_router | bool) else 'macsec network-link' }}
+
+# 2. Which show commands expose MACsec state, and what they call things.
+#
+# The C9300 puts everything in "show macsec interface" and has no status or
+# statistics variants. The C8000 is the exact opposite: "show macsec interface" does
+# not exist, but "show macsec status interface" and "show macsec statistics
+# interface" both do. Same facts, different commands and different labels, so the
+# screen-scrapers in verify-macsec-proof.yml and roles/verify need both spellings.
+my_macsec_show_state: >-
+  {{ ('show macsec status interface ' if (my_macsec_is_router | bool)
+      else 'show macsec interface ') ~ my_macsec_interface }}
+my_macsec_show_stats: >-
+  {{ ('show macsec statistics interface ' if (my_macsec_is_router | bool)
+      else 'show macsec interface ') ~ my_macsec_interface }}
+
+# The switch prints a literal "MACsec is enabled" banner. The router's status output
+# has no banner at all, so key off the transmit secure channel, which it only prints
+# when MACsec is actually running on the port.
+my_macsec_enabled_pattern: >-
+  {{ 'Transmit SC:' if (my_macsec_is_router | bool) else 'MACsec is enabled' }}
+
+my_macsec_transmitting_pattern: >-
+  {{ 'Transmitting:\s*TRUE' if (my_macsec_is_router | bool) else 'SA State:\s*inUse' }}
+
+# The live transmit counter. On the switch it is "Encrypted Pkts" under
+# "SA Statistics" (see the SC-versus-SA warning in verify-macsec-proof.yml). On the
+# router the equivalent is "Out Pkts Encrypted" under "Transmit SA Counters"; the
+# "Transmit SC Counters" block above it is the frozen aggregate, same trap.
+my_macsec_encrypted_pattern: >-
+  {{ 'Transmit SA Counters[\s\S]*?Out Pkts Encrypted\s*:\s*([0-9]+)'
+     if (my_macsec_is_router | bool)
+     else 'SA Statistics[\s\S]*?Encrypted Pkts\s*:\s*([0-9]+)' }}
+
+# Which device is the MKA key server (lower priority wins).
+macsec_key_server_priority:
+  sw1: 10
+  rtr1: 5
+  hx1: 10
+  hx2: 5
+
+# --- IPsec -------------------------------------------------------------------
+#
+# Point-to-point between sw1 and sw2 (C9300-48H) over a routed underlay.
+# No direct cable between the switches; traffic transits through the routers:
+#
+#   sw1 Gi1/0/48 (14.14.14.2) ── rtr1 Tw0/0/4 (14.14.14.1)
+#                                 rtr1 Vlan12  (10.0.12.1)
+#                                   ── rtr2 Vlan12  (10.0.12.2)
+#                                      rtr2 Vlan23  (10.0.23.1)
+#                                        ── rtr3 Vlan23  (10.0.23.2)
+#                                           rtr3 Tw0/0/4 (10.0.35.1)
+#                                             ── sw2 Gi1/0/48 (10.0.35.2)
+#
+#   sw1 Loopback110 110.0.1.1      110.0.1.2 Loopback110 sw2
+#   Tunnel0: 11.0.1.1/24  ----  11.0.1.2/24
+#
+# Tunnel source is the Loopback, not the physical interface. IKE packets
+# originate from the tunnel source IP, and the IKEv2 profiles match the
+# peer's loopback address. Static routes on all five devices propagate the
+# /32 loopback prefixes end to end.
+
+ipsec_topology:
+  sw1:
+    underlay_interface: Loopback110
+    loopback_address: 110.0.1.1
+    peer_name: sw2
+    peer_loopback: 110.0.1.2
+    tunnel_address: 11.0.1.1
+    tunnel_mask: 255.255.255.0
+
+  sw2:
+    underlay_interface: Loopback110
+    loopback_address: 110.0.1.2
+    peer_name: sw1
+    peer_loopback: 110.0.1.1
+    tunnel_address: 11.0.1.2
+    tunnel_mask: 255.255.255.0
+
+my_ipsec: "{{ ipsec_topology[inventory_hostname] | default({}) }}"

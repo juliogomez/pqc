@@ -1,0 +1,19 @@
+---
+# Post-quantum management HTTPS on the C9300 switches.
+#
+#   ansible-playbook tls-pq.yml
+#   ansible-playbook tls-pq.yml -e state=absent
+#
+# 26.2 already negotiates X25519MLKEM768 out of the box. This makes the posture
+# explicit, and lets you prove the knob does something by toggling it.
+
+- name: Configure management HTTPS PQC posture
+  hosts: switches
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: tls_pq
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

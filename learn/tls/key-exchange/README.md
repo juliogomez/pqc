@@ -140,7 +140,7 @@ That is all we need to run a real TLS 1.3 handshake and look inside it.
 Here's the plan:
 
 - **[Exercise 1](#exercise-1-run-a-hybrid-tls-13-handshake)**: run a TLS 1.3 handshake that negotiates hybrid `X25519MLKEM768`, and confirm it in the OpenSSL output.
-- **[Exercise 2](#exercise-2-prove-it-on-the-wire-and-compare)**: capture the handshake, prove in the bytes that the key share is hybrid, then run a classical handshake next to it and compare.
+- **[Exercise 2](#exercise-2-on-the-wire)**: capture the handshake, prove in the bytes that the key share is hybrid, then run a classical handshake next to it and compare.
 
 
 
@@ -243,8 +243,7 @@ Stop the server with Ctrl+C when you've seen the line. Leave the containers up f
 ---
 
 
-
-### Exercise 2: Prove it on the wire, and compare
+### Exercise 2: On the wire
 
 The negotiated-group line is convincing, but let's look at the actual bytes, and then put a classical handshake right next to the hybrid one.
 
@@ -343,17 +342,6 @@ That is the core finding of the lab: **post-quantum key exchange in TLS 1.3 cost
 
 ---
 
-
-
-### Troubleshooting
-
-- **The** `Negotiated TLS1.3 group` **line never shows up.** Either the group name is misspelled (it's `X25519MLKEM768`, and case matters) or you're on an OpenSSL older than 3.5 that doesn't know the group. `openssl version` inside the container should say 3.5.x.
-- **The client dies with a fatal "handshake failure" alert.** Server and client have to offer the *same* group. Start the server with `-groups x25519` but connect with `-groups X25519MLKEM768` (or the other way round) and there is nothing in common, so the server rejects it. Match them.
-- **The wrong group gets negotiated, or the server won't start on 4433.** A previous `s_server` is still holding the port. This is the easy trap in Exercise 2: kill the old one first (`kill $SSERVER_PID`, or `pkill -f s_server` if you lost the PID), otherwise your new capture quietly talks to the stale server.
-- **The capture only shows one key share instead of two.** The `ServerHello` didn't make it into the pcap. Let the handshake finish for a second before you stop `tcpdump`, then read the file again.
-
-
-
 ### Cleanup
 
 ```bash
@@ -363,11 +351,3 @@ docker compose down
 `docker compose down` stops and removes the containers and the `tls_net` network. The built image is kept, so the next `docker compose up -d` starts right away. The certificate and captures lived in the container's `/tmp`, so they vanish with the containers, nothing is left on your host.
 
 That's a wrap! You ran a real post-quantum TLS handshake, confirmed the hybrid group, and measured its exact cost on the wire. Next, the [authentication lab](../authentication/README.md) takes care of the other half of the handshake: proving who the server (and client) really is, with post-quantum certificates.
-
----
-
-**On real hardware:** [TLS on Cisco IOS XE](../../../deploy/ios-xe/tls.md) gets you the
-same `X25519MLKEM768` you just negotiated, from the router's own HTTPS management server,
-with no configuration at all. On IOS XE 26.1 that handshake fell back to a classical curve;
-on 26.2 it doesn't. The doc also shows you the `ip http secure-pqc-type` knob and what a
-HelloRetryRequest looks like when you turn the post-quantum groups off.

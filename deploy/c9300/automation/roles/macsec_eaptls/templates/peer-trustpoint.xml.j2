@@ -1,0 +1,30 @@
+{# Peer trustpoint for importing a remote certificate.
+
+   C9300 26.x wants terminal+pem under <enrollment-method>, not the old
+   <terminal-pem/> leaf.
+
+   The fingerprint is mandatory, not belt-and-braces. This build will not offer
+   the interactive "do you accept this certificate?" question at all; without a
+   pinned fingerprint "crypto pki authenticate" aborts with "Trustpoint
+   fingerprint must be supplied". See cert-exchange.yml for why it is SHA-1.
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <pki xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <trustpoint>
+          <id>{{ my_macsec_peer_trustpoint }}</id>
+          <fingerprint>{{ hostvars[my_macsec_peer]['published_cert_fingerprint'] }}</fingerprint>
+          <enrollment>
+            <enrollment-method>
+              <terminal>
+                <pem/>
+              </terminal>
+            </enrollment-method>
+          </enrollment>
+        </trustpoint>
+      </pki>
+    </crypto>
+  </native>
+</config>

@@ -1,0 +1,43 @@
+---
+# Is this fabric quantum-safe right now, and by which mechanism?
+#
+# Every config playbook here ends by importing this file, and it is also fine to
+# run on its own:
+#
+#   ansible-playbook verify.yml
+#
+# Scoped re-checks:
+#   ansible-playbook verify.yml -e verify_ipsec_only=true
+#   ansible-playbook verify.yml -e macsec_play_hosts=macsec_s2s
+#   ansible-playbook verify.yml -e macsec_play_hosts=macsec_h2s
+#   ansible-playbook verify.yml -e macsec_play_hosts=macsec_s2s -e verify_macsec_expect=absent
+#
+# Naming a link scopes the report to that link. That is also why the MACsec
+# playbooks, which always name one, end with a report about the link they built
+# rather than about the whole fabric.
+#
+# verify_macsec_only=true without macsec_play_hosts is an error: MACsec is per link,
+# and there is no default link.
+
+- name: Report the post-quantum posture
+  hosts: "{{ verify_play_hosts }}"
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  vars:
+    # A MACsec playbook that imports this has already named the link it just worked
+    # on, so report on that link instead of the whole fabric. A bare verify.yml run
+    # names no link and still covers every device.
+    verify_macsec_only: "{{ macsec_play_hosts is defined }}"
+    verify_ipsec_only: false
+    # Teardown runs import this too, and they should not be asked to prove a link
+    # they just removed is still secured.
+    verify_macsec_expect: >-
+      {{ 'absent' if (state | default('present')) == 'absent' else 'secured' }}
+    verify_play_hosts: >-
+      {{ (macsec_play_hosts | mandatory('pick the link to check. Re-run with -e
+      macsec_play_hosts=macsec_s2r, macsec_s2s or macsec_h2s'))
+      if verify_macsec_only | bool
+      else ('ipsec_pair' if verify_ipsec_only | bool
+      else 'all') }}
+  roles:
+    - role: verify

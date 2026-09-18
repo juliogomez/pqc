@@ -1,0 +1,19 @@
+---
+# ML-KEM in the IKEv2 handshake. Native hybrid key exchange.
+#
+#   ansible-playbook ipsec-pq-mlkem.yml
+#   ansible-playbook ipsec-pq-mlkem.yml -e state=absent
+#
+# RFC 9370 additional key exchange with ML-KEM. Nothing to distribute, but
+# both ends need ML-KEM support.
+
+- name: Add ML-KEM to the IKEv2 proposal
+  hosts: ipsec_pair
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: ipsec_pq_mlkem
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

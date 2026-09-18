@@ -1,0 +1,109 @@
+---
+# Apply EAP-TLS MACsec to the interface. THIS RUNS LAST.
+#
+# "access-session port-control auto" puts the port under authentication control the
+# instant it is applied. If EAP-TLS cannot complete, the port stays unauthorized and
+# you cannot reach the box over the link you just took control of. So: certificates
+# first, verified Available, then this.
+
+# Same regex as cert-identity.yml: "Router Self-Signed Certificate" is the header
+# a device self-signed cert gets, and anchoring on a newline excludes the
+# "CA Certificate" block.
+- name: Interface | certificate must exist before closing the port
+  cisco.ios.ios_command:
+    commands:
+      - "show crypto pki certificates {{ macsec_eaptls_identity_trustpoint }}"
+  register: eaptls_cert_check
+  changed_when: false
+  failed_when: false
+
+- name: Interface | refuse to close the port without a certificate
+  ansible.builtin.assert:
+    that:
+      - (eaptls_cert_check.stdout[0] | default('')) is search('(^|\n)(Router Self-Signed )?Certificate\s*\n\s*Status:\s*Available')
+    fail_msg: >-
+      {{ inventory_hostname }} has no Available certificate on trustpoint
+      {{ macsec_eaptls_identity_trustpoint | default('(not discovered)') }}.
+      cert-identity.yml should have caught this first.
+    quiet: true
+
+# my_macsec_mode_line, not a hardcoded string. On the C9300s it renders
+# "macsec network-link": plain "macsec" there is the access mode, and it produces a
+# session that reports Secured while encrypting exactly nothing. On the C8000 router
+# it renders plain "macsec", because that platform has no network-link keyword and a
+# routed port is network-link by definition. See group_vars/all/topology.yml.
+#
+# NO "access-session closed", and that is not an oversight. Closed mode deadlocks a
+# switch-to-switch link: both ends are supplicant and authenticator at once, both
+# ports stay closed until they authorize, and neither can finish authorizing
+# through the other's closed port. Measured on hx1/hx2, it fails exactly halfway,
+# one direction reaching "Authc Success" and the other timing out forever:
+#
+#   %DOT1X-5-FAIL: Authentication failed for client (...) with reason (Timeout)
+#   %MKA-4-KEEPALIVE_TIMEOUT: Peer has stopped sending MKPDUs
+#
+# Dropping the line converges in under a minute with both ends "Link Secured".
+#
+# Nothing is given up by leaving it out. The must-secure service template is what
+# guarantees encryption, and it reports for itself:
+#
+#   Security Policy:  Must Secure
+#   Security Status:  Link Secured
+#
+# Closed mode is for a textbook access port facing a NIC. Exercise 4 in this lab
+# uses another C9300 as the "host", and that pair only came up with the same
+# network-link / pae both CLI as the other two links. This role builds that.
+# The extra for macsec_h2s is VLAN 10 + SVIs (macsec-l2.yml), not access-mode.
+- name: Interface | EAP-TLS MACsec
+  cisco.ios.ios_config:
+    parents: "interface {{ my_macsec_interface }}"
+    lines: "{{ macsec_eaptls_interface_lines }}"
+  vars:
+    # NO "authentication periodic" on the non-h2s links.
+    #
+    # On a dot1x-pae-both MACsec link, reauthentication generates a new MSK from
+    # the fresh EAP-TLS handshake. The new MSK produces a new CAK, and the old MKA
+    # session dies. In theory MKA should seamlessly transition to the new CAK. In
+    # practice, on the C9300's routed-port MACsec ASIC, the transition fails: the
+    # ASIC drops to "Cipher: Invalid / must secure" and blocks MKPDUs. The new MKA
+    # session cannot negotiate, the access-session sits in "Blocked On: User
+    # Profile Application" forever, and the link is dead until someone saves a
+    # clean config and reloads the switch (the only way to clear the ASIC).
+    #
+    # MKA's own SAK re-keying (sak-rekey in the MKA policy) still rotates the
+    # encryption keys. To rotate the CAK itself (a fresh EAP-TLS handshake with
+    # new PQ keying material), run the playbook with -e state=absent then
+    # -e state=present, which tears down and rebuilds from scratch.
+    #
+    # NO "access-session closed" on ANY link, and this is not an oversight.
+    # Closed mode deadlocks every link in this lab because both ends are
+    # supplicant and authenticator at once (dot1x pae both). Both ports stay
+    # closed until they authorize, and neither can finish authorizing through
+    # the other's closed port. Measured on hx1/hx2 and again on sw1/sw2:
+    #   dot1x: Authc Success, dot1xSup: Authc Failed, MKA: Init, 0 peers
+    # Exercise 4's hand-built pair came up only with the same network-link /
+    # pae-both CLI as the other links. The h2s extra is the VLAN 10 + SVI
+    # (macsec-l2.yml), not access-mode.
+    #
+    # NO "authentication periodic" on ANY link. On a dot1x-pae-both MACsec
+    # link, reauthentication generates a new MSK → new CAK, and the old MKA
+    # session dies. The C9300 ASIC drops to "Cipher: Invalid / must secure"
+    # and blocks MKPDUs. The new MKA session cannot negotiate and the link is
+    # dead until someone saves a clean config and reloads the switch. MKA's
+    # own SAK re-keying still rotates the encryption keys. To rotate the CAK
+    # (a fresh EAP-TLS handshake with new PQ keying material), tear down and
+    # rebuild: -e state=absent then -e state=present.
+    macsec_eaptls_interface_lines: >-
+      {{
+        [
+          my_macsec_mode_line,
+          'access-session host-mode multi-host',
+          'dot1x pae both',
+          'dot1x authenticator eap profile ' ~ macsec_names.eap_profile,
+          'dot1x supplicant eap profile ' ~ macsec_names.eap_profile,
+          'mka policy ' ~ macsec_names.eaptls_mka_policy,
+          'dot1x credentials ' ~ my_macsec_dot1x_credentials,
+          'service-policy type control subscriber ' ~ macsec_names.control_policy,
+          'access-session port-control auto'
+        ]
+      }}

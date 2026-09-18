@@ -1,0 +1,64 @@
+---
+# Replace hand-driven Exercise 4 objects cleanly instead of changing them under
+# a live 802.1X/MKA session. IOS XE can authenticate both roles successfully and
+# still leave MKA one-way when the EAP profile, credentials, policy map, and MKA
+# policy are swapped in place.
+#
+# This only touches the selected orange port. It does not remove any global
+# hand-built object, and it never touches sw1 Gi1/0/3.
+
+- name: Takeover | read the selected interface
+  cisco.ios.ios_command:
+    commands:
+      - "show running-config interface {{ my_macsec_interface }}"
+  register: macsec_eaptls_takeover_probe
+  changed_when: false
+
+- name: Takeover | detect a non-PQAUTO EAP-TLS attachment
+  ansible.builtin.set_fact:
+    macsec_eaptls_takeover_needed: >-
+      {{
+        (macsec_h2s_play | bool)
+        and (
+          (macsec_eaptls_takeover_probe.stdout[0] | default('')
+           is search('(?:mka policy|dot1x credentials|service-policy type control subscriber)'))
+          and not (
+            (macsec_eaptls_takeover_probe.stdout[0] | default('')
+             is search('mka policy ' ~ macsec_names.eaptls_mka_policy))
+            and
+            (macsec_eaptls_takeover_probe.stdout[0] | default('')
+             is search('service-policy type control subscriber ' ~ macsec_names.control_policy))
+          )
+        )
+      }}
+
+- name: Takeover | detach the hand-built session from the orange port
+  cisco.ios.ios_config:
+    parents: "interface {{ my_macsec_interface }}"
+    lines:
+      - no service-policy type control subscriber DOT1X_POLICY_RADIUS
+      - no service-policy type control subscriber DOT1X_POLICY_HOST
+      - no access-session port-control auto
+      - no access-session closed
+      - no access-session host-mode multi-host
+      - no dot1x pae both
+      - no dot1x credentials EAPTLSCRED-IOSCA
+      - no dot1x supplicant eap profile Self
+      - no dot1x authenticator eap profile Self
+      - no mka policy mka_128
+      - "no service-policy type control subscriber {{ macsec_names.control_policy }}"
+      - "no dot1x credentials {{ my_macsec_dot1x_credentials }}"
+      - "no dot1x supplicant eap profile {{ macsec_names.eap_profile }}"
+      - "no dot1x authenticator eap profile {{ macsec_names.eap_profile }}"
+      - "no mka policy {{ macsec_names.eaptls_mka_policy }}"
+      - no authentication periodic
+      - no authentication timer reauthenticate 1800
+      - "no {{ my_macsec_mode_line }}"
+  when: macsec_eaptls_takeover_needed | bool
+
+- name: Takeover | let IOS XE destroy the old access session
+  ansible.builtin.pause:
+    seconds: "{{ macsec_eaptls_takeover_pause_seconds | default(10) }}"
+  when:
+    - macsec_eaptls_takeover_needed | bool
+    - inventory_hostname == (ansible_play_hosts | sort | first)

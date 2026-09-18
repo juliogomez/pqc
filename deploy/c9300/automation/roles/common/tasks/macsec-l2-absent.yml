@@ -1,0 +1,27 @@
+---
+# Undo macsec-l2.yml. Port back to VLAN 1, then drop the SVI and the VLAN.
+#
+# Does not touch access-session pqc-type. That leaf is global, and on sw1 it
+# still keys the router uplink on Gi1/0/3.
+
+- name: L2 | put the port back on VLAN 1
+  cisco.ios.ios_config:
+    parents: "interface {{ my_macsec_interface }}"
+    lines:
+      - switchport access vlan 1
+  when: (my_macsec_access_vlan | default(0) | int) > 0
+
+- name: L2 | remove the SVI
+  cisco.ios.ios_config:
+    lines:
+      - "no interface Vlan{{ my_macsec_access_vlan }}"
+  when:
+    - (my_macsec_access_vlan | default(0) | int) > 0
+    - my_macsec_svi_address | default('') | length > 0
+
+- name: L2 | remove the isolated VLAN
+  cisco.ios.ios_vlans:
+    config:
+      - vlan_id: "{{ my_macsec_access_vlan }}"
+    state: deleted
+  when: (my_macsec_access_vlan | default(0) | int) > 0

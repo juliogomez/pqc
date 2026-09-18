@@ -1,0 +1,20 @@
+---
+# Write the running config to startup, only if asked.
+#
+# Gated on save_config so the default run leaves nothing behind a reload. Flip it
+# with -e save_config=true when you actually want the state to survive.
+#
+# changed_when is deliberately false. cisco.ios decides "modified" by diffing
+# running-config against startup-config, and on IOS XE those two never match on a
+# box that holds any certificate: running-config prints the cert as an inline hex
+# blob, startup-config prints it as a filename. So running-vs-startup comparison
+# cannot be used for change detection on this platform at all.
+#
+# Saving is an action, not a piece of desired state, so it does not participate in
+# the changed contract. The run still saves; it just does not claim a change.
+- name: Save running config to startup
+  cisco.ios.ios_command:
+    commands:
+      - write memory
+  when: save_config | bool
+  changed_when: false

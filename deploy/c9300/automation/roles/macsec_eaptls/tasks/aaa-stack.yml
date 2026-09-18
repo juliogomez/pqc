@@ -1,0 +1,128 @@
+---
+# AAA, EAP and subscriber policy for EAP-TLS MACsec.
+#
+# CLI escape hatch: these are not fully modelled in the YANG schemas. The EAP
+# profile, subscriber control policy, and AAA attribute list all live outside the
+# modules retrieved from the box.
+#
+# ios_config still diffs against the running config, so this is idempotent.
+
+- name: AAA | local authentication and authorization for dot1x
+  cisco.ios.ios_config:
+    lines:
+      - aaa new-model
+      - aaa authentication dot1x default local
+      - aaa authorization network default local
+      - aaa authorization credential-download default local
+      - dot1x system-auth-control
+
+# The link must be MACsec-protected before the port authorizes. must-secure is what
+# turns "authenticated" into "authenticated AND encrypted"; without it a successful
+# EAP-TLS handshake authorizes a port that is forwarding in clear text.
+- name: AAA | linksec must-secure attribute list
+  cisco.ios.ios_config:
+    parents: "aaa attribute list {{ macsec_names.linksec_attribute_list | default('PQAUTO-LINKSEC') }}"
+    lines:
+      - attribute type linksec-policy must-secure
+
+# BOTH names, and the peer's is the one that actually matters. As authenticator
+# this box receives the PEER's identity and looks that string up locally; without
+# an entry for it the session authenticates and then never gets must-secure, so
+# the port comes up authorized and in clear text. Its own name is here for
+# symmetry and because either end can be the one asking.
+- name: AAA | bind the attribute list to both identities
+  cisco.ios.ios_config:
+    lines:
+      - "username {{ item }} aaa attribute list {{ macsec_names.linksec_attribute_list | default('PQAUTO-LINKSEC') }}"
+  loop:
+    - "{{ my_macsec_identity }}"
+    - "{{ my_macsec_peer_identity }}"
+
+# The trustpoint is the device's shipped TP-self-signed-<serial>, discovered in
+# cert-identity.yml. Not a name from crypto.yml: IOS XE only allows one
+# self-signed trustpoint per box and this role refuses to fight it for the slot.
+- name: EAP | which certificate EAP-TLS presents, in both roles
+  cisco.ios.ios_config:
+    parents: "eap profile {{ macsec_names.eap_profile }}"
+    lines:
+      - method tls
+      - "pki-trustpoint {{ macsec_eaptls_identity_trustpoint }}"
+
+# A ONE-TIME MANUAL STEP, and the only one in this layer. Sorry.
+#
+# IOS XE has two ways of expressing port authentication: the old flat
+# "authentication ..." interface commands (legacy) and the CPL subscriber control
+# policies this role uses (new-style). A box holds one or the other, and the first
+# "policy-map type control subscriber" is what converts it, after asking:
+#
+#   This operation will permanently convert all relevant authentication commands
+#   to their CPL control-policy equivalents. As this conversion is irreversible
+#   [...] Do you wish to continue? [yes]:
+#
+# There is no way to answer that from Ansible. It is a config-mode prompt, and
+# ios_config cannot answer prompts at all, while cli_command cannot hold config
+# mode across tasks (see roles/common/tasks/exec-with-prompt.yml). 26.x also
+# dropped the exec-mode "authentication convert-to new-style" escape hatch: only
+# "authentication display" survives. So the play stops here and tells you what to
+# type, rather than hanging for 180 seconds on a prompt nobody can see.
+- name: Subscriber | is this box already new-style?
+  cisco.ios.ios_command:
+    commands:
+      - show running-config | include ^policy-map type control subscriber
+  register: cpl_check
+  changed_when: false
+
+- name: Subscriber | refuse to run against a legacy-style box
+  ansible.builtin.assert:
+    that:
+      - (cpl_check.stdout[0] | default('')) is search('policy-map type control subscriber')
+    fail_msg: >-
+      {{ inventory_hostname }} is still legacy-style, and converting it needs an
+      answer to an interactive config-mode prompt that Ansible cannot give.
+      Convert it once by hand, then re-run this play:
+
+        ssh {{ inventory_hostname }}
+        conf t
+        policy-map type control subscriber {{ macsec_names.control_policy }}
+        <answer "yes" to the conversion prompt>
+        end
+
+      The conversion is irreversible. It rewrites any legacy "authentication ..."
+      interface commands into CPL equivalents, so read the box first if it has any.
+    quiet: true
+
+- name: Subscriber | control policy | on session start, authenticate
+  cisco.ios.ios_config:
+    parents:
+      - "policy-map type control subscriber {{ macsec_names.control_policy }}"
+      - event session-started match-all
+      - 1 class always do-until-failure
+    lines:
+      - >-
+        10 authenticate using dot1x both
+
+# Without this the first failure is the last one. Both ends come up as supplicant
+# and authenticator at the same time, so a cold start genuinely does fail once or
+# twice while the two sides race. With no failure event the session drops into HELD
+# and sits out the 60s quiet period with nothing scheduled to wake it, and the
+# whole link never converges. The hand-built reference config in
+# device-configs/c9300-macsec-pqc-reference.txt has this for the same reason.
+- name: Subscriber | control policy | on failure, try again shortly
+  cisco.ios.ios_config:
+    parents:
+      - "policy-map type control subscriber {{ macsec_names.control_policy }}"
+      - event authentication-failure match-all
+      - 1 class always do-until-failure
+    lines:
+      - "10 authentication-restart {{ my_macsec_authentication_restart | default(7) }}"
+
+- name: Subscriber | control policy | on success, demand a secured link
+  cisco.ios.ios_config:
+    parents:
+      - "policy-map type control subscriber {{ macsec_names.control_policy }}"
+      - event authentication-success match-all
+      - 1 class always do-until-failure
+    lines:
+      - "10 activate service-template {{ macsec_names.linksec_template | default('DEFAULT_LINKSEC_POLICY_MUST_SECURE') }}"
+    # DEFAULT_LINKSEC_POLICY_MUST_SECURE is a shipped-in service template, not ours.
+    # Nothing in this layer creates or removes it.

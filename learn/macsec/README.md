@@ -1,7 +1,5 @@
 # A Hands-On Post-Quantum MACsec Lab
 
-### Is your switch fabric ready for a quantum computer?
-
 A lot of network encryption happens one layer below the VPN. **MACsec (IEEE 802.1AE)** encrypts Ethernet frames at **Layer 2**, one hop at a time: between switches, between a host and its access port, or across a data-center fabric or a 5G fronthaul link. So if you run network infrastructure, here is a fair question: is MACsec ready for a cryptographically relevant quantum computer, and if not, where does the post-quantum work go?
 
 The answer is simpler than you might expect. MACsec's whole quantum story lives in **one place**: the **EAP-TLS** handshake that sets up its keys. That single handshake is where *both* halves of the post-quantum upgrade happen:
@@ -18,7 +16,7 @@ Ready? Let's start.
 ## Contents
 
 1. [What are we trying to figure out?](#what-are-we-trying-to-figure-out)
-2. [Why should you care? MACsec and Layer 2](#why-should-you-care-macsec-and-layer-2)
+2. [Why should you care? MACsec and Layer 2](#why-should-you-care)
 3. [Where does MACsec get its keys? MKA, CAK, and the key hierarchy](#where-does-macsec-get-its-keys-mka-cak-and-the-key-hierarchy)
 4. [Where's the quantum risk?](#wheres-the-quantum-risk)
 5. [The post-quantum pieces: ML-KEM and ML-DSA in EAP-TLS](#the-post-quantum-pieces-ml-kem-and-ml-dsa-in-eap-tls)
@@ -43,7 +41,7 @@ By the end of this lab you will have seen, in your own packets:
 
 ---
 
-## Why should you care? MACsec and Layer 2
+## Why should you care?
 
 First, some background. **MACsec** ([IEEE 802.1AE](https://1.ieee802.org/security/802-1ae/)) is link-layer encryption for Ethernet. Where IPsec protects IP packets end to end at Layer 3, MACsec protects *frames* at Layer 2, on a single hop: switch-to-switch, host-to-switch, or across a provider's Carrier Ethernet. It encrypts and integrity-protects the whole frame payload with **AES-GCM**.
 
@@ -67,7 +65,7 @@ Those use cases split along two independent axes: the **interface mode** (who th
 
 EAP-TLS works with *either* interface mode: a laptop authenticating to a campus switch (access) or two routers authenticating to each other via ISE (network-link). The post-quantum upgrade (ML-KEM + ML-DSA) lives inside the EAP-TLS handshake regardless of which mode the interface is in.
 
-This lab exercises EAP-TLS key establishment between a supplicant and an authenticator (access mode), which is where both the key exchange (ML-KEM) and authentication (ML-DSA) happen. The [IOS XE MACsec doc](../../deploy/ios-xe/macsec.md) covers the complementary case: **network-link mode** (router-to-router) with both PSK and EAP-TLS key sources. The EAP-TLS handshake and the ML-KEM/ML-DSA mechanics are identical regardless of interface mode; what changes is only who the peers are.
+This lab exercises EAP-TLS key establishment between a supplicant and an authenticator (access mode), which is where both the key exchange (ML-KEM) and authentication (ML-DSA) happen. The EAP-TLS handshake and the ML-KEM/ML-DSA mechanics are identical regardless of interface mode; what changes is only who the peers are.
 
 MACsec is interesting for a post-quantum discussion for one reason: it splits cleanly into two planes.
 
@@ -141,7 +139,7 @@ So the post-quantum fix for MACsec is **not** a new cipher for the data plane. I
 
 EAP-TLS ([RFC 9190](https://www.rfc-editor.org/rfc/rfc9190) brings it to TLS 1.3) runs an ordinary TLS 1.3 handshake, so making it post-quantum means changing two independent settings, both provided by OpenSSL 3.5.
 
-### Half 1: the key exchange (hybrid ML-KEM)
+### Half 1: the key exchange
 
 In TLS 1.3 the key exchange is negotiated as a **named group** in the `supported_groups` extension, and the actual keys are exchanged in `key_share`. A classical handshake offers groups like `x25519` or `secp256r1`. A post-quantum one offers **`X25519MLKEM768`**: a hybrid that runs classical X25519 **and** post-quantum ML-KEM-768 together and feeds *both* shared secrets into the TLS key schedule (you saw this exact group negotiated in a plain TLS 1.3 handshake in the [TLS key-exchange lab](../tls/key-exchange/README.md); the [IKEv2 key-exchange lab](../ipsec/key-exchange/README.md) explains the hybrid *why* in depth):
 
@@ -162,7 +160,7 @@ There is one useful difference from IKEv2. IKEv2 needed a whole new round trip (
 
 You will see every one of those byte counts in the capture in [Exercise 2](#exercise-2-prove-the-key-exchange-is-post-quantum).
 
-### Half 2: the authentication (ML-DSA certificates)
+### Half 2: the authentication
 
 EAP-TLS authentication is ordinary TLS 1.3 certificate authentication, so making it post-quantum means two things:
 
@@ -216,23 +214,23 @@ Here is the plan. We run **one** EAP-TLS handshake and examine its two independe
 So the order is *not* "start fully classical, then make everything post-quantum". Instead: the key exchange is already post-quantum from the start (Exercise 2 proves it in the bytes, and shows how easily a misconfiguration loses it), while the authentication is the one piece we switch over ourselves (Exercise 3). Keep that split in mind as you read each exercise:
 
 - **[Exercise 1](#exercise-1-run-the-eap-tls-handshake-ecdsa-baseline)**: run a real EAP-TLS handshake between a supplicant and an authenticator with the classical **ECDSA** certs, watch it derive the key material that roots the MACsec CAK, and record a baseline frame count. (Its key exchange is *already* hybrid ML-KEM; only its authentication is still classical.)
-- **[Exercise 2](#exercise-2-prove-the-key-exchange-is-post-quantum)**: capture that same handshake and prove, in the bytes, that its key exchange negotiated hybrid `X25519MLKEM768`, then remove the TLS 1.3 override and watch it silently downgrade to classical crypto.
+- **[Exercise 2](#exercise-2-prove-the-key-exchange-is-post-quantum)**: capture that same handshake and prove, in the bytes, that its key exchange negotiated hybrid DH/ML-KEM, then remove the TLS 1.3 override and watch it silently downgrade to classical crypto.
 - **[Exercise 3](#exercise-3-make-authentication-post-quantum-ml-dsa)**: reissue the certificates as **ML-DSA**, run the same handshake, confirm the *authentication* is now genuinely post-quantum, and measure the EAPOL fragmentation cost.
 
-### How the topology works
+### Topology
 
-We will have two containers, exactly like in the IKEv2 labs' initiator/responder:
+Two containers, exactly like in the IKEv2 labs' initiator/responder:
 
 - **`macsec-authenticator`**: the "switch port", runs hostapd with the integrated EAP-TLS server.
 - **`macsec-supplicant`**: the "endpoint", runs wpa_supplicant as the EAP-TLS peer.
 
-They are joined by a **veth pair** (a virtual Ethernet "cable"): `aut` on the authenticator end, `sup` on the supplicant end. To make that direct L2 link work on plain Docker, the supplicant container shares the authenticator's network namespace (`network_mode: service:macsec-authenticator` in the compose file). Why not a normal Docker bridge network? Because 802.1X EAPOL frames are sent to the **PAE group multicast address** `01:80:c2:00:00:03`, which Linux bridges filter out by default. A point-to-point veth delivers them unfiltered, so the lab needs no host-side configuration.
+They are joined by a **veth pair** (a virtual Ethernet "cable"): `aut` on the authenticator end, `sup` on the supplicant end. To make that direct L2 link work on plain Docker, the supplicant container shares the authenticator's network namespace. Why not a normal Docker bridge network? Because 802.1X EAPOL frames are sent to the **PAE group multicast address** `01:80:c2:00:00:03`, which Linux bridges filter out by default. A point-to-point veth delivers them unfiltered, so the lab needs no host-side configuration.
 
 > **What is the "PAE group address"?** A *PAE* (Port Access Entity) is the 802.1X software on each port that runs the authentication state machine: the supplicant on one side, the authenticator on the other. Instead of addressing each other by MAC, the two PAEs talk over a fixed IEEE-reserved Layer 2 multicast address, `01:80:c2:00:00:03`, called the **PAE group address**. It is a well-known "everyone doing 802.1X on this link, listen here" address, so a device can start EAPOL before it knows anything about its neighbour (or even has an IP). 
 
 ### Prerequisites
 
-**Docker** with the Compose v2 plugin (`docker compose ...`), and three terminals: two for the container shells (authenticator and supplicant) and one on your host for `docker compose` commands like reissuing certificates. Everything the handshake needs, wpa_supplicant, hostapd, OpenSSL 3.5, `tcpdump`, and `tshark`, is compiled into the image. One caveat to know going in: this lab exercises the EAP-TLS *handshake*, which runs on any Docker host, but actually encrypting frames with the kernel MACsec driver needs a kernel built with `CONFIG_MACSEC` (Docker Desktop's LinuxKit kernel doesn't have it), so the data plane itself is out of scope, see [A note on the data plane](#a-note-on-the-data-plane) at the end for how you'd drive it on a Linux host.
+**Docker** with the Compose v2 plugin, and three terminals: two for the container shells (authenticator and supplicant) and one on your host for "docker compose" commands like reissuing certificates. Everything the handshake needs, wpa_supplicant, hostapd, OpenSSL 3.5, `tcpdump`, and `tshark`, is compiled into the image. One caveat to know going in: this lab exercises the EAP-TLS *handshake*, which runs on any Docker host, but actually encrypting frames with the kernel MACsec driver needs a kernel built with `CONFIG_MACSEC` (Docker Desktop's LinuxKit kernel doesn't have it), so the data plane itself is out of scope, see [A note on the data plane](#a-note-on-the-data-plane) at the end for how you'd drive it on a Linux host.
 
 ### Build and start
 
@@ -760,28 +758,3 @@ containers.
 ---
 
 That is it. You followed MACsec's keys from the data plane back to the EAP-TLS handshake that roots them, ran that handshake for real, proved in the captured bytes that it negotiates hybrid ML-KEM (and that it quietly will not unless you make it), then made its certificates post-quantum with a one-line reissue and measured the size cost on the wire. Both halves, one handshake. Well done!
-
----
-
-### How this compares to the other labs
-
-MACsec is the one protocol family in this repo that puts *both* post-quantum pillars inside a single handshake, because its entire quantum exposure lives in the embedded EAP-TLS (TLS 1.3) exchange. The IKEv2 and TLS families split key exchange and authentication into separate labs; here they are two exercises against the same handshake.
-
-| | MACsec (this lab) | IKEv2 ([key-exchange](../ipsec/key-exchange/README.md) / [authentication](../ipsec/authentication/README.md)) | TLS 1.3 ([key-exchange](../tls/key-exchange/README.md) / [authentication](../tls/authentication/README.md)) |
-|-|-------------------|-----------------------------|-----------------------------|
-| Layer | 2 (Ethernet frames) | 3 (IP) | 4+ (application) |
-| Carrier for the handshake | EAP-TLS over 802.1X/EAPOL | IKEv2 | TLS directly over TCP |
-| Underlying handshake | TLS 1.3 | IKEv2 + RFC 9370 | TLS 1.3 |
-| Hybrid KE group | `X25519MLKEM768` | `x25519-ke1_mlkem768` | `X25519MLKEM768` |
-| Extra round trip for ML-KEM? | No (rides in ClientHello/ServerHello) | Yes (`IKE_INTERMEDIATE`) | No |
-| Authentication algo | `ML-DSA-44/65/87` | `ML-DSA-44/65/87` | `ML-DSA-44/65/87` |
-| Visible auth cost | bigger certs, EAPOL fragmentation | bigger certs/IKE payloads | bigger certs on the wire |
-| Image change to enable PQC | none (OpenSSL 3.5 native) | separate strongSwan build | none (OpenSSL 3.5 native) |
-| Data-plane cipher | MACsec AES-GCM | ESP AES-GCM | AES-GCM record layer |
-
-Put the labs together and you have seen the full post-quantum picture for network infrastructure: **ML-KEM** secures the key exchange against harvest-now-decrypt-later, **ML-DSA** secures authentication against future forgery, and both run inside the *same* protocols you already use (TLS 1.3 under EAP-TLS, IKEv2), just with bigger payloads and a few configuration gates to get right.
-
----
-
-**On real hardware:** [MACsec on Cisco IOS XE](../../deploy/ios-xe/macsec.md) covers
-PSK-based MKA and the full EAP-TLS config for PQ MACsec with ML-KEM on real routers.

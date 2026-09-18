@@ -1,0 +1,6 @@
+# Python side. Install into a virtualenv:
+#   python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
+ansible-core>=2.18
+ncclient>=0.6.15
+paramiko>=3.4
+lxml>=5.0

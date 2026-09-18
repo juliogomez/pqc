@@ -1,0 +1,33 @@
+{# Post-quantum SSH key exchange.
+   /native/ip/ssh/server/algorithm/kex/kex-options (ordered-by user)
+   /native/ip/ssh/server/algorithm/hostkey/hostkey-options (ordered-by user)
+   Both leaf-lists pushed with nc:operation="replace" for exact order.
+-#}
+{% set op = 'remove' if state == 'absent' else 'replace' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <ip>
+      <ssh>
+        <server>
+          <algorithm>
+            <kex nc:operation="{{ op }}">
+{% if state == 'present' %}
+{% for algo in pq_ssh_kex %}
+              <kex-options>{{ algo }}</kex-options>
+{% endfor %}
+{% endif %}
+            </kex>
+            <hostkey nc:operation="{{ op }}">
+{% if state == 'present' %}
+{% for algo in pq_ssh_hostkey %}
+              <hostkey-options>{{ algo }}</hostkey-options>
+{% endfor %}
+{% endif %}
+            </hostkey>
+          </algorithm>
+        </server>
+      </ssh>
+    </ip>
+  </native>
+</config>

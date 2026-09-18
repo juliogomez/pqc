@@ -1,0 +1,19 @@
+{# Post-quantum TLS on the management HTTPS server.
+   /native/ip/http/secure-pqc-type
+   One leaf. Same four enum values as MACsec.
+   Teardown removes the leaf rather than writing a value.
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <ip>
+      <http xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-http">
+{% if state == 'present' %}
+        <secure-pqc-type>{{ pq_https_pqc_type }}</secure-pqc-type>
+{% else %}
+        <secure-pqc-type nc:operation="remove"/>
+{% endif %}
+      </http>
+    </ip>
+  </native>
+</config>

@@ -1,0 +1,15 @@
+---
+# Enable NETCONF (RFC 6241) on all managed devices.
+#
+# Run this once, first. Everything else in this directory assumes port 830
+# answers.
+#
+#   ansible-playbook bootstrap.yml
+#   ansible-playbook bootstrap.yml -e state=absent      # last, if ever
+
+- name: Bootstrap the standard management transports
+  hosts: all
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: bootstrap

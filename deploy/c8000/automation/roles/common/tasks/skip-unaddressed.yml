@@ -1,0 +1,25 @@
+---
+# End the play for any device that has no management address in lab.yml.
+#
+# The inventory lists every lab device, but plenty of people only have some of
+# them wired up. Without this guard, a playbook that targets a group containing a
+# missing device dies with a Jinja error out of the inventory:
+#
+#   Error processing keyword 'remote_addr': object of type 'dict' has no attribute 'r3'
+#
+# which says nothing about the actual problem (r3 is not in lab_mgmt).
+#
+# "meta: end_host" runs on the controller and ends the play for this host only,
+# so no connection is attempted and the rest of the fabric carries on.
+
+- name: Skipping | no management address in lab.yml
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} has no entry under lab_mgmt in
+      group_vars/all/lab.yml, so it is being skipped. Add it there if you expect
+      this device to be configured or checked.
+  when: inventory_hostname not in (lab_mgmt | default({}))
+
+- name: Skipping | end the play for this host
+  ansible.builtin.meta: end_host
+  when: inventory_hostname not in (lab_mgmt | default({}))

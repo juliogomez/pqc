@@ -1,0 +1,19 @@
+---
+# Post-quantum SSH key exchange on the C9300 switches.
+#
+#   ansible-playbook ssh-pq.yml
+#   ansible-playbook ssh-pq.yml -e state=absent
+#
+# Changes the SSH server's offer order on every switch. The one playbook where
+# the post-quantum change is on the connection you are using to make it.
+
+- name: Configure SSH PQ key exchange
+  hosts: switches
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: ssh_pq
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

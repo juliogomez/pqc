@@ -1,0 +1,44 @@
+---
+# Put ML-KEM inside the EAP-TLS handshake that keys MACsec.
+#
+#   ansible-playbook macsec-pq.yml -e macsec_play_hosts=macsec_s2r
+#   ansible-playbook macsec-pq.yml -e macsec_play_hosts=macsec_s2s
+#   ansible-playbook macsec-pq.yml -e macsec_play_hosts=macsec_h2s
+#   ansible-playbook macsec-pq.yml -e macsec_play_hosts=macsec_s2s -e state=absent
+#
+# Two leaves. The biggest single win. Stacks on macsec-eaptls, never on
+# macsec-psk. There is no default link: name the one you already built with
+# macsec-eaptls.yml.
+
+- name: Enable post-quantum MACsec key exchange
+  hosts: >-
+    {{ macsec_play_hosts | mandatory('pick the link to upgrade. Re-run with -e
+    macsec_play_hosts=macsec_s2r, macsec_s2s or macsec_h2s') }}
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  # A link is a pair. See the note in macsec-eaptls.yml: one end failing means the
+  # run is over, not that the other end should be finished on its own.
+  any_errors_fatal: true
+  roles:
+    - role: macsec_pq
+
+- name: Confirm MACsec is secured with ML-KEM key exchange
+  hosts: "{{ macsec_play_hosts }}"
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  tasks:
+    - name: Operational proof
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: verify-macsec-proof
+      vars:
+        macsec_proof_keying: pq
+      when: state | default('present') == 'present'
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  vars:
+    # macsec-pq state=absent removes the PQ overlay, not MACsec itself.
+    # The EAP-TLS link is still up and should still be secured.
+    verify_macsec_expect: secured
+  tags: [verify, posture]

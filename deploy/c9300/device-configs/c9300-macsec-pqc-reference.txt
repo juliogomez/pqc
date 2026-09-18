@@ -1,0 +1,42 @@
+! C9300 switch-to-router PQC MACsec reference config
+! After Exercise 3 in macsec.md (ML-KEM key exchange)
+!
+! Peer cert import (Exercise 2 Step 1) is omitted here.
+! Adjust interface name, username, and MKA policy to match your topology.
+!
+access-session tls-version 1.3
+access-session pqc-type pqc
+!
+eap profile EAP-PROFILE
+ method tls
+ pki-trustpoint Self
+!
+dot1x credentials DOT1X-CREDS
+ username SW1
+ pki-trustpoint Self
+!
+mka policy mka_128
+ key-server priority 5
+ sak-rekey interval 200
+!
+policy-map type control subscriber DOT1X_POLICY_RADIUS
+ event session-started match-all
+  1 class always do-until-failure
+   10 authenticate using dot1x both
+ event authentication-failure match-all
+  1 class always do-until-failure
+   10 authentication-restart 7
+ event authentication-success match-all
+  1 class always do-until-failure
+   10 activate service-template DEFAULT_LINKSEC_POLICY_MUST_SECURE
+!
+interface GigabitEthernet1/0/3
+ macsec network-link
+ access-session host-mode multi-host
+ access-session port-control auto
+ dot1x pae both
+ dot1x authenticator eap profile EAP-PROFILE
+ dot1x credentials DOT1X-CREDS
+ dot1x supplicant eap profile EAP-PROFILE
+ mka policy mka_128
+ service-policy type control subscriber DOT1X_POLICY_RADIUS

@@ -1,0 +1,147 @@
+---
+# Exchange self-signed certificates between MACsec peers.
+#
+# Each device exports the PEM of its shipped self-signed cert, and the peer
+# imports it into my_macsec_peer_trustpoint via "crypto pki authenticate".
+# That name is PQAUTO-PEER on the default links and PQAUTO-PEER-H2S on the
+# host-to-switch pair, so sw1 can hold both peer certs at once.
+
+# GETTING THE PEM OUT IS THE AWKWARD PART, so here is why it looks like this.
+#
+# The obvious command, "crypto pki export <tp> pem terminal", is not usable:
+#   - in exec mode the "pem" keyword does not exist, only "pkcs12"
+#   - it only appears in config mode, and driving an interactive config-mode exec
+#     through a persistent network_cli session desynchronises the reader, so the
+#     output comes back one task late
+#   - the shipped keypair is non-exportable anyway
+#
+# The running config carries the same certificate as a DER hex dump, which needs
+# no interactive session at all. Read it, strip it to hex, convert on the
+# controller. Requires xxd and openssl, both of which are already on any machine
+# that can run this layer.
+
+- name: Export | read the certificate chain out of the running config
+  cisco.ios.ios_command:
+    commands:
+      - "show running-config | section crypto pki certificate chain {{ macsec_eaptls_identity_trustpoint }}"
+  register: cert_chain
+  changed_when: false
+
+- name: Export | reduce the chain block to bare DER hex
+  ansible.builtin.set_fact:
+    local_cert_der_hex: >-
+      {{ ((cert_chain.stdout[0] | default(''))
+          | regex_search('certificate self-signed[^\n]*\n([\s\S]*?)\n\s*quit', '\1')
+          | first | default(''))
+         | regex_replace('[^0-9A-Fa-f]', '') }}
+
+- name: Export | the chain must actually contain a certificate
+  ansible.builtin.assert:
+    that:
+      - local_cert_der_hex | length > 400
+    fail_msg: >-
+      No "certificate self-signed" block under "crypto pki certificate chain
+      {{ macsec_eaptls_identity_trustpoint }}" on {{ inventory_hostname }}. The
+      trustpoint exists but its certificate is not in the running config.
+    quiet: true
+
+- name: Export | convert the DER to PEM on the controller
+  ansible.builtin.set_fact:
+    local_cert_pem: >-
+      {{ lookup('pipe', 'printf %s ' ~ local_cert_der_hex
+                        ~ ' | xxd -r -p | openssl x509 -inform DER -outform PEM') }}
+
+- name: Export | the conversion must have produced a PEM
+  ansible.builtin.assert:
+    that:
+      - local_cert_pem is search('-----BEGIN CERTIFICATE-----')
+      - local_cert_pem is search('-----END CERTIFICATE-----')
+    fail_msg: >-
+      Converting {{ inventory_hostname }}'s certificate to PEM produced nothing
+      usable. Check that xxd and openssl are on this controller.
+    quiet: true
+
+# SHA-1, and not by choice. This build refuses the interactive "do you accept
+# this certificate?" accept path entirely:
+#
+#   Trustpoint fingerprint must be supplied.
+#   Trustpoint CA certificate is rejected. Abort.
+#
+# The trustpoint has to pin the fingerprint up front, and IOS only compares
+# against MD5 or SHA-1. SHA-1 is the stronger of the two on offer. This is a
+# pinning check on a certificate we already hold, not a signature, so a collision
+# attack would need the attacker to control the certificate before we read it off
+# the peer's own running config. If a build ever accepts sha256 here, switch.
+- name: Export | fingerprint the certificate for the peer to pin
+  ansible.builtin.set_fact:
+    local_cert_fingerprint: >-
+      {{ lookup('pipe', 'printf %s ' ~ local_cert_der_hex
+                        ~ ' | xxd -r -p | openssl x509 -inform DER -noout -fingerprint -sha1'
+                        ~ ' | cut -d= -f2 | tr -d :') | trim }}
+
+# Publish as host facts so the peer can read them out of hostvars.
+- name: Publish my cert PEM and fingerprint as host facts
+  ansible.builtin.set_fact:
+    published_cert_pem: "{{ local_cert_pem }}"
+    published_cert_fingerprint: "{{ local_cert_fingerprint }}"
+
+- name: Determine my peer
+  ansible.builtin.set_fact:
+    my_peer: "{{ my_macsec_peer }}"
+
+- name: Fail if the peer did not publish a certificate in this play
+  ansible.builtin.assert:
+    that:
+      - my_macsec_peer | length > 0
+      - my_macsec_peer in hostvars
+      - hostvars[my_macsec_peer]['published_cert_pem'] | default('') | length > 30
+      - hostvars[my_macsec_peer]['published_cert_fingerprint'] | default('') | length == 40
+    fail_msg: >-
+      {{ inventory_hostname }} expected peer {{ my_macsec_peer }} to publish a
+      certificate PEM and SHA-1 fingerprint in this play. Both ends of the pair
+      must be in lab.yml and in the play (do not --limit one side of a hop).
+    quiet: true
+
+- name: Check if the peer trustpoint already has a certificate
+  cisco.ios.ios_command:
+    commands:
+      - "show crypto pki certificates {{ my_macsec_peer_trustpoint }}"
+  register: peer_tp_check
+  changed_when: false
+  failed_when: false
+
+- name: Record whether the peer cert is already imported
+  ansible.builtin.set_fact:
+    peer_cert_imported: >-
+      {{ (peer_tp_check.stdout[0] | default('')) is search('Status:\s*Available') }}
+
+- name: Create the peer trustpoint via NETCONF
+  when: not (peer_cert_imported | bool)
+  block:
+    - name: Render peer trustpoint config
+      ansible.builtin.set_fact:
+        nc_label: "trustpoint {{ my_macsec_peer_trustpoint }}"
+        nc_operation: merge
+        nc_payload: "{{ lookup('template', 'peer-trustpoint.xml.j2') }}"
+
+    - name: Push peer trustpoint config
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-edit
+
+- name: Import the peer's certificate
+  when: not (peer_cert_imported | bool)
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: exec-with-prompt
+  vars:
+    exec_label: "crypto pki authenticate {{ my_macsec_peer_trustpoint }}"
+    exec_command: "crypto pki authenticate {{ my_macsec_peer_trustpoint }}"
+    # One prompt, not two. The old "% Do you accept this certificate? [yes/no]:"
+    # question does not appear on this build: the trustpoint pins the fingerprint
+    # instead, so IOS decides for itself and never asks.
+    exec_prompt:
+      - 'Enter the base 64 encoded CA certificate'
+    exec_answer:
+      - "{{ hostvars[my_peer]['published_cert_pem'] }}\nquit"
+    exec_check_all: true

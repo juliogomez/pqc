@@ -15,7 +15,7 @@ Ready? Let's get started.
 1. [What are we trying to figure out?](#what-are-we-trying-to-figure-out)
 2. [Why should you care? The quantum threat](#why-should-you-care-the-quantum-threat)
 3. [Meet our two contenders](#meet-our-two-contenders)
-4. [Head-to-head: let's get ready to rumble](#head-to-head-lets-get-ready-to-rumble)
+4. [Head-to-head](#head-to-head)
 5. [The hybrid solution](#the-hybrid-solution)
 6. [Our tool of choice: strongSwan](#our-tool-of-choice-strongswan)
 7. [Let's get our hands dirty: the lab](#lets-get-our-hands-dirty-the-lab)
@@ -70,15 +70,15 @@ ML-KEM (Module-Lattice-Based Key Encapsulation Mechanism, [**FIPS 203**](https:/
 
 ML-KEM-768 is the sweet spot for most deployments: a comfortable security margin against quantum attacks without the extra bandwidth of ML-KEM-1024. ML-KEM-512 is generally avoided, as its security level is considered a bit marginal for long-term protection. **So this lab uses ML-KEM-768.**
 
-> **Curious *why* ML-KEM resists quantum attack?** That "Module-Lattice-Based" in the name is doing real work. The companion [module-lattices lab](../../module-lattices/README.md) builds the underlying math from scratch (Learning With Errors, the `R_q = Z_q[x]/(x^n+1)` ring, a baby ML-KEM you implement yourself) and runs a real lattice attack into the exponential wall that protects it. Highly recommended if you want the foundation beneath this lab.
+> **Curious *why* ML-KEM resists quantum attack?** That "Module-Lattice-Based" in the name is doing real work. The companion [module-lattices lab](../../module-lattices/README.md) builds the underlying math from scratch and runs a real lattice attack into the exponential wall that protects it. Highly recommended if you want the foundation beneath this lab.
 
-Now here's the twist that trips a lot of people up: ML-KEM is a **Key Encapsulation Mechanism**, not a symmetric key exchange. One party generates, the other encapsulates. The initiator sends a public key, the responder runs the encapsulation algorithm on it (which spits out *both* a ciphertext and a shared secret) and sends back the ciphertext. Only the initiator, holding the private key, can run decapsulation on that ciphertext to recover the same shared secret.
+Now here's something to remark: ML-KEM is a **Key Encapsulation Mechanism**, not a symmetric key exchange. One party generates, the other encapsulates. The initiator sends a public key, the responder runs the encapsulation algorithm on it (which spits out *both* a ciphertext and a shared secret) and sends back the ciphertext. Only the initiator, holding the private key, can run decapsulation on that ciphertext to recover the same shared secret.
 
 ---
 
-## Head-to-head: let's get ready to rumble
+## Head-to-head
 
-This is the heart of the lab. The differences below explain every design decision that follows, and Exercise 2 lets you reproduce them yourself. So let's put our two contenders side by side.
+The differences below explain every design decision that follows, and Exercise 2 lets you reproduce them yourself. So let's put our two contenders side by side.
 
 ### Size on the wire
 
@@ -87,9 +87,9 @@ This is the heart of the lab. The differences below explain every design decisio
 | Public key | 32 B | 800 B | 1184 B | 1568 B |
 | Response (ciphertext / public key) | 32 B | 768 B | 1088 B | 1568 B |
 | Shared secret | 32 B | 32 B | 32 B | 32 B |
-| Fits in one IKE message (≤1280 B)? | ✅ yes | ✅ yes | ❌ no (needs fragmentation) | ❌ no |
+| Fits in one IKE message (≤1280 B)? | yes | yes | no (needs fragmentation) | no |
 
-X25519's 32-byte keys are tiny. ML-KEM's are 25–50× larger, big enough that ML-KEM-768 forces IKE fragmentation. This single fact drives the `fragmentation = yes` requirement and those chunky packets you'll spot in the captures in the lab exercises below.
+X25519's 32-byte keys are tiny. ML-KEM's are 25–50× larger, big enough that ML-KEM-768 forces IKE fragmentation. This single fact drives the fragmentation requirement and those chunky packets you'll spot in the captures in the lab exercises below.
 
 ### Latency: round trips in IKEv2
 
@@ -104,7 +104,7 @@ The hybrid mode adds one full round trip, measurable but small in practice (typi
 
 A common misconception is that "post-quantum" means "painfully slow". For ML-KEM, the opposite is closer to the truth: its lattice operations are seriously fast, in the same ballpark as, and often faster than, an elliptic-curve scalar multiplication.
 
-Approximate per-operation cost on modern x86 (AVX2), drawn from published benchmarks (eBACS / SUPERCOP, measuring AVX2-optimised implementations on comparable Intel/AMD hardware, not measured here):
+Approximate per-operation cost on modern x86 (AVX2), drawn from published benchmarks:
 
 | Operation | X25519 | ML-KEM-768 |
 |-----------|--------|-----------|
@@ -116,7 +116,7 @@ Approximate per-operation cost on modern x86 (AVX2), drawn from published benchm
 
 The two algorithms don't map one-to-one: a complete X25519 exchange costs two scalar multiplications (one for keygen, one to derive the shared secret), whereas a KEM splits the work: the initiator does keygen (~30k cycles) plus decapsulate (~35k cycles) and the responder does only encapsulate (~45k cycles). Adding those up: initiator side ≈ 65k cycles total, responder ≈ 45k cycles, squarely in the same range as X25519's ~100–130k total for both operations combined. Either way the totals are comparable, and ML-KEM-768 is **not** the bottleneck.
 
-You can measure X25519 yourself inside the container with `openssl speed ecdhx25519`. The containers in this lab are based on Ubuntu 24.04 (the Dockerfile base image), which ships OpenSSL 3.0, and OpenSSL 3.0 cannot benchmark ML-KEM from the CLI, hence the cited reference figures above.
+You can measure X25519 yourself inside the container with `openssl speed ecdhx25519`. The containers in this lab are based on Ubuntu 24.04 (the Dockerfile base image), which ships OpenSSL 3.0, and OpenSSL 3.0 cannot benchmark ML-KEM from the CLI (that's why I included the reference figures above).
 
 The decisive evidence for this lab is the end-to-end handshake time you'll measure directly in Exercise 2: hybrid adds only ~1 ms over classical (≈21 ms vs ≈20 ms on the Docker bridge), and essentially all of that is the extra network round trip, not computation. Since a handshake happens once per tunnel (with rekeying every few hours), the CPU cost of either algorithm is negligible in practice.
 
@@ -125,13 +125,11 @@ The decisive evidence for this lab is the end-to-end handshake time you'll measu
 | | X25519 | ML-KEM-768 |
 |-|--------|-----------|
 | Classical security¹ | ~128-bit | ~192-bit |
-| Quantum security (Shor / Grover) | ❌ broken by Shor's algorithm | ✅ no known quantum attack |
+| Quantum security (Shor / Grover) | broken by Shor's algorithm | no known quantum attack |
 | Standardisation | RFC 7748 (2016) | FIPS 203 (2024) |
 | Deployment maturity | Very high | Emerging |
 
 ¹ *Classical security* is the estimated work required to break the algorithm on a conventional (non-quantum) computer, expressed as equivalent bits of symmetric key strength. ~128-bit means an attacker would need roughly 2¹²⁸ operations, currently infeasible. This says nothing about quantum resistance.
-
-² ML-KEM-768's ~192-bit classical security level comes from NIST's analysis in FIPS 203: the underlying Module-LWE problem with the chosen parameter set (module rank k=3, polynomial degree n=256, modulus q=3329) requires an estimated 2¹⁹² classical operations to break with the best known lattice-reduction attacks (BKZ algorithm and variants). The "768" in the name is the **module-lattice dimension** k×n = 3×256 = 768, the number of integer coefficients in the secret, which is the quantity that tracks the security level (ML-KEM-512/768/1024 are simply k=2/3/4, so 512/768/1024 = k×256). It is *not* the public key size: those same 768 coefficients, encoded at ⌈log₂q⌉ = 12 bits each, come to 768×12/8 = 1152 B, and adding the 32-byte seed ρ gives the **1184 B** public key from the table above.
 
 ### The verdict: why not both?
 
@@ -142,17 +140,16 @@ Neither option wins outright today. X25519 is well-tested but quantum-vulnerable
 
 ## The hybrid solution
 
-So how do we actually get our two contenders to work together? Enter [**RFC 9370**](https://www.rfc-editor.org/rfc/rfc9370) (Multiple Key Exchanges in IKEv2, 2023), which defines a mechanism to run additional key exchanges *on top of* the standard IKEv2 DH exchange, with each contributing keying material to the final IKE SA (Security Association) keys. This is what makes hybrid PQC possible in IKEv2 without redesigning the whole protocol.
+So how do we actually get our two contenders to work together? Enter [**RFC 9370**](https://www.rfc-editor.org/rfc/rfc9370), which defines a mechanism to run additional key exchanges *on top of* the standard IKEv2 DH exchange, with each contributing keying material to the final IKE Security Association (SA) keys. This is what makes hybrid PQC possible in IKEv2 without redesigning the whole protocol.
 
-The scheme works like this: X25519 stays as the primary key exchange (carried in the standard `IKE_SA_INIT` message), and ML-KEM joins as an *additional* key exchange in a new `IKE_INTERMEDIATE` round trip. The final session key is derived from **both** shared secrets combined. Which means:
+The scheme works like this: X25519 stays as the primary key exchange (in the`IKE_SA_INIT` message), and ML-KEM joins as an *additional* key exchange in a new `IKE_INTERMEDIATE` round trip. The final session key is derived from **both** shared secrets combined. Which means:
 
 - If ML-KEM is broken by a future quantum attack, X25519 still provides classical security.
 - If X25519 is broken by a quantum computer, ML-KEM provides quantum resistance.
 - An attacker must break **both** simultaneously, which is believed to be infeasible.
 
-RFC 9370 is the reason this lab works at all. Without it, you'd be forced to either replace X25519 with ML-KEM entirely (losing classical security) or sit around waiting for a full protocol redesign. The hybrid approach is the practical migration path recommended by NIST and most VPN vendors. And it's backward compatible too: peers that don't speak additional key exchanges simply fall back to the base DH exchange.
+RFC 9370 is the reason this lab works at all. Without it, you'd be forced to either replace X25519 with ML-KEM entirely (losing classical security) or sit around waiting for a full protocol redesign. The hybrid approach is the practical migration path recommended by NIST and most VPN vendors. And it's backward compatible too! Peers that don't speak additional key exchanges simply fall back to the base DH exchange.
 
-The proposal string `x25519-ke1_mlkem768` says all of this out loud: `x25519` is the main DH group in `IKE_SA_INIT`, and `ke1_mlkem768` is the first RFC 9370 additional key exchange, riding in `IKE_INTERMEDIATE`.
 
 ### The handshake, step by step
 
@@ -186,7 +183,7 @@ Those big packets in the intermediate exchange are the ML-KEM public key (~1184 
 
 Time to talk tooling. **strongSwan** is an open-source IKEv2/IPsec implementation widely used in Linux-based VPN gateways, routers, and security appliances. It implements the full IKEv2 protocol ([RFC 7296](https://www.rfc-editor.org/rfc/rfc7296)) and manages the keying lifecycle for IPsec tunnels: negotiating IKE SAs, installing ESP/AH child SAs into the kernel, handling rekeying, and responding to dead peer detection.
 
-> **Why strongSwan and not OpenSSL here?** Simple: OpenSSL isn't an IKEv2 implementation. It's a crypto library, and while OpenSSL 3.5 does ship ML-KEM, that support is wired into **TLS**: there's no OpenSSL "IKEv2 mode" you could point at a VPN peer. So for a post-quantum *IKEv2* key exchange there's genuinely no OpenSSL alternative; strongSwan is the tool that speaks the protocol, and ML-KEM is production-ready inside it today (6.0.x), so we get to watch it run in a real handshake. Its companion lab, [Who goes there? Post-quantum authentication](../authentication/README.md), reaches for OpenSSL instead, not by preference, but because post-quantum *authentication* (ML-DSA certificates and signatures) hasn't landed in strongSwan/IKEv2 yet, and OpenSSL is where you can generate and inspect those certs today. Two labs, two tools: that split isn't us being fussy, it's an honest snapshot of where each piece of the post-quantum puzzle is mature right now.
+> **Why strongSwan and not OpenSSL here?** Simple: OpenSSL isn't an IKEv2 implementation. It's a crypto library, and while OpenSSL 3.5 does ship ML-KEM, that support is wired into **TLS**: there's no OpenSSL "IKEv2 mode" you could point at a VPN peer. So for a post-quantum *IKEv2* key exchange there's genuinely no OpenSSL alternative; strongSwan is the tool that speaks the protocol, and ML-KEM is production-ready inside it today (6.0.x), so we get to watch it run in a real handshake. The companion lab, [Who goes there? Post-quantum authentication](../authentication/README.md), reaches for OpenSSL instead, not by preference, but because post-quantum *authentication* (ML-DSA certificates and signatures) hasn't landed in strongSwan/IKEv2 yet, and OpenSSL is where you can generate and inspect those certs today. Two labs, two tools: that split isn't us being fussy, it's an honest snapshot of where each piece of the post-quantum puzzle is mature right now.
 
 ---
 
@@ -195,12 +192,12 @@ Time to talk tooling. **strongSwan** is an open-source IKEv2/IPsec implementatio
 Enough theory, let's run it. Here's the plan:
 
 - **[Exercise 1](#exercise-1-observe-a-hybrid-handshake)**: observe a single hybrid handshake from initiation to teardown, inspecting the SA and the packet capture along the way.
-- **[Exercise 2](#exercise-2-compare-classical-only-vs-hybrid-handshake)**: toggle the config between classical-only and hybrid proposals, and compare round trips, packet sizes, and timing side by side. (This is the payoff, don't skip it!)
-- **[Exercise 3](#exercise-3-an-alternate-path-to-quantum-safety-rfc-8784-ppk)**: reach quantum safety a different way with an RFC 8784 post-quantum preshared key (PPK): an algorithm-free alternative to ML-KEM, and often a practical first step on gear that can't do ML-KEM yet.
+- **[Exercise 2](#exercise-2-compare-classical-only-vs-hybrid-handshake)**: toggle the config between classical-only and hybrid proposals, and compare round trips, packet sizes, and timing side by side.
+- **[Exercise 3](#exercise-3-an-alternate-path-to-quantum-safety-ppk)**: reach quantum safety a different way with an RFC 8784 **P**ost-quantum **P**reshared **K**ey (PPK): an algorithm-free alternative to ML-KEM, and often a practical first step on gear that can't do ML-KEM yet.
 
 ### Prerequisites
 
-**Docker** with the Compose v2 plugin (the `docker compose` subcommand), and ideally two terminals: one shelled into the initiator, and a spare on your host for things like `docker cp` or `docker logs`. strongSwan, `swanctl`, and `tcpdump` are all compiled into the image, so nothing lands on your host. Heads up that the first `docker compose build` compiles strongSwan from source and takes around five minutes; after that, startup is quick. This is the recommended starting point for the repo (it introduces hybrid key exchange, IKE fragmentation, and the key-exchange-vs-authentication split that later labs build on). If you'd rather see the math under ML-KEM first, the [module-lattices lab](../../module-lattices/README.md) is the prequel.
+**Docker** with the Compose v2 plugin (the `docker compose` subcommand), and ideally two terminals: one shelled into the initiator, and a spare on your host for things like `docker cp` or `docker logs`. strongSwan, `swanctl`, and `tcpdump` are all compiled into the image, so nothing lands on your host. This is the recommended starting point for the repo (it introduces hybrid key exchange, IKE fragmentation, and the key-exchange-vs-authentication split that later labs build on).
 
 ### Build and start
 
@@ -331,66 +328,49 @@ That's a quantum-resistant tunnel up and running.
 
 **Step 6: Inspect the packet capture**
 
-Now for the fun part: let's peek at what actually flew across the wire. Stop the capture and wait for the file to be fully written:
+Now for the fun part: let's peek at what actually flew across the wire. Stop the capture first:
 
 ```bash
 kill $TCPDUMP_PID
 wait $TCPDUMP_PID 2>/dev/null
 ```
 
-The raw `tcpdump -r /tmp/capture.pcap -n -vv` output is *very* verbose (full payload dump per packet). Let's filter it down to one meaningful line per IKE message: the exchange type and direction:
+#### The filtered view: one line per IKE message
+
+The raw `-vv` output is verbose. Let's start with a filtered view that shows just the exchange type and direction of each IKE message:
 
 ```bash
 tcpdump -r /tmp/capture.pcap -n -vv 2>/dev/null | grep -E "parent_sa|child_sa"
 ```
 
-What to look for:
+Seven lines, one per packet:
 
 | Packet | Direction | Filtered line shows | What it means |
 |--------|-----------|---------------------|---------------|
-| 1 | `.2 → .3` | `parent_sa ikev2_init[I]` | `IKE_SA_INIT`: SA proposal with X25519 (`dh=#31`) and ML_KEM_768 (`type=#6 id=36`) |
+| 1 | `.2 → .3` | `parent_sa ikev2_init[I]` | `IKE_SA_INIT`: SA proposal with X25519 and ML-KEM-768 |
 | 2 | `.3 → .2` | `parent_sa ikev2_init[R]` | `IKE_SA_INIT`: responder accepts same proposal |
-| 3-4 | `.2 → .3` | `child_sa #43[I]` | `IKE_INTERMEDIATE` (RFC 9370 exchange type 43): ML-KEM encapsulation key (~1250 B, fragmented across two UDP packets) |
-| 5 | `.3 → .2` | `child_sa #43[R]` | `IKE_INTERMEDIATE` response: ML-KEM ciphertext (~1155 B) |
+| 3-4 | `.2 → .3` | `child_sa #43[I]` | `IKE_INTERMEDIATE` (RFC 9370): ML-KEM encapsulation key, fragmented |
+| 5 | `.3 → .2` | `child_sa #43[R]` | `IKE_INTERMEDIATE` response: ML-KEM ciphertext |
 | 6 | `.2 → .3` | `child_sa ikev2_auth[I]` | `IKE_AUTH`: encrypted PSK auth + child SA request |
 | 7 | `.3 → .2` | `child_sa ikev2_auth[R]` | `IKE_AUTH`: encrypted confirmation |
 
-> **Heads up: the `grep` collapses each message to one line.** The filter keeps only the summary line per IKE message (the `parent_sa`/`child_sa` header with exchange type + direction), which is all you'll see in this view, seven lines, one per packet. The *What it means* column describes what each message is *carrying*; that detail lives on the lines *below* each header, which the `grep` throws away. So the `dh=#31` / `type=#6 id=36` transforms and the `v2ke` key share simply aren't in this filtered output, by design.
->
-> To actually see them, drop the `grep` and read one packet in full:
->
-> ```bash
-> tcpdump -r /tmp/capture.pcap -n -vv -c 1
-> ```
->
-> That prints the first `IKE_SA_INIT` with its nested `(sa: ... (t: #3 type=dh id=#31) (t: #4 type=#6 id=36))` proposal and `(v2ke: len=32 group=#31)` key share. It's the same full dump we annotate a couple of commands down.
+The `grep` keeps only the summary header per message. To see the full payload detail of any single packet (the SA transforms, the `v2ke` key share), drop the filter and limit to one packet:
 
-> **Why does tcpdump say `child_sa #43` instead of `IKE_INTERMEDIATE`?**
-> tcpdump's ISAKMP dissector doesn't have a name for exchange type 43, so it falls back to displaying the raw number. Exchange type 43 (0x2B) is `IKE_INTERMEDIATE`, assigned by RFC 9370. The `[|v2ke]` annotation confirms there is a key exchange payload inside: that is the ML-KEM public key.
+```bash
+tcpdump -r /tmp/capture.pcap -n -vv -c 1
+```
 
-> **Why does a 1184 B key need fragmentation when the limit is 1280 B?**
->
-> [RFC 7296](https://www.rfc-editor.org/rfc/rfc7296) requires every IKEv2 implementation to handle messages up to **1280 bytes** without relying on IP fragmentation. The ML-KEM-768 encapsulation key is only 1184 B (under the limit), yet the `IKE_INTERMEDIATE` message still gets fragmented. The reason is the layers of headers wrapped around the key, and the UDP/IP encapsulation added on the wire. Accounting for every byte:
->
-> | Layer | Adds | Running total |
-> |-------|------|---------------|
-> | ML-KEM-768 encapsulation key (raw) | n/a | 1184 B |
-> | Key Exchange payload header (RFC 7296 section 3.4: 4 B generic + 2 B method + 2 B reserved) | +8 | 1192 B |
-> | Encrypted (SK) payload wrapper (section 3.14 / AES-GCM per RFC 5282: 4 B header + 8 B IV + 1 B pad-length + 16 B GCM tag) | +29 | 1221 B |
-> | IKE header (section 3.1) | +28 | **1249 B** |
-> | UDP-encap on port 4500 (4 B non-ESP marker + 8 B UDP + 20 B IPv4 header) | +32 | **1281 B** |
->
-> That final **1281 B just crosses the 1280 ceiling**, so strongSwan fragments at the IKE layer ([RFC 7383](https://www.rfc-editor.org/rfc/rfc7383)) rather than letting the IP layer fragment it (IP fragments are widely dropped by firewalls). You can see it in the capture: the first fragment's UDP length is **1252 B**, so its datagram is `1252 + 8 (UDP) + 20 (IP) = 1280` (sized to sit exactly on the limit), and the remainder spills into the tiny second fragment (`70 + 8 + 20 = 98 B`). The responder's reply carries the 1088 B ML-KEM ciphertext through the same wrapping, landing at ~1155 B. This is exactly why `fragmentation = yes` is mandatory: without it the oversized `IKE_INTERMEDIATE` message would be IP-fragmented or silently dropped.
->
-> (Exact byte counts vary slightly depending on whether UDP/IP headers are counted in a given view.)
+#### Packet sizes at a glance
 
-For a compact view of packet sizes and counts, use `-q` instead:
+For a compact view of sizes and counts:
 
 ```bash
 tcpdump -r /tmp/capture.pcap -n -q
 ```
 
-To inspect the full payload detail of a single packet (SA proposals, KE payloads, the `[v2ke]` key-exchange marker, etc.), drop the filter and read the raw `-vv` output:
+#### The full annotated dump
+
+Now read the whole thing with payload detail:
 
 ```bash
 tcpdump -r /tmp/capture.pcap -n -vv
@@ -427,41 +407,61 @@ In  172.20.0.3.4500 > 172.20.0.2.4500  length 1185
   child_sa #43[R]: (v2e: len=1121)                     # v2e = single encrypted payload (SK), no fragmentation
   #  → ML-KEM shared secret combined with X25519 → final IKE SA keys
 
-# IKE_AUTH: the payload is encrypted; tcpdump shows only the outer IKE header (exchange type,
-# message ID, flags) and the SK payload wrapper (type=46 / v2e), not the auth data inside.
-# The length (321 / 177) is the encrypted blob's byte count, not its contents.
+# IKE_AUTH: encrypted; tcpdump shows only the outer IKE header and the SK wrapper, not the auth data.
 Out 172.20.0.2.4500 > 172.20.0.3.4500  length 385
-  child_sa ikev2_auth[I]: (v2e: len=321)               # request: outer wrapper only; auth data + child SA proposal are ciphertext
+  child_sa ikev2_auth[I]: (v2e: len=321)               # auth data + child SA proposal are ciphertext
 In  172.20.0.3.4500 > 172.20.0.2.4500  length 241
-  child_sa ikev2_auth[R]: (v2e: len=177)               # response: outer wrapper only; confirmation is ciphertext
+  child_sa ikev2_auth[R]: (v2e: len=177)               # confirmation is ciphertext
   #  → IKE SA + CHILD SA ESTABLISHED.  Whole handshake here: ~18.6 ms across 3 round trips
 ```
 
-> **`-vv` vs `-q`: same packets, two rulers.** The `length` values above come from `tcpdump -n -vv`, which prints the **IP datagram** size (IP and UDP headers included). The compact `tcpdump -n -q` view you'll use in [Exercise 2](#exercise-2-compare-classical-only-vs-hybrid-handshake) prints the **UDP payload** length instead, which is exactly 28 B smaller (20 B IP + 8 B UDP). So this same `IKE_AUTH` request reads as `length 385` here and `357` there, and the `IKE_INTERMEDIATE` first fragment is `1280` here but `1252` under `-q`. Same bytes on the wire, just measured at a different layer. Worth knowing, so the two exercises' numbers line up in your head instead of looking like a contradiction.
+Three things worth pausing on:
 
-A few things worth pausing on:
+- **The proposal is the `--list-sas` line, seen from the wire.** The four `(t: ...)` transforms in the first packet decode straight to `AES_GCM_16-256/PRF_HMAC_SHA2_256/CURVE_25519/KE1_ML_KEM_768` from Step 5: same suite, two viewpoints.
+- **`IKE_SA_INIT` only promises ML-KEM; it doesn't carry it.** The `(v2ke: len=32)` payload is just the tiny X25519 key. The chunky ML-KEM key doesn't appear until `IKE_INTERMEDIATE`: keep the base exchange small and standard, ride the big PQC payload in the extra round trip.
+- **The 1280-byte ceiling is right there in the capture.** strongSwan sized fragment 1 to exactly 1280 B and spilled the rest into a 98 B second fragment.
 
-- **The proposal is the `--list-sas` line, seen from the wire.** The four `(t: ...)` transforms in the very first packet decode straight to `AES_GCM_16-256/PRF_HMAC_SHA2_256/CURVE_25519/KE1_ML_KEM_768` from Step 5: same suite, two viewpoints.
-- **`IKE_SA_INIT` only promises ML-KEM; it doesn't carry it.** The `(v2ke: len=32)` payload is just the tiny X25519 key. The chunky ML-KEM key doesn't appear until `IKE_INTERMEDIATE`, exactly the RFC 9370 design: keep the base exchange small and standard, ride the big PQC payload in the extra round trip.
-- **The 1280-byte ceiling is right there in the capture.** strongSwan sized fragment 1 to exactly 1280 B and spilled the rest into a 98 B second fragment: the concrete proof behind the fragmentation math in the callout above.
-
-> **Reading the payload markers.** Three little tags tell you what each message is carrying:
-> - `v2ke`: a cleartext **Key Exchange** payload (the X25519 key in `IKE_SA_INIT`).
-> - `(#53)`: payload type 53, an **encrypted *fragment*** (SKF, [RFC 7383](https://www.rfc-editor.org/rfc/rfc7383)). Seeing `#53` is the dead giveaway that a message was IKE-fragmented, which is why it shows up *only* on the big `IKE_INTERMEDIATE` request carrying the ML-KEM key.
-> - `v2e`: payload type 46, a single **encrypted** payload (SK, not fragmented). The ML-KEM ciphertext and both `IKE_AUTH` messages each fit in one `v2e`.
->
-> **Why can tcpdump "see" the `IKE_AUTH` messages if they're encrypted?** It can't, not really. What you see in the capture is only the *outer* IKE header (20 bytes, cleartext: initiator/responder cookies, exchange type, flags, message ID, total length) and the *SK payload header* (4 bytes, cleartext: payload type 46, reserved, and the payload length). The actual content (the PSK auth token, identities, child SA proposal, traffic selectors) is ciphertext inside the SK payload and appears as opaque bytes. `tcpdump -vv` will show `(v2e: len=N)` for the encrypted blob's length, which is all the dissector can extract. You'd need the IKE session keys to decrypt it.
->
-> So the request side (ML-KEM *public key*, ~1184 B) splits into two `#53` fragments, while the response side (ML-KEM *ciphertext*, ~1088 B) rides in a single `v2e`: the same public-key-bigger-than-ciphertext asymmetry you saw in the head-to-head table.
-
-> **Heads up: `bad udp cksum` warnings are normal here.** tcpdump captures each outbound packet *before* the virtual NIC fills in its UDP checksum (checksum offloading), so it flags the not-yet-computed value. It's a capture artifact on the Docker bridge, not a real corrupted packet.
-
-**Optional: copy the capture to your workstation for Wireshark.** If you want to inspect the packets in a GUI, run the following **from your own workstation, not from inside the container**. The `docker cp` command talks to Docker on your host, so it won't work inside the container shell. Open a **new terminal window** on your workstation for it (keep the container shell open; there are more in-container commands coming up in Step 7):
+**Optional: copy the capture to your workstation for Wireshark.** Run this **from your host, not from inside the container** (open a new terminal window; keep the container shell for Step 7):
 
 ```bash
-# Run this in a NEW terminal window on your workstation, NOT inside the container
+# Run this on your workstation, NOT inside the container
 docker cp ike-initiator:/tmp/capture.pcap ~/Desktop/ike_capture.pcap
 ```
+
+#### Deep-dive notes
+
+These are reference notes for the curious. Skip them on a first pass and come back when
+something in the capture doesn't look right.
+
+> **Why does tcpdump say `child_sa #43` instead of `IKE_INTERMEDIATE`?**
+> tcpdump's ISAKMP dissector doesn't have a name for exchange type 43, so it displays the raw number. Exchange type 43 (0x2B) is `IKE_INTERMEDIATE`, assigned by RFC 9370. The `[|v2ke]` annotation confirms there is a key exchange payload inside: that is the ML-KEM public key.
+
+> **Why does a 1184 B key need fragmentation when the limit is 1280 B?**
+>
+> [RFC 7296](https://www.rfc-editor.org/rfc/rfc7296) requires every IKEv2 implementation to handle messages up to **1280 bytes** without relying on IP fragmentation. The ML-KEM-768 encapsulation key is only 1184 B, yet the `IKE_INTERMEDIATE` message still gets fragmented. The reason: headers.
+>
+> | Layer | Adds | Running total |
+> |-------|------|---------------|
+> | ML-KEM-768 encapsulation key (raw) | n/a | 1184 B |
+> | Key Exchange payload header (4 B generic + 2 B method + 2 B reserved) | +8 | 1192 B |
+> | Encrypted (SK) payload wrapper (AES-GCM: 4 B header + 8 B IV + 1 B pad + 16 B tag) | +29 | 1221 B |
+> | IKE header | +28 | **1249 B** |
+> | UDP-encap on port 4500 (4 B non-ESP marker + 8 B UDP + 20 B IPv4) | +32 | **1281 B** |
+>
+> That **1281 B just crosses the 1280 ceiling**, so strongSwan fragments at the IKE layer ([RFC 7383](https://www.rfc-editor.org/rfc/rfc7383)) rather than letting the IP layer fragment it (IP fragments are widely dropped by firewalls). The first fragment lands at exactly 1280 B; the remainder spills into a tiny 98 B second fragment. This is exactly why `fragmentation = yes` is mandatory.
+
+> **Reading the payload markers.** Three tags tell you what each message is carrying:
+> - `v2ke`: a cleartext **Key Exchange** payload (the X25519 key in `IKE_SA_INIT`).
+> - `(#53)`: payload type 53, an **encrypted fragment** (SKF, [RFC 7383](https://www.rfc-editor.org/rfc/rfc7383)). Seeing `#53` is the dead giveaway of IKE-layer fragmentation; it shows up only on the big `IKE_INTERMEDIATE` request.
+> - `v2e`: payload type 46, a single **encrypted** payload (SK, not fragmented). The ML-KEM ciphertext and both `IKE_AUTH` messages each fit in one `v2e`.
+>
+> The request side (ML-KEM *public key*, ~1184 B) splits into two `#53` fragments, while the response side (ML-KEM *ciphertext*, ~1088 B) rides in a single `v2e`: the same public-key-bigger-than-ciphertext asymmetry from the head-to-head table.
+
+> **Why can tcpdump "see" `IKE_AUTH` if it's encrypted?** It can't, not really. What you see is only the outer IKE header (cleartext: cookies, exchange type, flags, message ID, length) and the SK payload header (type 46, payload length). The actual auth data is ciphertext inside. `tcpdump -vv` shows `(v2e: len=N)` for the blob's length, which is all the dissector can extract. You'd need the IKE session keys to decrypt it.
+
+> **`-vv` vs `-q`: same packets, two rulers.** The `length` values in the annotated dump come from `-vv`, which prints the **IP datagram** size (IP + UDP headers included). The `-q` view in [Exercise 2](#exercise-2-compare-classical-only-vs-hybrid-handshake) prints the **UDP payload** instead, exactly 28 B smaller (20 B IP + 8 B UDP). So the `IKE_AUTH` request reads `385` above but `357` under `-q`, and the first `IKE_INTERMEDIATE` fragment is `1280` above but `1252` under `-q`. Same bytes, different layer. Worth knowing so the two exercises' numbers line up.
+
+> **`bad udp cksum` warnings are normal.** tcpdump captures each outbound packet *before* the virtual NIC fills in its UDP checksum (checksum offloading), so it flags the not-yet-computed value. It's a capture artifact on the Docker bridge, not a real corrupted packet.
 
 ---
 
@@ -498,7 +498,7 @@ Exercise 2 will make this concrete by running both configurations back-to-back a
 
 ### Exercise 2: Compare classical-only vs hybrid handshake
 
-This is the payoff exercise: the head-to-head comparison stops being a table and becomes something you can see. We'll run the same handshake twice (once with pure X25519, once with our default hybrid proposal) and compare the round trips, packet sizes, and timing.
+This is where the head-to-head comparison stops being a table and becomes something you can see. We'll run the same handshake twice (once with pure X25519, once with our default hybrid proposal) and compare the round trips, packet sizes, and timing.
 
 We start with the classical-only run: both containers configured to use X25519 alone, no ML-KEM, no fragmentation. This gives us the baseline (the simplest possible IKEv2 handshake) against which we can measure everything the hybrid adds.
 
@@ -647,7 +647,7 @@ What to look for:
 | Fragmented packets | None | 2: ML-KEM public key (1184 B) split across fragments |
 | IKE_AUTH size | identical: 357 B / 213 B | identical: 357 B / 213 B |
 | Handshake time | ~20 ms | ~21 ms |
-| Quantum-safe | ❌ | ✅ |
+| Quantum-safe | No | Yes |
 
 > **Why might the classical capture show 5 lines instead of 4?** `-i any` on Linux *can* capture the outgoing `IKE_SA_INIT[I]` twice: once as `Out` (leaving the socket) and once as `P` (promiscuous pass-through on the Docker bridge). When it does, both lines show the same length (232 B) and nearly identical timestamps: a capture artifact, not an extra protocol message. Whether the duplicate appears depends on the host's bridge, so you may see 4 lines or 5; either is fine. The hybrid capture doesn't show the duplicate because the later messages switch to port 4500 before the same condition is triggered.
 
@@ -672,9 +672,9 @@ exit
 
 ---
 
-### Exercise 3: An alternate path to quantum safety, RFC 8784 PPK
+### Exercise 3: An alternate path to quantum safety: PPK
 
-So far we've made the *key exchange itself* quantum-safe by adding a PQC algorithm (ML-KEM) to it. [**RFC 8784**](https://www.rfc-editor.org/rfc/rfc8784) (Mixing Preshared Keys in IKEv2 for Post-quantum Security, 2020) takes a completely different route to the same "harvest now, decrypt later" problem: instead of a new algorithm, it mixes a **static, out-of-band Postquantum Preshared Key (PPK)** into the IKE key schedule. The PPK never travels on the wire: it's distributed out-of-band ahead of time, so both peers already know it.
+So far we've made the *key exchange itself* quantum-safe by adding a PQC algorithm (ML-KEM) to it. [**RFC 8784**](https://www.rfc-editor.org/rfc/rfc8784) takes a completely different route to the same "harvest now, decrypt later" problem: instead of a new algorithm, it mixes a **static, out-of-band Postquantum Preshared Key (PPK)** into the IKE key schedule. The PPK never travels on the wire: it's distributed out-of-band ahead of time, so both peers already know it.
 
 So even if a quantum computer one day recovers the X25519 shared secret from a recorded handshake, it *still* can't derive the traffic keys without also knowing the PPK, which was never transmitted. Because it leans on a shared secret rather than a new algorithm, it works even on gear too old to negotiate ML-KEM, which makes it a pragmatic first step toward post-quantum security. The catch is getting those secrets in place: they either have to be managed manually, or generated by a QKD (Quantum Key Distribution) appliance at every site, which in turn needs support for a key-delivery protocol like SKIP and, for the quantum channel itself, a full mesh of direct point-to-point fibers between sites. None of that scales gracefully.
 
@@ -873,11 +873,3 @@ edits landed in your clone, not just in the container. It's a no-op if you're al
 The captures lived in the containers' `/tmp`, so they're gone with the containers.
 
 And that's it. You stood up a hybrid post-quantum VPN tunnel, captured it, and showed, with your own packets, that quantum-safe IKEv2 is both practical and cheap. From here, go explore your own integrations and use cases.
-
----
-
-**On real hardware:** [IPsec on Cisco IOS XE](../../../deploy/ios-xe/ipsec.md) runs this
-same progression on three C8000 routers. Both the ML-KEM hybrid and the RFC 8784 PPK you
-just used ship today, and the doc adds a phased hub-and-spoke migration you can't stage
-with two containers. Next lab: [IPsec authentication](../authentication/README.md).
-

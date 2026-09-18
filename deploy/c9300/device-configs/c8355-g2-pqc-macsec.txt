@@ -1,0 +1,38 @@
+! C8355-G2 router (switch-to-router PQC MACsec peer)
+! IOS XE 26.1.1
+!
+! Self-signed identity cert on trustpoint Self; peer cert imported on trustpoint Peer.
+! See macsec.md Exercise 2 Steps 1-2 for the cert exchange procedure.
+!
+aaa authentication dot1x default local
+!
+eap profile EAP-PROFILE
+ method tls
+ pki-trustpoint Self
+!
+access-session mac-move deny
+access-session pqc-type pqc
+access-session tls-version 1.3
+!
+dot1x system-auth-control
+!
+dot1x credentials DOT1X-CREDS
+ username RTR1
+ pki-trustpoint Self
+!
+mka policy mka_128
+ key-server priority 5
+ macsec-cipher-suite gcm-aes-128
+ sak-rekey interval 200
+ pqc mlkem768
+!
+interface FiveGigabitEthernet0/0/3
+ macsec
+ access-session host-mode multi-host
+ access-session port-control auto
+ dot1x pae both
+ dot1x authenticator eap profile EAP-PROFILE
+ dot1x credentials DOT1X-CREDS
+ dot1x supplicant eap profile EAP-PROFILE
+ mka policy mka_128
+ ip address 14.14.14.2 255.255.255.0

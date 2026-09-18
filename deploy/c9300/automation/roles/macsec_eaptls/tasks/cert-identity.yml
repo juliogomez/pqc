@@ -1,0 +1,123 @@
+---
+# Find the identity certificate EAP-TLS will present. Do not create one.
+#
+# WHY THIS ROLE DOES NOT GENERATE ITS OWN CERT.
+#
+# IOS XE allows exactly ONE self-signed trustpoint per box, and every device
+# ships with that slot already taken: TP-self-signed-<serial>, which is also
+# what "ip http secure-trustpoint" points at. Creating a second one does not
+# fail cleanly. "crypto pki enroll" offers to destroy the first:
+#
+#   The router has already generated a Self Signed Certificate for
+#   trustpoint TP-self-signed-4130127353.
+#   If you continue the existing trustpoint and Self Signed Certificate
+#   will be deleted.
+#
+# TP-self-signed-* is in protected_trustpoint_regex precisely because removing
+# it wedges the HTTPS server, and RESTCONF with it. So this role reuses the
+# shipped certificate as the EAP identity and never modifies it. Nothing to
+# enroll, nothing to roll back, and teardown has no local trustpoint to remove.
+#
+# FALLBACK: Self. The C9300s in this lab (sw1 / sw2) may have enrolled a
+# named Self trustpoint for the hand-driven exercises, and some of them never
+# grew a TP-self-signed-<serial> at all. If the shipped name is missing or its
+# cert is not Available, reuse Self the same way: present it, never enroll it,
+# never delete it. Self is also in protected_trustpoint_regex.
+#
+# The cost: the certificate CN is IOS-Self-Signed-Certificate-<serial>, not the
+# hostname. That is fine here. The certificate proves identity on its own, and
+# the EAP identity string is the separate "username" in dot1x credentials.
+
+- name: Identity | look for the shipped TP-self-signed trustpoint
+  cisco.ios.ios_command:
+    commands:
+      - show running-config | include ^crypto pki trustpoint TP-self-signed-
+  register: identity_tp_probe
+  changed_when: false
+
+- name: Identity | candidate from the shipped name
+  ansible.builtin.set_fact:
+    macsec_eaptls_identity_trustpoint: >-
+      {{ ((identity_tp_probe.stdout[0] | default(''))
+          | regex_findall('TP-self-signed-[0-9]+') + ['']) | first }}
+    macsec_eaptls_identity_available: false
+
+- name: Identity | read the shipped certificate
+  when: macsec_eaptls_identity_trustpoint | length > 0
+  cisco.ios.ios_command:
+    commands:
+      - "show crypto pki certificates {{ macsec_eaptls_identity_trustpoint }}"
+  register: identity_cert_check
+  changed_when: false
+  failed_when: false
+
+# The block header for a device self-signed cert is "Router Self-Signed
+# Certificate", not the bare "Certificate" an enrolled cert gets. Both are
+# accepted. Anchoring on a newline is what excludes the "CA Certificate" block
+# that appears further down the same output.
+- name: Identity | shipped cert is Available
+  when: macsec_eaptls_identity_trustpoint | length > 0
+  ansible.builtin.set_fact:
+    macsec_eaptls_identity_available: >-
+      {{ (identity_cert_check.stdout[0] | default(''))
+         is search('(^|\n)(Router Self-Signed )?Certificate\s*\n\s*Status:\s*Available') }}
+
+- name: Identity | fall back to Self when the shipped cert is unusable
+  when: not (macsec_eaptls_identity_available | bool)
+  block:
+
+    - name: Identity | look for a Self trustpoint
+      cisco.ios.ios_command:
+        commands:
+          - show running-config | include ^crypto pki trustpoint Self$
+      register: identity_self_probe
+      changed_when: false
+
+    - name: Identity | Self must exist if we got here
+      ansible.builtin.assert:
+        that:
+          - (identity_self_probe.stdout[0] | default('')) is search('crypto pki trustpoint Self')
+        fail_msg: >-
+          {{ inventory_hostname }} has no Available identity certificate.
+          Expected TP-self-signed-<serial> (every IOS XE box is supposed to
+          create one on first boot) or a Self trustpoint with an Available
+          cert (what the C9300 host-to-switch exercise enrolls). Check
+          "show crypto pki trustpoints status". Do not work around this by
+          adding "enrollment selfsigned" to a new trustpoint: IOS XE allows
+          one per box and enrolling it deletes whatever is there now.
+        quiet: true
+
+    - name: Identity | switch to Self
+      ansible.builtin.set_fact:
+        macsec_eaptls_identity_trustpoint: Self
+
+    - name: Identity | read the Self certificate
+      cisco.ios.ios_command:
+        commands:
+          - show crypto pki certificates Self
+      register: identity_self_cert
+      changed_when: false
+      failed_when: false
+
+    - name: Identity | Self must be Available
+      ansible.builtin.assert:
+        that:
+          - (identity_self_cert.stdout[0] | default(''))
+            is search('(^|\n)(Router Self-Signed )?Certificate\s*\n\s*Status:\s*Available')
+        fail_msg: >-
+          Trustpoint Self on {{ inventory_hostname }} has no Available
+          certificate, so EAP-TLS has nothing to present. Enroll it once by
+          hand (crypto pki enroll Self) as in macsec.md Exercise 4, then
+          re-run this play. This role will not enroll it for you.
+        quiet: true
+
+    - name: Identity | Self is the identity we will present
+      ansible.builtin.set_fact:
+        macsec_eaptls_identity_available: true
+
+- name: Identity | say which certificate EAP-TLS will present
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} will present the existing self-signed certificate
+      on {{ macsec_eaptls_identity_trustpoint }}. This role does not create or
+      modify it, so teardown leaves it alone.

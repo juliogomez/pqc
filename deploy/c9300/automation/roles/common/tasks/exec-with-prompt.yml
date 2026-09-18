@@ -1,0 +1,42 @@
+---
+# Run one interactive command with an explicit, named prompt handler.
+#
+# A blanket "answer yes to anything that looks like a question" handler destroyed
+# a router in this lab. So the rule here is absolute: every interactive command
+# names the exact prompt text it expects and the exact answer for that prompt. If
+# the router asks something that was not listed, nothing is sent, the command
+# times out, and the play fails. Failing is the correct outcome. Guessing is not.
+#
+# Callers pass:
+#   exec_label         short human name for the task line
+#   exec_command       the one command that prompts
+#   exec_prompt        list of regexes, one per expected prompt, in order
+#   exec_answer        list of answers, same order, same length
+#   exec_check_all     true if every listed prompt must appear, in order
+#
+# EXEC MODE ONLY. There is deliberately no "send configure terminal first" option.
+# Config mode does not survive reliably across two cli_command tasks on the same
+# persistent connection: the reader comes back one response behind, so the command
+# either runs in exec mode by accident or sits there until the 180s timeout. Both
+# failures are silent and intermittent, which is the worst kind. If something needs
+# an interactive config-mode command, find the exec-mode equivalent (as aaa-stack
+# does with "authentication convert-to new-style") or model it in NETCONF.
+
+- name: "Guard | {{ exec_label }} has one answer per prompt"
+  ansible.builtin.assert:
+    that:
+      - exec_prompt | length > 0
+      - exec_prompt | length == exec_answer | length
+    fail_msg: >-
+      Prompt and answer lists for "{{ exec_label }}" must be the same length. A
+      mismatch means some prompt would get an answer meant for a different question,
+      which is exactly the failure mode this wrapper exists to stop.
+    quiet: true
+
+- name: "Exec (strict prompt) | {{ exec_label }}"
+  ansible.netcommon.cli_command:
+    command: "{{ exec_command }}"
+    prompt: "{{ exec_prompt }}"
+    answer: "{{ exec_answer }}"
+    check_all: "{{ exec_check_all | default(false) }}"
+  register: exec_with_prompt_result

@@ -10,18 +10,28 @@ platform does not support yet, and what are the most relevant and useful router 
 
 ## Platforms covered
 
-### IOS XE on Cisco 8000 Secure Routers
+### Cisco C8000 Secure Routers (IOS XE)
 
-Start with the [topology, feature status, and reading order](ios-xe/README.md). It has
-the lab topology, the per-protocol lab links, and a summary table showing exactly which
-PQ features work on 26.2 and which don't. Read that first to understand the scope,
-then dive into whichever protocol you care about:
-[IPsec](ios-xe/ipsec.md) · [SSH](ios-xe/ssh.md) · [MACsec](ios-xe/macsec.md) · [TLS](ios-xe/tls.md).
+The WAN side: IPsec tunnels, SSH and TLS management, and MACsec between routers. Start
+with the [C8000 platform guide](c8000/README.md) for the topology, feature summary, and
+reading order, then pick a protocol:
+[IPsec](c8000/ipsec.md) · [MACsec](c8000/macsec.md) · [SSH](c8000/ssh.md) · [TLS](c8000/tls.md).
 
 Ansible playbooks for all four protocols live under
-[`ios-xe/automation/`](ios-xe/automation/README.md) ([operator guide](ios-xe/automation/README.md),
-[design notes](ios-xe/automation/DESIGN.md), and
-[captured hardware runs](ios-xe/automation/captured/)).
+[`c8000/automation/`](c8000/automation/README.md) ([operator guide](c8000/automation/README.md),
+[design notes](c8000/automation/DESIGN.md), and
+[captured hardware runs](c8000/automation/captured/)).
+
+### Cisco C9300 Smart Switches (IOS XE)
+
+The access layer: MACsec with EAP-TLS 1.3 using ML-KEM on host-to-switch,
+switch-to-switch, and switch-to-router links, plus SSH and TLS management PQC. Start with the
+[C9300 platform guide](c9300/README.md) for the feature summary, then pick a protocol:
+[MACsec](c9300/macsec.md) · [SSH](c9300/ssh.md) · [TLS](c9300/tls.md) · [IPsec](c9300/ipsec.md).
+
+Ansible playbooks for all four protocols live under
+[`c9300/automation/`](c9300/automation/README.md) ([operator guide](c9300/automation/README.md),
+[design notes](c9300/automation/DESIGN.md)).
 
 ## Ansible automation
 
@@ -39,7 +49,7 @@ Same layout for every platform:
 - **Captured runs** from real hardware when you cannot run the playbooks yourself: apply,
   assert, re-run, teardown.
 
-## Reading these docs without the hardware
+## If you don't have the hardware
 
 You don't need the Cisco gear to get value out of this half. Every document includes the
 real command output, the sanitized running configs are checked in, and where a platform has
@@ -53,7 +63,7 @@ Two things before you start typing, because routers don't have a `docker compose
 - **Snapshot the running config first.** Every exercise builds on the previous one, so
   nothing you configure gets undone as you go. One `copy running-config` up front turns the
   whole teardown into a single command later.
-- **Plan the teardown.** [Putting the routers back](ios-xe/README.md#putting-the-routers-back)
+- **Plan the teardown.** [Putting the routers back](c8000/README.md#putting-the-routers-back)
   covers the fast rollback, the surgical removal in dependency order, the debug-only globals
   that are easy to leave enabled, and the private key material to delete from `bootflash:`
   and from your workstation.

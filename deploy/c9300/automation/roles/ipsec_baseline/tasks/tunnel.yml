@@ -1,0 +1,34 @@
+---
+# ESCAPE HATCH: network_cli, because the interface model is not there.
+#
+# Everything else in this role is NETCONF against Cisco-IOS-XE-crypto. Tunnel
+# interfaces are not, and the reason is worth writing down: the tunnel nodes live
+# in Cisco-IOS-XE-tunnel, which the crypto module augments at
+#
+#   /native/interface/Tunnel/tunnel/protection
+#
+# for "tunnel protection ipsec profile". That module was not among the schemas
+# pulled off the box, and the copy of Cisco-IOS-XE-native we have is a partial
+# that carries no interface containers at all.
+#
+# ios_config still compares against the running config, so this is idempotent
+# even though it is CLI.
+#
+# C9300 has a single peer: one Tunnel0, not one per peer like the C8000 hub-and-spoke.
+
+- name: Tunnel interface
+  cisco.ios.ios_config:
+    parents: "interface Tunnel0"
+    lines:
+      - "ip address {{ my_ipsec.tunnel_address }} {{ my_ipsec.tunnel_mask }}"
+      - "tunnel source {{ my_ipsec.underlay_interface }}"
+      - tunnel mode ipsec ipv4
+      - "tunnel destination {{ my_ipsec.peer_loopback }}"
+      - "tunnel protection ipsec profile {{ crypto_names.ipsec_profile }}"
+      - no shutdown
+  when: state == 'present'
+
+- name: Remove tunnel interface
+  cisco.ios.ios_config:
+    lines: "no interface Tunnel0"
+  when: state == 'absent'

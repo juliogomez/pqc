@@ -1,0 +1,12 @@
+---
+# How long to wait for the NETCONF subsystem after enabling it.
+#
+# Measured on C9300/C8355 lab gear: the subsystem takes roughly 90-135 seconds
+# from the moment "netconf-yang" is accepted. 300s gives roughly double the
+# measured time, which covers a loaded box.
+bootstrap_netconf_wait_seconds: 300
+bootstrap_netconf_poll_seconds: 15
+
+# Whether to enable RESTCONF alongside NETCONF. Nothing in this layer uses
+# RESTCONF; leave this false unless you want it for your own tooling.
+bootstrap_enable_restconf: false

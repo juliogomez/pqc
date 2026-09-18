@@ -21,15 +21,15 @@ progression:
 
 | Protocol | What you learn |
 |----------|----------------|
-| [**IPsec**](#ipsec-layer-3-vpns) | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
-| [**TLS**](#tls-the-webs-secure-channel) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
-| [**MACsec**](#macsec-layer-2-link-encryption) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
-| [**SSH**](#ssh-secure-remote-access) | PQ key exchange on by default; **loud** downgrade; composite ML-DSA auth |
+| [**IPsec**](#ipsec--layer-3-vpns) | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
+| [**TLS**](#tls) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
+| [**MACsec**](#macsec--layer-2-encryption) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
+| [**SSH**](#ssh) | PQ key exchange on by default; **loud** downgrade; composite ML-DSA auth |
 
 Each lab *can* be run standalone if you already know the earlier material, but if you're
 going through the repo for the first time, the order above gives the smoothest ramp.
 
-**Bonus:** [Module Lattices](#module-lattices-bonus-lab-the-math-foundation) is an optional
+**Bonus:** [Module Lattices](#module-lattices-bonus-lab) is an optional
 deep-dive into the math behind ML-KEM and ML-DSA. It's not a protocol lab, but if you want
 to understand *why* lattice problems are hard (and attack one yourself), that's where to look.
 
@@ -37,7 +37,7 @@ to understand *why* lattice problems are hard (and attack one yourself), that's 
 
 ## The labs
 
-### IPsec (Layer 3 VPNs)
+### IPsec / Layer 3 VPNs
 
 Take a real IKEv2/IPsec VPN tunnel post-quantum.
 
@@ -49,13 +49,13 @@ Take a real IKEv2/IPsec VPN tunnel post-quantum.
 
 *Start with Key Exchange: it introduces the containers, strongSwan, and the hybrid handshake that the Authentication lab builds on.*
 
-**On Cisco hardware:** [IPsec on IOS XE](../deploy/ios-xe/ipsec.md). ML-KEM, PPK and
+**On Cisco hardware:** [IPsec on IOS XE](../deploy/c8000/ipsec.md). ML-KEM, PPK and
 ML-DSA authentication all work on 26.2, and the write-up measures what ML-DSA does to the
 handshake: six times the bytes, and a migration that can't be done without an outage.
 
-### TLS (the web's secure channel)
+### TLS
 
-Take TLS post-quantum, the protocol behind HTTPS and most application traffic.
+The web's secure channel. Take TLS post-quantum, the protocol behind HTTPS and most application traffic.
 
 - **[Key Exchange](tls/key-exchange/README.md)** (30 min, beginner):
   Run a real TLS 1.3 handshake that negotiates a hybrid **DH + ML-KEM** key exchange, capture it, and compare it to classical DH byte for byte. See why TLS needs **no extra round trip** for ML-KEM, unlike IKEv2.
@@ -65,11 +65,11 @@ Take TLS post-quantum, the protocol behind HTTPS and most application traffic.
 
 *Same two pillars as the IPsec family, this time at the application layer.*
 
-**On Cisco hardware:** [TLS on IOS XE](../deploy/ios-xe/tls.md). On 26.2 the router's
+**On Cisco hardware:** [TLS on IOS XE](../deploy/c8000/tls.md). On 26.2 the router's
 management HTTPS server negotiates X25519MLKEM768 with no configuration at all. Its
 certificate is still classical.
 
-### MACsec (Layer 2 link encryption)
+### MACsec / Layer 2 encryption
 
 Take MACsec post-quantum. Its entire quantum exposure lives in an EAP-TLS handshake.
 
@@ -78,30 +78,30 @@ Take MACsec post-quantum. Its entire quantum exposure lives in an EAP-TLS handsh
 
 *Both pillars live in a **single** EAP-TLS handshake here, so this is one combined lab, at Layer 2 over a different control plane, a useful contrast for anyone running switching/access infrastructure.*
 
-**On Cisco hardware:** [MACsec on IOS XE](../deploy/ios-xe/macsec.md). The PQ key exchange
+**On Cisco hardware:** [MACsec on IOS XE](../deploy/c8000/macsec.md). The PQ key exchange
 is a supported feature and the write-up runs it end to end, PSK first and then EAP-TLS with
 ML-KEM, including the three config lines that decide whether frames are actually
 encrypted. ML-DSA certificates are the one open question left on 26.2.
 
-### SSH (secure remote access)
+### SSH
 
-Take SSH post-quantum, the protocol behind remote shells, git, CI/CD deploys, and tunnels. Its key exchange is post-quantum **by default**, while its authentication is the piece still on the experimental frontier.
+The secure remote access standard. Take SSH post-quantum, the protocol behind remote shells, git, CI/CD deploys, and tunnels. Its key exchange is post-quantum **by default**, while its authentication is the piece still on the experimental frontier.
 
 - **[SSH](ssh/README.md)** (45 min, intermediate):
   Watch a real SSH handshake negotiate hybrid **ML-KEM** with zero config, prove it in the cleartext bytes and measure its size cost, catch a downgrade being flagged out loud, then reissue the host and user keys as composite **Ed25519+ML-DSA-44** and authenticate both ends post-quantum.
 
 *Both pillars live in one SSH handshake, so this is one combined lab where the key exchange is the easy, on-by-default half, and the authentication is the frontier.*
 
-**On Cisco hardware:** [SSH on IOS XE](../deploy/ios-xe/ssh.md). The hybrid KEX is one
+**On Cisco hardware:** [SSH on IOS XE](../deploy/c8000/ssh.md). The hybrid KEX is one
 config line; the composite ML-DSA keys are still not there on 26.2, and the doc shows the
 CLI proving it.
 
-### Module Lattices (bonus lab: the math foundation)
+### Module Lattices (bonus lab)
+
+An optional deep-dive for when you want to understand the shared module-lattice foundation under both ML-KEM and ML-DSA, and why neither is breakable by a quantum computer.
 
 - **[Module Lattices](module-lattices/README.md)** (60 min, beginner, no crypto-math required):
   Build a lattice from scratch, watch noise turn easy algebra into hard **LWE**, implement a baby **ML-KEM** over the real ring, then run a real lattice attack and watch its cost explode: the concrete reason a quantum computer can't break **ML-KEM or ML-DSA**.
-
-*An optional deep-dive for when you want to understand the shared module-lattice foundation under both ML-KEM and ML-DSA, and why neither is breakable by a quantum computer.*
 
 ---
 
@@ -149,5 +149,5 @@ docker network prune
 ```
 
 Then head to [Stage 2](../deploy/README.md) and do it all again on real routers, where the
-cleanup story is [considerably less forgiving](../deploy/ios-xe/README.md#putting-the-routers-back).
+cleanup story is [considerably less forgiving](../deploy/c8000/README.md#putting-the-routers-back).
 

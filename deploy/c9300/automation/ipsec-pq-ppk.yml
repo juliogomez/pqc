@@ -1,0 +1,19 @@
+---
+# RFC 8784: make the tunnel quantum-safe without a single new algorithm.
+#
+#   ansible-playbook ipsec-pq-ppk.yml
+#   ansible-playbook ipsec-pq-ppk.yml -e state=absent
+#
+# An out-of-band secret is mixed into the IKEv2 key schedule. No ML-KEM
+# needed, but you now have a secret to distribute and rotate.
+
+- name: Add post-quantum pre-shared key to IPsec
+  hosts: ipsec_pair
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: ipsec_pq_ppk
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

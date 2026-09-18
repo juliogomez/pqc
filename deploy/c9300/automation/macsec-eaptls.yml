@@ -1,0 +1,45 @@
+---
+# MACsec keyed by EAP-TLS with self-signed certificates.
+#
+#   ansible-playbook macsec-eaptls.yml -e macsec_play_hosts=macsec_s2r
+#   ansible-playbook macsec-eaptls.yml -e macsec_play_hosts=macsec_s2s
+#   ansible-playbook macsec-eaptls.yml -e macsec_play_hosts=macsec_h2s
+#   ansible-playbook macsec-eaptls.yml -e macsec_play_hosts=macsec_s2s -e state=absent
+#
+# The scaffolding for post-quantum MACsec: a TLS 1.3 handshake inside EAP-TLS,
+# whose key exchange macsec-pq.yml steers. Self-signed certs with peer import
+# (different from C8000's SCEP/IOS CA approach).
+#
+# There is no default link. Say which one you mean, every time: this reconfigures
+# a live port, and guessing on your behalf is how you black-hole the wrong one.
+
+- name: Build MACsec with EAP-TLS certificates
+  hosts: >-
+    {{ macsec_play_hosts | mandatory('pick the link to build. Re-run with -e
+    macsec_play_hosts=macsec_s2r, macsec_s2s or macsec_h2s') }}
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  # A link is a pair. If one end fails, finishing the other end is not partial
+  # progress, it is a half-configured port that cannot key with anything. Stop the
+  # whole run there, so the proof and posture plays below don't execute against the
+  # survivor and report a green recap for a build that failed.
+  any_errors_fatal: true
+  roles:
+    - role: macsec_eaptls
+
+- name: Confirm MACsec is secured with EAP-TLS keying
+  hosts: "{{ macsec_play_hosts }}"
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  tasks:
+    - name: Operational proof
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: verify-macsec-proof
+      vars:
+        macsec_proof_keying: eaptls
+      when: state | default('present') == 'present'
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

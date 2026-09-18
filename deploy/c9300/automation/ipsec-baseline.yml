@@ -1,0 +1,19 @@
+---
+# Classical IPsec between sw1 and sw2 over a routed underlay.
+#
+#   ansible-playbook ipsec-baseline.yml
+#   ansible-playbook ipsec-baseline.yml -e state=absent
+#
+# AES-256, SHA-512, ECDH P-521: strong today, harvest-now-decrypt-later
+# tomorrow. The ipsec-pq-* playbooks fix that.
+
+- name: Build classical IPsec
+  hosts: ipsec_pair
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  roles:
+    - role: ipsec_baseline
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

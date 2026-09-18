@@ -1,0 +1,35 @@
+---
+# Isolated access VLAN + SVI on the host-to-switch MACsec hop.
+#
+# Only runs when topology.yml set my_macsec_access_vlan (macsec_h2s). The other
+# links already have their underlay and must not get a surprise VLAN rewrite.
+#
+# Why a private VLAN? VLAN 1 on Gi1/0/1 leaked 802.1X toward other neighbors
+# on the same broadcast domain. Exercise 4 in macsec.md uses VLAN 10 for the
+# same reason. The SVI is what verify pings; OOB management does not increment
+# Out Pkts Encrypted.
+
+- name: L2 | create the isolated VLAN
+  cisco.ios.ios_vlans:
+    config:
+      - vlan_id: "{{ my_macsec_access_vlan }}"
+        name: PQAUTO-H2S
+    state: merged
+  when: (my_macsec_access_vlan | default(0) | int) > 0
+
+- name: L2 | put the MACsec port in that VLAN
+  cisco.ios.ios_config:
+    parents: "interface {{ my_macsec_interface }}"
+    lines:
+      - switchport mode access
+      - "switchport access vlan {{ my_macsec_access_vlan }}"
+  when: (my_macsec_access_vlan | default(0) | int) > 0
+
+- name: L2 | SVI so the hop has an address to ping
+  cisco.ios.ios_config:
+    parents: "interface Vlan{{ my_macsec_access_vlan }}"
+    lines:
+      - "ip address {{ my_macsec_svi_address }} {{ my_macsec_svi_mask }}"
+  when:
+    - (my_macsec_access_vlan | default(0) | int) > 0
+    - my_macsec_svi_address | default('') | length > 0

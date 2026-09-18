@@ -1,0 +1,31 @@
+---
+# Refuse to remove key material or a trustpoint this layer did not create.
+#
+# Call this before every zeroize, every trustpoint delete and every key label
+# delete. It is cheap, it is offline, and it is the difference between tearing
+# down your own lab objects and taking out the certificate that backs the HTTPS
+# server or the chassis identity.
+#
+# Callers pass:
+#   guard_kind   "trustpoint" or "key-label"
+#   guard_name   the name about to be removed
+
+- name: "Guard | {{ guard_kind }} {{ guard_name }} is safe to remove"
+  ansible.builtin.assert:
+    that:
+      - guard_name | length > 0
+      - guard_name is not match(guard_regex)
+    fail_msg: >-
+      Refusing to remove {{ guard_kind }} "{{ guard_name }}". It matches the
+      protected pattern {{ guard_regex }}, which covers the device self-signed
+      trustpoint behind "ip http secure-trustpoint", the SUDI chassis identity,
+      Smart Licensing material and the NETCONF SSH host key. Removing any of
+      those breaks the box or the transport you are managing it over. If this is
+      genuinely your own object, rename it so it stops colliding with the
+      pattern.
+    success_msg: "{{ guard_kind }} {{ guard_name }} is not protected"
+    quiet: true
+  vars:
+    guard_regex: >-
+      {{ (guard_kind == 'trustpoint')
+         | ternary(protected_trustpoint_regex, protected_key_label_regex) }}

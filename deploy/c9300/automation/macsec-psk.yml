@@ -1,0 +1,41 @@
+---
+# MACsec keyed by a static pre-shared key, on whichever link you target.
+#
+#   ansible-playbook macsec-psk.yml -e macsec_play_hosts=macsec_s2r
+#   ansible-playbook macsec-psk.yml -e macsec_play_hosts=macsec_s2s
+#   ansible-playbook macsec-psk.yml -e macsec_play_hosts=macsec_h2s
+#   ansible-playbook macsec-psk.yml -e macsec_play_hosts=macsec_s2s -e state=absent
+#   ansible-playbook macsec-psk.yml -e macsec_play_hosts=macsec_s2s -e state=absent -e macsec_psk_remove_globals=true
+#
+# There is no default link. Say which one you mean, every time. Devices missing
+# from lab.yml are skipped. Quantum-safe by construction: nothing is negotiated.
+# Also a dead end. Tear this down before macsec-eaptls.yml.
+
+- name: Build MACsec with a pre-shared key
+  hosts: >-
+    {{ macsec_play_hosts | mandatory('pick the link to build. Re-run with -e
+    macsec_play_hosts=macsec_s2r, macsec_s2s or macsec_h2s') }}
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  # A link is a pair. See the note in macsec-eaptls.yml: one end failing means the
+  # run is over, not that the other end should be finished on its own.
+  any_errors_fatal: true
+  roles:
+    - role: macsec_psk
+
+- name: Confirm MACsec is secured with the static CAK
+  hosts: "{{ macsec_play_hosts }}"
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  tasks:
+    - name: Operational proof
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: verify-macsec-proof
+      vars:
+        macsec_proof_keying: psk
+      when: state | default('present') == 'present'
+
+- name: Report posture
+  ansible.builtin.import_playbook: verify.yml
+  tags: [verify, posture]

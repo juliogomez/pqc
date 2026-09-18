@@ -1,0 +1,42 @@
+---
+# A MACsec link needs both of its ends.
+#
+# skip-unaddressed.yml exists so a half-wired lab can still run playbooks against
+# "all": devices with no lab.yml entry drop out and the rest carry on. That is the
+# right call for a fabric-wide report. It is the wrong call for a two-host link,
+# where losing one end is not a partial success, it is a broken run.
+#
+# What you get without this check is a failure 20 tasks later, on the surviving
+# host, about something else entirely: "expected peer rtr1 to publish a certificate
+# PEM in this play". True, but it points at the certificate exchange when the actual
+# problem is that rtr1 was never in the play to begin with.
+#
+# So check it here, immediately after the skip guard, and name the file to edit.
+
+- name: Link check | the peer must have a management address
+  ansible.builtin.assert:
+    that:
+      - my_macsec_peer | default('') | length > 0
+      - my_macsec_peer in (lab_mgmt | default({}))
+    fail_msg: >-
+      {{ macsec_play_hosts }} is the {{ inventory_hostname }} to
+      {{ my_macsec_peer | default('(no peer in topology.yml)') }} link, but
+      {{ my_macsec_peer | default('that peer') }} has no entry under lab_mgmt in
+      group_vars/all/lab.yml, so it was dropped before this play could touch it.
+      Both ends have to be reachable: this playbook configures them together, and
+      each one needs the certificate the other one publishes. Give
+      {{ my_macsec_peer | default('the peer') }} an out-of-band management address
+      with netconf-yang and a login, add it to lab.yml, and re-run. If that device
+      is console-only, build this link by hand instead: see deploy/c9300/macsec.md.
+    quiet: true
+
+- name: Link check | the peer must be in this play
+  ansible.builtin.assert:
+    that:
+      - my_macsec_peer in ansible_play_hosts
+    fail_msg: >-
+      {{ my_macsec_peer }} is in lab.yml but not in this play, so
+      {{ inventory_hostname }} has nothing to pair with. Do not --limit one side of
+      a hop: run the whole group with
+      "-e macsec_play_hosts={{ macsec_play_hosts }}".
+    quiet: true

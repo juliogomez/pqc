@@ -1,0 +1,41 @@
+---
+# Copy this file to lab.yml and edit it:
+#
+#   cp group_vars/all/lab.yml.example group_vars/all/lab.yml
+#
+# lab.yml is gitignored. This example is not, so never put anything real in here.
+
+# Management addresses of the lab devices. Reachable over SSH from wherever
+# you run ansible-playbook.
+#
+# sw1 and sw2 need *different* IPs. Both C9300s in this lab have shipped
+# with the same Gi0/0 address; Ansible cannot talk to both until you fix that.
+# Leave a host out of this map and the playbooks skip it.
+lab_mgmt:
+  sw1: 192.0.2.11
+  sw2: 192.0.2.12
+  hx1: 192.0.2.61
+  hx2: 192.0.2.62
+  rtr1: 192.0.2.21
+  rtr2: 192.0.2.22
+  rtr3: 192.0.2.23
+
+lab_user: admin
+lab_password: changeme
+# Only needed if your enable secret differs from the login password.
+# lab_enable_password: changeme
+
+# --- Throwaway crypto material -----------------------------------------------
+
+# IKEv2 pre-shared key for the classical IPsec baseline.
+lab_ikev2_psk: replace-me-ikev2-psk
+
+# RFC 8784 post-quantum pre-shared key, as hex.
+# IOS XE wants the hex encoding of an ASCII string. Generate with:
+#   python3 -c "import secrets,string; s=''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(32)); print(s, s.encode().hex())"
+lab_ppk_hex: 48656C6C6F506F737451756172746E756D
+
+# MACsec CAK for the PSK path. Length must match macsec_key_algorithm in
+# crypto.yml (32 hex for aes-128-cmac, 64 hex for aes-256-cmac).
+# Generate your own with:  openssl rand -hex 16
+lab_macsec_cak: "12345678901234567890123456789012"

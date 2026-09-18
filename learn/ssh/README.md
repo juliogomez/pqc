@@ -524,11 +524,3 @@ rm -f config/server/ssh_host_key config/server/ssh_host_key.pub config/server/au
 ---
 
 That is it. You watched a real SSH handshake negotiate hybrid ML-KEM key exchange with **zero configuration**, proved it in the cleartext bytes and measured its exact size cost, saw a downgrade get caught **out loud**, and then turned on a brand-new composite ML-DSA-44 signature to make **both** the server and yourself authenticate post-quantum. Key exchange on by default, authentication on the frontier: that split is the whole state of post-quantum SSH today. Well done!
-
----
-
-**On real hardware:** [SSH on Cisco IOS XE](../../deploy/ios-xe/ssh.md) shows that same
-split with the dial turned one notch back. The hybrid KEX is one config line and you can
-prove it from your own laptop, but the composite ML-DSA keys you just generated have no
-counterpart on the router, even on 26.2 where ML-DSA did arrive for IKEv2. The
-Internet-Draft behind composite SSH keys is not an RFC, and no vendor ships it.

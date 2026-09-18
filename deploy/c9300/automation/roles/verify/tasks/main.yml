@@ -1,0 +1,506 @@
+---
+# Answer one question: is this fabric quantum-safe right now, and by which
+# mechanism.
+
+- name: Verify | skip devices with no management address
+  ansible.builtin.include_tasks: "{{ role_path }}/../common/tasks/skip-unaddressed.yml"
+
+# --- IKEv2 key exchange: structured -----------------------------------------
+- name: Verify | negotiated ML-KEM group per IKEv2 SA
+  when:
+    - verify_collect_ipsec | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: netconf-fetch
+  vars:
+    nc_label: IKEv2 SA operational data
+    nc_filter: |
+      <crypto-oper-data xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto-oper">
+        <crypto-ikev2-sa/>
+      </crypto-oper-data>
+
+- name: Verify | record the negotiated groups
+  when:
+    - verify_collect_ipsec | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+  ansible.builtin.set_fact:
+    verify_pqc_groups: >-
+      {{ (netconf_fetch_result.stdout | default(''))
+         | regex_findall('<pqc-group>([^<]+)</pqc-group>') }}
+    verify_dh_groups: >-
+      {{ (netconf_fetch_result.stdout | default(''))
+         | regex_findall('<dh-group>([^<]+)</dh-group>') }}
+    verify_ike_sa_count: >-
+      {{ (netconf_fetch_result.stdout | default(''))
+         | regex_findall('<crypto-ikev2-sa>') | length }}
+
+# --- RFC 8784 PPK: structured -----------------------------------------------
+- name: Verify | PPK quantum-resistance counters
+  when:
+    - verify_collect_ipsec | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: netconf-fetch
+  vars:
+    nc_label: IKEv2 statistics
+    nc_filter: |
+      <crypto-oper-data xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto-oper">
+        <crypto-ikev2-stats/>
+      </crypto-oper-data>
+
+- name: Verify | record the PPK counters (YANG)
+  when:
+    - verify_collect_ipsec | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+  ansible.builtin.set_fact:
+    verify_ppk_yang:
+      quantum_resistant_sessions: "{{ (_s | regex_findall('<tot-quantum-res-sess>([0-9]+)<') + ['0']) | first }}"
+      manual_ppk: "{{ (_s | regex_findall('<tot-quantum-res-sess-man>([0-9]+)<') + ['0']) | first }}"
+      dynamic_ppk: "{{ (_s | regex_findall('<tot-quantum-res-sess-dyn>([0-9]+)<') + ['0']) | first }}"
+  vars:
+    _s: "{{ netconf_fetch_result.stdout | default('') }}"
+
+# --- IKEv2 detail: SCREEN-SCRAPE --------------------------------------------
+- name: Verify | IKEv2 signature and PPK counters (show parsing)
+  when:
+    - verify_collect_ipsec | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+  cisco.ios.ios_command:
+    commands:
+      - show crypto ikev2 sa detailed
+      - show crypto ikev2 stats
+  register: verify_ikev2_detail
+  changed_when: false
+
+- name: Verify | record IKEv2 details
+  when:
+    - verify_collect_ipsec | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+  ansible.builtin.set_fact:
+    verify_auth_sign: >-
+      {{ (verify_ikev2_detail.stdout[0] | default(''))
+         | regex_findall('Auth sign:\s*(\S+?)[,\s]') }}
+    verify_dh_grp_cli: >-
+      {{ (verify_ikev2_detail.stdout[0] | default(''))
+         | regex_findall('DH Grp:(\d+)') }}
+    verify_pqc_kex_cli: >-
+      {{ (verify_ikev2_detail.stdout[0] | default(''))
+         | regex_findall('PQC Key Exchange:\s*(\S+)') }}
+    verify_fragmentation_enabled: >-
+      {{ (verify_ikev2_detail.stdout[0] | default('')) is search('Fragmentation\s+enabled') }}
+    verify_ppk_secured_sas: >-
+      {{ (verify_ikev2_detail.stdout[0] | default(''))
+         | regex_findall('Quantum-safe Encryption using (\S+) PPK') }}
+
+- name: Verify | record the PPK counters (CLI)
+  when:
+    - verify_collect_ipsec | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+  ansible.builtin.set_fact:
+    verify_ppk:
+      quantum_resistant_sessions: >-
+        {{ (_c | regex_findall('Sessions with Quantum Resistance:\s*([0-9]+)') + ['0']) | first }}
+      manual_ppk: >-
+        {{ (_c | regex_findall('Quantum Resistance:\s*[0-9]+\s+Manual:\s*([0-9]+)') + ['0']) | first }}
+      dynamic_ppk: >-
+        {{ (_c | regex_findall('Manual:\s*[0-9]+\s+Dynamic:\s*([0-9]+)') + ['0']) | first }}
+  vars:
+    _c: "{{ verify_ikev2_detail.stdout[1] | default('') }}"
+
+- name: Verify | summarize negotiated IKE key exchange
+  when:
+    - verify_collect_ipsec | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+  ansible.builtin.set_fact:
+    verify_ike_kex_summary: "{{ _kex_summary }}"
+  vars:
+    _pqc_cli: >-
+      {{ (verify_pqc_kex_cli | default([]) | map('trim') | reject('equalto', '') | unique | list) }}
+    _pqc_yang_active: >-
+      {{ (verify_pqc_groups | default([]) | unique | reject('equalto', 'pqc-gt-none') | list) }}
+    _has_pqc: >-
+      {{ (_pqc_cli | length > 0) or (_pqc_yang_active | length > 0) }}
+    _pqc_label: >-
+      {%- if _pqc_cli | length > 0 -%}
+      {{ _pqc_cli | join(', ') }}
+      {%- elif _pqc_yang_active | length > 0 -%}
+      {{ _pqc_yang_active | map('regex_replace', '^pqc-gt-', '') | join(', ') }}
+      {%- endif -%}
+    _dh_cli: >-
+      {{ (verify_dh_grp_cli | default([]) | map('trim') | reject('equalto', '') | unique | list) }}
+    _dh_yang: >-
+      {{ (verify_dh_groups | default([]) | map('regex_replace', '^crypto-dh-grouptype-', '') | unique | list) }}
+    _dh_numbers: >-
+      {{ _dh_cli if (_dh_cli | length) > 0
+         else (_dh_yang | map('regex_replace', '^group', '') | list) }}
+    _dh_part: >-
+      {{ ('ECDH group ' ~ (_dh_numbers | join(', ')))
+         if (_dh_numbers | length) > 0 else '' }}
+    _kex_summary: >-
+      {%- if (verify_ike_sa_count | default(0) | int) == 0 -%}
+      (no IKEv2 SAs)
+      {%- elif _has_pqc | bool -%}
+      {{ _pqc_label }}{% if _dh_part | length > 0 %} + {{ _dh_part }}{% endif %}
+      {%- elif _dh_part | length > 0 -%}
+      {{ _dh_part }} (classical)
+      {%- else -%}
+      (unknown)
+      {%- endif -%}
+
+# --- SSH: structured --------------------------------------------------------
+- name: Verify | SSH key exchange algorithms
+  when: verify_collect_ssh_https | bool
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: netconf-fetch
+  vars:
+    nc_label: ip ssh server algorithm kex
+    nc_source: running
+    nc_filter: |
+      <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+        <ip>
+          <ssh>
+            <server>
+              <algorithm/>
+            </server>
+          </ssh>
+        </ip>
+      </native>
+
+- name: Verify | record the SSH posture
+  when: verify_collect_ssh_https | bool
+  ansible.builtin.set_fact:
+    verify_ssh_kex: >-
+      {{ (netconf_fetch_result.stdout | default(''))
+         | regex_findall('<kex-options>([^<]+)</kex-options>') }}
+    verify_ssh_hostkey: >-
+      {{ (netconf_fetch_result.stdout | default(''))
+         | regex_findall('<hostkey-options>([^<]+)</hostkey-options>') }}
+
+# --- Management HTTPS: structured -------------------------------------------
+- name: Verify | HTTPS PQC type
+  when: verify_collect_ssh_https | bool
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: netconf-fetch
+  vars:
+    nc_label: ip http secure-pqc-type
+    nc_source: running
+    nc_filter: |
+      <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+        <ip>
+          <http xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-http"/>
+        </ip>
+      </native>
+
+- name: Verify | record the HTTPS posture
+  when: verify_collect_ssh_https | bool
+  ansible.builtin.set_fact:
+    verify_https_pqc_type: >-
+      {{ ((netconf_fetch_result.stdout | default(''))
+          | regex_findall('<secure-pqc-type>([^<]+)</secure-pqc-type>') + ['(default: all)'])
+         | first }}
+
+# --- MACsec / EAP-TLS -------------------------------------------------------
+- name: Verify | MACsec posture
+  when:
+    - verify_collect_macsec | bool
+    - my_macsec_interface | default('') | length > 0
+  block:
+
+    - name: Verify | access-session PQ settings
+      ansible.builtin.include_role:
+        name: common
+        tasks_from: netconf-fetch
+      vars:
+        nc_label: access-session pqc-type / tls-version
+        nc_source: running
+        nc_filter: |
+          <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+            <access-session xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-sanet"/>
+          </native>
+
+    - name: Verify | record the access-session settings
+      ansible.builtin.set_fact:
+        verify_macsec_pqc_type: >-
+          {{ ((netconf_fetch_result.stdout | default(''))
+              | regex_findall('<pqc-type>([^<]+)</pqc-type>') + ['(default: non-pqc)'])
+             | first }}
+        verify_macsec_tls_version: >-
+          {{ ((netconf_fetch_result.stdout | default(''))
+              | regex_findall('<tls-version>([^<]+)</tls-version>') + ['(default: all)'])
+             | first }}
+
+    # SCREEN-SCRAPE. No MACsec/MKA operational YANG. The commands are per platform
+    # (see group_vars/all/topology.yml): a C9300 carries everything in "show macsec
+    # interface", a C8000 has no such command and splits it into "show macsec status
+    # interface" and "show macsec statistics interface". MKA must be scoped to this
+    # hop so a leftover session on another port does not count.
+    - name: Verify | MKA and MACsec state (show parsing)
+      cisco.ios.ios_command:
+        commands:
+          - "show mka sessions interface {{ my_macsec_interface }}"
+          - "{{ my_macsec_show_state }}"
+          - "{{ my_macsec_show_stats }}"
+      register: verify_macsec_show
+      changed_when: false
+      failed_when: false
+
+    - name: Verify | record the MACsec state
+      ansible.builtin.set_fact:
+        verify_mka_secured: >-
+          {{ 1 if (verify_macsec_show.stdout[0] | default('')) is search('\sSecured\s') else 0 }}
+        verify_macsec_cipher: >-
+          {{ ((verify_macsec_show.stdout[1] | default(''))
+              | regex_findall('Cipher\s*:\s*(\S+)') + ['(none)']) | first }}
+        verify_macsec_transmitting: >-
+          {{ (verify_macsec_show.stdout[1] | default('')) is search(my_macsec_transmitting_pattern) }}
+        verify_macsec_encrypted_out: "{{ _venc | int }}"
+        verify_mka_ckn: >-
+          {{ ((verify_macsec_show.stdout[0] | default(''))
+              | regex_findall('Secured\s+([0-9A-Fa-f]{2,32})') + ['(none)']) | first }}
+        verify_macsec_enabled: >-
+          {{ (verify_macsec_show.stdout[1] | default('')) is search(my_macsec_enabled_pattern) }}
+      vars:
+        # SA Statistics, not SC Statistics. The transmit channel prints
+        # "Encrypted Pkts" twice and the SC aggregate is frozen, so anything that
+        # takes the max reads a number that never changes and reports delta 0 on a
+        # link that is encrypting fine. Same parse as
+        # roles/common/tasks/verify-macsec-proof.yml; keep them identical.
+        #
+        # default([0], true) has to come BEFORE first. regex_search returns None
+        # when nothing matches, which it does whenever the SA is down (mid-reauth,
+        # or right after a teardown), and "None | first" is a hard error.
+        _venc: >-
+          {{ (verify_macsec_show.stdout[2] | default(''))
+             | regex_search(my_macsec_encrypted_pattern, '\1')
+             | default([0], true) | first }}
+
+    # Encryption delta: push frames, sample twice, compare.
+    - name: Verify | MACsec delta | push frames across the secured link
+      cisco.ios.ios_command:
+        commands:
+          - "ping {{ verify_macsec_peer_address }} repeat {{ verify_macsec_delta_pings }}"
+      register: verify_macsec_ping
+      changed_when: false
+      failed_when: false
+      when:
+        - verify_macsec_enabled | bool
+        - verify_macsec_peer_address | length > 0
+
+    - name: Verify | MACsec delta | second read
+      cisco.ios.ios_command:
+        commands:
+          - "{{ my_macsec_show_stats }}"
+      register: verify_macsec_show2
+      changed_when: false
+      failed_when: false
+      when: verify_macsec_enabled | bool
+
+    - name: Verify | MACsec delta | record it
+      ansible.builtin.set_fact:
+        verify_macsec_encrypted_out_2: "{{ _venc2 | int }}"
+        verify_macsec_ping_success: >-
+          {{ ((verify_macsec_ping.stdout[0] | default(''))
+              | regex_findall('Success rate is [0-9]+ percent \(([0-9]+)/') + ['0']) | first }}
+      vars:
+        _venc2: >-
+          {{ (verify_macsec_show2.stdout[0] | default(''))
+             | regex_search(my_macsec_encrypted_pattern, '\1')
+             | default([0], true) | first }}
+      when: verify_macsec_enabled | bool
+
+    - name: Verify | MACsec delta | compute
+      ansible.builtin.set_fact:
+        verify_macsec_encrypted_delta: >-
+          {{ (verify_macsec_encrypted_out_2 | int) - (verify_macsec_encrypted_out | int) }}
+      when: verify_macsec_enabled | bool
+
+- name: Verify | classify the MACsec scenario
+  ansible.builtin.set_fact:
+    verify_macsec_scenario: >-
+      {%- if not (verify_macsec_enabled | default(false) | bool) -%}none
+      {%- elif (verify_mka_ckn | default('') | upper) == '01' -%}psk
+      {%- elif verify_mka_ckn | default('') is match('^[0-9A-Fa-f]{32}$') -%}
+      {%- if verify_macsec_pqc_type | default('') in [my_macsec_pq_type, 'hybrid'] -%}eaptls-mlkem
+      {%- else -%}eaptls{%- endif -%}
+      {%- else -%}unknown{%- endif -%}
+  when:
+    - verify_collect_macsec | bool
+    - my_macsec_interface | default('') | length > 0
+
+- name: Verify | MACsec health verdict
+  ansible.builtin.set_fact:
+    verify_macsec_health_pass: >-
+      {%- if verify_effective_require_macsec_absent | bool -%}
+      {{ (not (verify_macsec_enabled | default(false) | bool))
+         and (verify_mka_secured | default('0') | int == 0) }}
+      {%- else -%}
+      {{ (verify_mka_secured | default('0') | int > 0)
+         and (verify_macsec_transmitting | default(false) | bool)
+         and ((verify_macsec_encrypted_delta | default(-1) | int) > 0) }}
+      {%- endif -%}
+  when:
+    - verify_collect_macsec | bool
+    - my_macsec_interface | default('') | length > 0
+
+# FAIL is a judgement, and a bare verify run has not been told what to expect.
+# An unconfigured port after "-e state=absent" is the goal, not a failure, so
+# say NOT_CONFIGURED and keep FAIL for a link that was asked to be up and is not.
+- name: Verify | MACsec health label
+  ansible.builtin.set_fact:
+    verify_macsec_health: >-
+      {%- if not (verify_macsec_enabled | default(false) | bool)
+             and not (verify_effective_require_macsec_absent | bool) -%}NOT_CONFIGURED
+      {%- elif verify_macsec_health_pass | default(false) | bool -%}PASS
+      {%- else -%}FAIL{%- endif -%}
+  when:
+    - verify_collect_macsec | bool
+    - my_macsec_interface | default('') | length > 0
+
+# --- Report ------------------------------------------------------------------
+
+- name: Verify | IPsec posture
+  ansible.builtin.debug:
+    msg: "{{ verify_ipsec_summary }}"
+  changed_when: true
+  when:
+    - verify_collect_ipsec | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+  vars:
+    verify_ipsec_summary: >-
+      {{ inventory_hostname }}
+      | ike_sas={{ verify_ike_sa_count | default(0) }}
+      | kex={{ verify_ike_kex_summary | default('(no IKEv2 SAs)') }}
+      | auth_sign={{ (verify_auth_sign | default([]) | unique | join(',')) if (verify_auth_sign | default([]) | length) > 0 else '(none)' }}
+      | ppk_qr={{ verify_ppk.quantum_resistant_sessions | default('0') if verify_ppk is defined else '0' }}
+      | fragmentation={{ verify_fragmentation_enabled | default(false) }}
+
+- name: Verify | MACsec posture
+  ansible.builtin.debug:
+    msg: "{{ verify_macsec_summary }}"
+  changed_when: true
+  when:
+    - verify_collect_macsec | bool
+    - my_macsec_interface | default('') | length > 0
+  vars:
+    verify_macsec_summary: >-
+      {{ inventory_hostname }}
+      | if={{ my_macsec_interface | default('(none)') }}
+      | peer={{ my_macsec_peer | default('(none)') }}
+      | scenario={{ verify_macsec_scenario | default('unknown') }}
+      | health={{ verify_macsec_health | default('FAIL') }}
+      | mka_secured={{ verify_mka_secured | default('0') }}
+      | transmitting={{ verify_macsec_transmitting | default(false) }}
+      | encrypt_delta={{ verify_macsec_encrypted_delta | default('(not sampled)') }}
+      | ckn={{ verify_mka_ckn | default('(none)') -}}
+      {{- (' | note=no MACsec on ' ~ my_macsec_interface
+           ~ '; run macsec-psk.yml or macsec-eaptls.yml with -e macsec_play_hosts='
+           ~ (macsec_play_hosts | default('<group>')) ~ ' to build it')
+          if verify_macsec_health | default('') == 'NOT_CONFIGURED' else '' -}}
+
+- name: Verify | SSH and HTTPS posture
+  ansible.builtin.debug:
+    msg: "{{ verify_mgmt_summary }}"
+  changed_when: true
+  when: verify_collect_ssh_https | bool
+  vars:
+    verify_mgmt_summary: >-
+      {{ inventory_hostname }}
+      | ssh_kex={{ (verify_ssh_kex | default([]) | first) | default('(default)') }}
+      | https_pqc={{ verify_https_pqc_type | default('(unread)') }}
+
+- name: Verify | full fabric report
+  ansible.builtin.debug:
+    msg: "{{ verify_report }}"
+  changed_when: true
+  when: verify_collect_full_fabric | bool
+  vars:
+    verify_report: >-
+      {{
+        {
+          'host': inventory_hostname,
+          'ipsec': (
+            {
+              'ike_sa_count': verify_ike_sa_count | default(0),
+              'negotiated_kex': verify_ike_kex_summary | default('(no IKEv2 SAs)'),
+              'ppk_counters': verify_ppk | default({})
+            }
+            if inventory_hostname in groups['ipsec_pair'] | default([])
+            else 'not on the IPsec link'
+          ),
+          'ssh': {
+            'kex_offer_order': verify_ssh_kex | default([]),
+            'hostkey': verify_ssh_hostkey | default([])
+          },
+          'https': {
+            'pqc_type': verify_https_pqc_type | default('(unread)')
+          },
+          'macsec': (
+            {
+              'interface': my_macsec_interface | default(''),
+              'peer': my_macsec_peer | default(''),
+              'scenario': verify_macsec_scenario | default('unknown'),
+              'health': verify_macsec_health | default('FAIL'),
+              'pqc_type': verify_macsec_pqc_type | default('(unread)'),
+              'tls_version': verify_macsec_tls_version | default('(unread)'),
+              'mka_secured': verify_mka_secured | default('0'),
+              'ckn': verify_mka_ckn | default('(none)'),
+              'cipher': verify_macsec_cipher | default('(none)'),
+              'transmitting': verify_macsec_transmitting | default(false),
+              'encrypt_delta': verify_macsec_encrypted_delta | default('(not sampled)')
+            }
+            if my_macsec_interface | default('') | length > 0
+            else 'not on the MACsec link'
+          )
+        }
+      }}
+
+# --- Hard assertions (after the report so the posture line is visible) -------
+
+- name: Verify | assert ML-KEM is negotiated on every IKEv2 SA
+  ansible.builtin.assert:
+    that:
+      - verify_ike_sa_count | int > 0
+      - verify_pqc_groups | length == verify_ike_sa_count | int
+      - verify_pqc_groups | unique == [verify_expected_pqc_group]
+    fail_msg: >-
+      Expected every IKEv2 SA to report {{ verify_expected_pqc_group }}, got
+      {{ verify_pqc_groups | default([]) }} across
+      {{ verify_ike_sa_count | default(0) }} SA(s).
+    quiet: true
+  when:
+    - verify_require_mlkem | bool
+    - verify_effective_enforce | bool
+    - inventory_hostname in groups['ipsec_pair'] | default([])
+
+- name: Verify | assert MACsec is not configured (post-teardown)
+  ansible.builtin.assert:
+    that:
+      - not (verify_macsec_enabled | default(false) | bool)
+    fail_msg: >-
+      Expected MACsec off on {{ my_macsec_interface }} after teardown.
+    quiet: true
+  when:
+    - verify_effective_require_macsec_absent | bool
+    - my_macsec_interface | default('') | length > 0
+
+- name: Verify | assert MACsec is secured and encrypting RIGHT NOW
+  ansible.builtin.assert:
+    that:
+      - verify_mka_secured | int > 0
+      - verify_macsec_transmitting | bool
+      - verify_macsec_encrypted_delta | default(-1) | int > 0
+    fail_msg: >-
+      MACsec is not both secured and currently encrypting. Secured sessions
+      {{ verify_mka_secured | default('0') }}, transmitting
+      {{ verify_macsec_transmitting | default(false) }}, delta
+      {{ verify_macsec_encrypted_delta | default('(not sampled)') }}.
+    quiet: true
+  when:
+    - verify_effective_require_macsec_secured | bool
+    - not (verify_effective_require_macsec_absent | bool)
+    - verify_macsec_enabled | default(false) | bool
+    - my_macsec_interface | default('') | length > 0

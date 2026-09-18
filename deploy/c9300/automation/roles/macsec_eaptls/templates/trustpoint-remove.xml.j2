@@ -1,0 +1,15 @@
+{# Remove a trustpoint by name, and nothing else.
+   Short on purpose. A destructive payload should be readable in one glance.
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <crypto>
+      <pki xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto">
+        <trustpoint nc:operation="remove">
+          <id>{{ trustpoint_to_remove }}</id>
+        </trustpoint>
+      </pki>
+    </crypto>
+  </native>
+</config>

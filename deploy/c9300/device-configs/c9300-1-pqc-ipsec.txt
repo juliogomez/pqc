@@ -1,0 +1,84 @@
+! C9300 access switch (IKEv2 PQC)
+! IOS XE 26.2
+!
+! IPsec PQC on a C9300 is a 26.2 feature not in public config guides yet.
+!
+! Self-signed identity cert on trustpoint Self; peer cert imported on trustpoint Peer.
+! See macsec.md Exercise 2 Steps 1-2 for the cert exchange procedure.
+!
+aaa authentication dot1x default local
+!
+eap profile EAP-PROFILE
+ method tls
+ pki-trustpoint Self
+!
+access-session mac-move deny
+access-session pqc-type pqc
+access-session tls-version 1.3
+!
+dot1x system-auth-control
+!
+dot1x credentials DOT1X-CREDS
+ username SW1
+ pki-trustpoint Self
+!
+mka policy mka_128
+ key-server priority 5
+ sak-rekey interval 200
+!
+! MACsec on Te1/0/5
+interface TenGigabitEthernet1/0/5
+ macsec network-link
+ access-session host-mode multi-host
+ access-session port-control auto
+ dot1x pae both
+ dot1x authenticator eap profile EAP-PROFILE
+ dot1x credentials DOT1X-CREDS
+ dot1x supplicant eap profile EAP-PROFILE
+ mka policy mka_128
+!
+! IPsec PQC proposals (ML-KEM on a C9300!)
+crypto ikev2 proposal pqc-mlkem512
+ pqc mlkem512
+ encryption aes-cbc-256
+ integrity sha512
+ group 21
+!
+crypto ikev2 proposal pqc-no-optional
+ pqc mlkem768 mlkem1024
+ encryption aes-cbc-256
+ integrity sha512 sha384
+ group 19 14 21
+!
+crypto ikev2 policy pqc-policy
+ match fvrf any
+ proposal pqc-mlkem512
+ proposal pqc-no-optional
+!
+crypto ikev2 profile ikev2_prof
+ match identity remote address 110.0.1.2 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local ikev2_key
+ dpd 10 2 periodic
+!
+crypto ipsec transform-set tfs esp-gcm 256
+ mode tunnel
+!
+crypto ipsec profile ipsec_prof
+ set security-association lifetime kilobytes disable
+ set security-association lifetime seconds 900
+ set transform-set tfs
+ set ikev2-profile ikev2_prof
+!
+interface Tunnel1
+ ip address 11.0.1.1 255.255.255.0
+ tunnel source Loopback110
+ tunnel destination 110.0.1.2
+ tunnel protection ipsec profile ipsec_prof
+!
+interface Loopback110
+ ip address 110.0.1.1 255.255.255.255
+!
+ip ssh bulk-mode 131072
+ip ssh stricthostkeycheck accept-new

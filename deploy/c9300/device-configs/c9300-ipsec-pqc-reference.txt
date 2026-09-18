@@ -1,0 +1,61 @@
+! C9300 IPsec PQC reference config (Switch-A side)
+! Combines underlay + Exercise 3 (ML-KEM PQC) from ipsec.md
+!
+! For Switch-B: mirror the IPs as noted at the bottom of this file.
+! Adjust interface names and subnets for your topology.
+!
+ip routing
+!
+interface Loopback0
+ ip address 10.255.0.1 255.255.255.255
+!
+interface TenGigabitEthernet1/0/6
+ no switchport
+ ip address 10.1.1.1 255.255.255.0
+ no shutdown
+!
+ip route 10.255.0.2 255.255.255.255 10.1.1.2
+!
+crypto ikev2 proposal PQC-PROPOSAL
+ pqc mlkem768
+ encryption aes-cbc-256
+ integrity sha512
+ group 21
+!
+crypto ikev2 policy PQC-POLICY
+ proposal PQC-PROPOSAL
+!
+crypto ikev2 keyring PQC-KEYRING
+ peer SWITCH-B
+  address 10.255.0.2
+  pre-shared-key LabPskAB
+!
+crypto ikev2 profile PQC-PROFILE
+ match identity remote address 10.255.0.2 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local PQC-KEYRING
+ dpd 10 2 periodic
+!
+crypto ipsec transform-set PQC-TS esp-gcm 256
+ mode tunnel
+!
+crypto ipsec profile PQC-IPSEC
+ set transform-set PQC-TS
+ set ikev2-profile PQC-PROFILE
+!
+interface Tunnel0
+ ip address 192.168.1.1 255.255.255.0
+ tunnel source Loopback0
+ tunnel mode ipsec ipv4
+ tunnel destination 10.255.0.2
+ tunnel protection ipsec profile PQC-IPSEC
+!
+! --- Switch-B differences ---
+! Loopback0:        10.255.0.2
+! Te1/0/6:          10.1.1.2
+! Static route:     ip route 10.255.0.1 255.255.255.255 10.1.1.1
+! Keyring peer:     address 10.255.0.1
+! Match identity:   10.255.0.1
+! Tunnel IP:        192.168.1.2
+! Tunnel dest:      10.255.0.1

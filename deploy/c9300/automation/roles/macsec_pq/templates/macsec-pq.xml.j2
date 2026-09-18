@@ -1,0 +1,19 @@
+{# Post-quantum MACsec: two global leaves.
+   /native/access-session/pqc-type
+   /native/access-session/tls-version
+   On teardown, revert to defaults rather than removing.
+-#}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <access-session xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-sanet">
+{% if state == 'present' %}
+      <pqc-type>{{ my_macsec_pq_type }}</pqc-type>
+      <tls-version>{{ pq_macsec_tls_version }}</tls-version>
+{% else %}
+      <pqc-type nc:operation="remove"/>
+      <tls-version nc:operation="remove"/>
+{% endif %}
+    </access-session>
+  </native>
+</config>

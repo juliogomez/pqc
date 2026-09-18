@@ -1,0 +1,69 @@
+---
+# The post-quantum posture of the C9300 lab, in one file.
+#
+# Every PQ decision the playbooks make comes from here, and every one of these
+# values lands in exactly one YANG leaf on the device. Change a value, re-run
+# the playbook, and the posture changes.
+
+# --- IKEv2 key exchange (ML-KEM) --------------------------------------------
+
+# Which ML-KEM parameter set the IKEv2 proposal offers.
+#   mlkem512   NIST category 1. Don't pick it by accident.
+#   mlkem768   NIST category 3. The baseline everyone converged on. Default.
+#   mlkem1024  NIST category 5. More handshake bytes for margin you probably
+#              can't justify.
+pq_key_exchange: mlkem768
+
+# IKEv2 fragmentation MTU. ML-KEM puts a 1,184-byte encapsulation key in an
+# IKE_INTERMEDIATE exchange; without fragmentation the handshake never completes.
+pq_ike_fragmentation_mtu: 1400
+
+# --- SSH key exchange --------------------------------------------------------
+
+# Ordered preference list for "ip ssh server algorithm kex". The YANG leaf-list
+# is "ordered-by user", so this order is the server's offer order. ML-KEM first
+# means clients that support it negotiate PQ; older clients fall back.
+pq_ssh_kex:
+  - mlkem768x25519-sha256
+  - mlkem768nistp256-sha256
+  - curve25519-sha256
+  - ecdh-sha2-nistp256
+
+# Pin the SSH host key algorithms.
+pq_ssh_hostkey:
+  - rsa-sha2-512
+  - rsa-sha2-256
+
+# --- MACsec / EAP-TLS -------------------------------------------------------
+
+# "access-session pqc-type", which steers the key exchange inside the EAP-TLS
+# TLS 1.3 handshake.
+#   pqc      pure mode, ML-KEM-512. The weaker PQ choice.
+#   hybrid   x448 + ML-KEM-768. Strongest, fails closed. Default.
+#   non-pqc  classical secp521r1. Troubleshooting only.
+#   all      behaves like hybrid between two IOS XE peers, but silently drops
+#            to classical against a non-PQ peer.
+pq_macsec_type: hybrid
+
+# "access-session tls-version". Pin 1.3, because ML-KEM in EAP-TLS only exists
+# in the TLS 1.3 handshake.
+pq_macsec_tls_version: "1.3"
+
+# --- Management HTTPS --------------------------------------------------------
+
+# "ip http secure-pqc-type". Same four values as the MACsec knob. 26.2 ships
+# "all" and already negotiates X25519MLKEM768 with no configuration at all.
+pq_https_pqc_type: all
+
+# --- RFC 8784 post-quantum pre-shared key ------------------------------------
+
+# PPK ID must match on both ends.
+pq_ppk_id: PPK-LAB
+
+# "required" means the tunnel will not come up without PPK.
+pq_ppk_required: true
+
+# Whether ML-KEM is optional or required. When optional, a peer that cannot do
+# ML-KEM falls back to classical DH silently. Set false once every peer is
+# upgraded.
+pq_key_exchange_optional: false

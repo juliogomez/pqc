@@ -1,0 +1,37 @@
+{# MKA policy and MACsec key chain for the pre-shared-key path.
+   The key-string is pushed once, on the run that creates the chain.
+   macsec_psk_push_key_string comes from tasks/main.yml.
+-#}
+{% set op = ' nc:operation="remove"' if state == 'absent' else '' %}
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+    <mka>
+      <policy xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-mka"{{ op }}>
+        <name>{{ macsec_names.psk_mka_policy }}</name>
+{% if state == 'present' %}
+        <macsec-cipher-suite>{{ macsec_cipher_suite }}</macsec-cipher-suite>
+{% endif %}
+      </policy>
+    </mka>
+    <key>
+      <chain xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto"{{ op }}>
+        <name>{{ macsec_names.psk_key_chain }}</name>
+{% if state == 'present' %}
+        <macsec/>
+{% if macsec_psk_push_key_string | default(true) | bool %}
+        <key>
+          <id>{{ macsec_key_id }}</id>
+          <cryptographic-algorithm-choice>
+            <macsec>{{ macsec_key_algorithm }}</macsec>
+          </cryptographic-algorithm-choice>
+          <key-string>
+            <key>{{ lab_macsec_cak }}</key>
+          </key-string>
+        </key>
+{% endif %}
+{% endif %}
+      </chain>
+    </key>
+  </native>
+</config>

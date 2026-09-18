@@ -1,6 +1,6 @@
 # A Hands-On Post-Quantum TLS Authentication Lab
 
-### Who Is That Server, Really? Proving Identity After Quantum
+### Who Is That Server, Really? 
 
 The companion [TLS key-exchange lab](../key-exchange/README.md) made sure a future quantum computer can't decrypt your HTTPS traffic. Good. But a secure channel to the *wrong* server is no help at all. So the other half of every TLS handshake is **authentication**: the certificate that proves the server (and sometimes the client) is who it claims to be. And those certificates rely on **digital signatures**, which a quantum computer can also break.
 
@@ -13,7 +13,7 @@ Ready? Let's find out who is on the other end.
 ## Contents
 
 1. [What are we trying to figure out?](#what-are-we-trying-to-figure-out)
-2. [Why should you care? A different deadline](#why-should-you-care-a-different-deadline)
+2. [Why should you care? A different deadline](#why-should-you-care)
 3. [Meet the two contenders](#meet-the-two-contenders)
 4. [Head-to-head: the size story](#head-to-head-the-size-story)
 5. [Our tool of choice: OpenSSL 3.5](#our-tool-of-choice-openssl-35)
@@ -36,7 +36,7 @@ By the end of this lab you'll have seen, with your own certificates:
 
 ---
 
-## Why should you care? A different deadline
+## Why should you care?
 
 The key-exchange labs had one clear villain: **"harvest now, decrypt later"**. An attacker records your traffic today and decrypts it once a quantum computer arrives. That makes post-quantum key exchange urgent right now.
 
@@ -335,12 +335,3 @@ That's a wrap! You generated post-quantum certificates, measured the size jump, 
 - **The TLS code points are still settling.** The signature scheme identifiers that let TLS negotiate ML-DSA are recent and still moving through the IETF TLS working group. OpenSSL implements them, but expect details to shift before everything is final. One practical quirk: if a server offers both a classical and an ML-DSA certificate, OpenSSL often prefers the classical one, so you may need `-sigalgs mldsa65` to force the post-quantum choice. (In this lab the server holds *only* an ML-DSA certificate, so it is always chosen.)
 
 So just like the IKEv2 story, the building blocks are here and worth getting hands-on with now, even though the wider ecosystem (public CAs, browsers, every server) still has a long way to go.
-
----
-
-**On real hardware:** the two halves moved at different speeds.
-[IOS XE 26.2](../../../deploy/ios-xe/tls.md#tls-authentication-still-classical) negotiates
-X25519MLKEM768 on its management HTTPS server by default, so the key exchange half is
-done, but the server certificate is still classical RSA and there's no ML-DSA equivalent
-of what you just built. TLS also goes post-quantum on that platform inside EAP-TLS, which
-the [MACsec lab](../../macsec/README.md) covers.

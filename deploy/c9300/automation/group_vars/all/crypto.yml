@@ -1,0 +1,81 @@
+---
+# Classical baseline algorithms and object names for the C9300 lab.
+#
+# Deliberately separate from pqc.yml. This file is the part that is NOT the
+# point: ordinary IKEv2/IPsec and MACsec choices you would make in 2026.
+#
+# The algorithm values are YANG leaf names, not CLI words, because they go
+# straight into the NETCONF payload.
+
+# --- IKEv2 proposal ---------------------------------------------------------
+
+ike_encryption: aes-cbc-256
+ike_integrity: sha512
+
+# "group 21" (ECDH P-521). YANG spells DH groups as leaf names.
+ike_dh_group: twenty-one
+
+# --- IKEv2 profile ----------------------------------------------------------
+
+ike_dpd_interval: 10
+ike_dpd_retry: 2
+ike_dpd_query: periodic
+ike_peer_match_mask: 255.255.255.255
+
+# --- IPsec ------------------------------------------------------------------
+
+ipsec_esp: esp-gcm
+ipsec_key_bits: 256
+ipsec_mode_leaf: tunnel-choice
+
+# --- Object names ------------------------------------------------------------
+#
+# THE PQAUTO- PREFIX IS A SAFETY MECHANISM, NOT A STYLE CHOICE.
+#
+# Every name in this file is something "-e state=absent" will delete. The
+# hand-driven exercises in the protocol docs use names like CLASSICAL-PROPOSAL,
+# EAP-PROFILE, etc. The PQAUTO- prefix guarantees teardown here never destroys
+# the reader's own work.
+crypto_names:
+  ike_proposal: PQAUTO-PROPOSAL
+  ike_policy: PQAUTO-POLICY
+  ike_keyring: PQAUTO-KEYRING
+  ike_profile: PQAUTO-IKEV2
+  ipsec_transform_set: PQAUTO-TS
+  ipsec_profile: PQAUTO-IPSEC
+
+# --- MACsec / MKA -----------------------------------------------------------
+
+macsec_names:
+  # PSK path
+  psk_mka_policy: PQAUTO-MKA-PSK
+  psk_key_chain: PQAUTO-MACSEC-KC
+  # EAP-TLS path
+  eaptls_mka_policy: PQAUTO-MKA-EAP
+  eap_profile: PQAUTO-EAP
+  dot1x_credentials: PQAUTO-DOT1X
+  control_policy: PQAUTO-MACSEC-POL
+  # AAA attribute list and shipped-in service template for linksec must-secure.
+  linksec_attribute_list: PQAUTO-LINKSEC
+  linksec_template: DEFAULT_LINKSEC_POLICY_MUST_SECURE
+  # The trustpoint holding the peer's imported certificate. There is no name here
+  # for the local identity trustpoint on purpose: IOS XE allows one self-signed
+  # trustpoint per box and the device already ships with it as
+  # TP-self-signed-<serial>. macsec_eaptls reuses that one and discovers its name
+  # at run time. See roles/macsec_eaptls/tasks/cert-identity.yml.
+  peer_trustpoint: PQAUTO-PEER
+  # Host-to-switch uses this name instead, so importing sw2's cert on sw1 does
+  # not overwrite the router peer cert already sitting in PQAUTO-PEER.
+  peer_trustpoint_h2s: PQAUTO-PEER-H2S
+  # Same reasoning, same box. A dot1x credentials object carries the identity the
+  # device announces, and sw1 announces SW1 to the router but MUST to sw2. One
+  # object cannot hold both: building the router link would rewrite the username to
+  # SW1, sw2 has no "username SW1 aaa attribute list" entry, and the host link then
+  # authenticates but never gets must-secure, so MKA never keys. Credentials are
+  # bound per interface, so two objects on sw1 is exactly right.
+  dot1x_credentials_h2s: PQAUTO-DOT1X-H2S
+
+macsec_cipher_suite: gcm-aes-128
+macsec_key_algorithm: aes-128-cmac
+macsec_key_id: "01"
+macsec_reauth_seconds: 1800
