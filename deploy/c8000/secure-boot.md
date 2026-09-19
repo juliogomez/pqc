@@ -14,6 +14,10 @@ published PKI. More importantly, the output reveals that **the C8235-G2 boot cha
 
 Everything below was captured on a **C8235-G2** running **IOS XE 26.2**.
 
+> **Switching side?** The [C9300 secure boot doc](../c9300/secure-boot.md) runs the
+> same exercises on a C9350. The boot chain there is entirely classical (no LDWM),
+> which makes the comparison interesting.
+
 
 ## How the boot chain works
 

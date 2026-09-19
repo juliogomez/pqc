@@ -9,8 +9,8 @@ The big PQC story here is **MACsec with ML-KEM key exchange**. The C9300 uses EA
 with ML-KEM to establish quantum-resistant session keys for MACsec encryption. That
 secures the "first hop" before traffic even enters an IPsec tunnel.
 
-The target platform is the **Cisco C9300 Series Smart Switch** running **IOS XE 26.1**
-(or later). 
+The target platform is the **Cisco C9300 Series Smart Switch** running **IOS XE 26.2**
+or later. Everything below was tested on 26.2.
 
 ## MACsec scenarios
 
@@ -31,6 +31,7 @@ through all three:
 | [**SSH**](ssh.md) | Enable ML-KEM hybrid key exchange on the switch's SSH server |
 | [**TLS**](tls.md) | Management HTTPS with ML-KEM hybrid key exchange |
 | [**IPsec**](ipsec.md) | IKEv2 IPsec with ML-KEM: classical baseline, then flip to quantum-safe key exchange |
+| [**Secure Boot**](secure-boot.md) | Map the boot chain algorithms, verify integrity measurements, inspect the SUDI identity |
 
 Ansible playbooks for all four protocols live under
 [`automation/`](automation/README.md) ([operator guide](automation/README.md),
