@@ -250,9 +250,10 @@ Ping the peer tunnel address and verify with `show interface Tunnel0 | include p
 that the input/output packet counts increase.
 
 > **Why not `show crypto ipsec sa | include pkts`?** On C9350 switches, the crypto is
-> offloaded to the Silicon One ASIC, so the software counters (`#pkts encaps`) stay at
-> zero even when the tunnel is forwarding traffic. The interface-level counters reflect
-> the actual data plane.
+> offloaded to the Silicon One ASIC, so the software counters (`#pkts encaps`) freeze
+> at whatever value the previous SA left behind and never increment, even while the
+> tunnel is actively forwarding traffic. The interface-level counters reflect the
+> actual data plane.
 
 ## SSH and TLS
 

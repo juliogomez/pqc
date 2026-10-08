@@ -125,10 +125,11 @@ The automation playbooks (`ipsec-baseline.yml`, `ipsec-pq-ppk.yml`,
 `ipsec-pq-mlkem.yml`) configure the tunnel and negotiate the SA. Tunnel pings work
 end-to-end on 26.2.
 
-> **Counter quirk on C9350:** `show crypto ipsec sa | include pkts` stays at zero because
-> the crypto is offloaded to the Silicon One ASIC. Use `show interface Tunnel0 | include
-> packets` to verify data-plane forwarding. C8000 routers on the other end of a tunnel
-> *do* show proper `#pkts encaps` counters.
+> **Counter quirk on C9350:** `show crypto ipsec sa | include pkts` freezes at whatever
+> value the previous SA left behind and never increments, because the crypto is offloaded
+> to the Silicon One ASIC. Use `show interface Tunnel0 | include packets` to verify
+> data-plane forwarding. C8000 routers on the other end of a tunnel *do* show proper
+> `#pkts encaps` counters.
 
 
 ## Object naming
