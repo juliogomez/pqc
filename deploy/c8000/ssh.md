@@ -1,4 +1,4 @@
-# SSH on Cisco C8000 Secure Routers
+# SSH on Cisco 8000 Series Secure Routers
 
 > **Pre-req:** this doc assumes you reviewed the container [SSH lab](../../learn/ssh/README.md),
 > where OpenSSH negotiated hybrid ML-KEM with zero config.

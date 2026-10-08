@@ -1,9 +1,9 @@
 # Post-Quantum Cryptography on Cisco C9300 Smart Switches
 
-The [C8000 Secure Router labs](../c8000/README.md) cover the WAN side: IPsec tunnels,
-SSH management, and the MACsec links *between routers*. This guide covers the other
-half of the picture: **the access layer**, where a C9300 Smart Switch connects endpoints
-to the network and hands traffic off to a WAN router.
+The [Cisco 8000 Series Secure Router labs](../c8000/README.md) cover the WAN side:
+IPsec tunnels, SSH management, and the MACsec links *between routers*. This guide covers
+the other half of the picture: **the access layer**, where a C9300 Smart Switch connects
+endpoints to the network and hands traffic off to a WAN router.
 
 The big PQC story here is **MACsec with ML-KEM key exchange**. The C9300 uses EAP-TLS 1.3
 with ML-KEM to establish quantum-resistant session keys for MACsec encryption. That

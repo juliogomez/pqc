@@ -89,8 +89,8 @@ rerun the labs as many times as you like. A few of the images compile their tool
 source. Each lab's README has its own short Prerequisites
 and Build-and-start section.
 
-**Stage 2** needs real gear: Cisco C8000 Secure Routers and/or Cisco C9300 Smart Switches
-on IOS XE 26.2 or later. No RADIUS or ISE needed, even for MACsec: IOS XE does the
+**Stage 2** needs real gear: Cisco 8000 Series Secure Routers and/or Cisco C9300 Smart
+Switches on IOS XE 26.2 or later. No RADIUS or ISE needed, even for MACsec: IOS XE does the
 EAP-TLS itself with local CAs and self-signed certs. You can read Stage 2 without any of
 it (the captured output and running configs are all in the repo).
 

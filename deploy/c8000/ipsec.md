@@ -1,4 +1,4 @@
-# IPsec on Cisco 8000 Secure Routers
+# IPsec on Cisco 8000 Series Secure Routers
 
 > **Pre-req:** this doc assumes you have reviewed the container labs on
 > [IPsec key exchange](../../learn/ipsec/key-exchange/README.md) and
@@ -7,7 +7,7 @@
 hybrid, then ML-DSA certificate authentication, then a phased migration across a hub and
 two spokes.
 
-Everything below was run on three Cisco C8000 routers on **IOS XE 26.2**. Every
+Everything below was run on three Cisco 8000 Series Secure Routers on **IOS XE 26.2**. Every
 exercise has a matching [Ansible playbook](automation/README.md#ipsec) that pushes the
 same config over NETCONF. Do the CLI first, reach for the playbooks after.
 

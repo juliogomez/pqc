@@ -1,4 +1,4 @@
-# TLS on Cisco C8000 Secure Routers
+# TLS on Cisco 8000 Series Secure Routers
 
 > **Learn it first:** this doc assumes you went through the container labs
 > [TLS key exchange](../../learn/tls/key-exchange/README.md) and

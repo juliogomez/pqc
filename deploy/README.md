@@ -10,7 +10,7 @@ platform does not support yet, and what are the most relevant and useful router 
 
 ## Platforms covered
 
-### Cisco C8000 Secure Routers (IOS XE)
+### Cisco 8000 Series Secure Routers (IOS XE)
 
 The WAN side: IPsec tunnels, SSH and TLS management, and MACsec between routers. Start
 with the [C8000 platform guide](c8000/README.md) for the topology, feature summary, and

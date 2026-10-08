@@ -1,4 +1,4 @@
-# Post-Quantum Cryptography on Cisco C8000 Secure Routers
+# Post-Quantum Cryptography on Cisco 8000 Series Secure Routers
 
 If you've done the [container labs](../../learn/README.md), you already know the concepts:
 hybrid key exchange, PPK, ML-KEM, IKE fragmentation, large KEM ciphertexts. This is where
@@ -7,9 +7,10 @@ do today. The concepts are the same across both environments. The RFCs don't cha
 you're on a different platform. What changes is the CLI and how the implementation handles
 things like fragmentation and licensing.
 
-The target platform is the **Cisco 8000 Series Secure Router** running **IOS XE
+The target platform is the **Cisco 8000 Series Secure Routers** running **IOS XE
 26.2**. Three of them, wired back-to-back, with the "advantage" license
-that unlocks all crypto features without needing a separate HSECK9 key.
+that unlocks all crypto features without needing a separate HSECK9 key. These docs
+write "C8000" as shorthand for the platform in tables, paths, and command output.
 
 IOS XE 26.1 gave you post-quantum *key exchange*
 and left *authentication* classical. 26.2 adds ML-DSA signatures for IKEv2, so a
