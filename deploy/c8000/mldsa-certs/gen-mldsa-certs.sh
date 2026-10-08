@@ -44,13 +44,31 @@ DAYS_LEAF=825
 # Certificate subject and SAN addresses must match the IKEv2 `identity local
 # address` on each router. Without the matching IP SAN, IOS XE still brings the
 # tunnel up but logs IKMP_NO_ID_CERT_ADDR_MATCH on every negotiation.
+#
+# Override with environment variables to avoid editing this file per POD:
+#   R1_SAN=10.10.10.2 R2_SAN=10.10.10.1 ./gen-mldsa-certs.sh
+#
+# The value is the underlay (transport) IP, NOT the tunnel interface IP. IKEv2
+# negotiates on the underlay and that is what "identity local address" references.
+# Multiple IPs (e.g. a hub with two tunnel endpoints) use comma-separated format:
+#   R2_SAN=10.0.12.2,10.0.23.1
 router_san() {
+  local raw
   case "$1" in
-    r1) echo "IP:10.0.12.1" ;;
-    r2) echo "IP:10.0.12.2,IP:10.0.23.1" ;;   # hub, terminates both tunnels
-    r3) echo "IP:10.0.23.2" ;;
+    r1) raw="${R1_SAN:-10.0.12.1}" ;;
+    r2) raw="${R2_SAN:-10.0.12.2,10.0.23.1}" ;;
+    r3) raw="${R3_SAN:-10.0.23.2}" ;;
     *)  echo "unknown router: $1" >&2; exit 1 ;;
   esac
+  # Normalise: accept bare IPs (10.0.12.1) or SAN syntax (IP:10.0.12.1).
+  # Output is always IP:x.x.x.x[,IP:y.y.y.y,...] for the openssl extension.
+  local out="" ip
+  IFS=',' read -ra parts <<< "$raw"
+  for ip in "${parts[@]}"; do
+    ip="${ip#IP:}"  # strip leading IP: if present
+    out="${out:+$out,}IP:$ip"
+  done
+  echo "$out"
 }
 
 say() { printf '\n=== %s\n' "$*"; }
