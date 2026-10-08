@@ -1,6 +1,6 @@
 # Switch-to-router interop (C9300 ↔ C8000)
 
-Tested between C9300 switches and C8000-G2 routers on IOS XE
+Tested between C9300 switches and Generation-2 Cisco 8000 Series Secure Routers on IOS XE
 26.2. The CLI is almost identical on both platforms, with a few differences that
 will bite you if you don't know where to look.
 
@@ -55,9 +55,10 @@ overhead, phased migration) is in
 ### Counter quirk on C9350
 
 Crypto is offloaded to the Silicon One ASIC, so `show crypto ipsec sa | include pkts`
-stays at zero even when traffic is flowing. Use `show interface TunnelX | include
-packets` to verify the data plane instead. C8000 routers on the other end of the
-tunnel *do* show proper `#pkts encaps` counters.
+freezes at whatever value the previous SA left behind and never increments, even when
+traffic is actively flowing. Use `show interface TunnelX | include packets` to verify
+the data plane instead. C8000 routers on the other end of the tunnel *do* show proper
+`#pkts encaps` counters.
 
 ### Policy matching on routers
 
