@@ -35,7 +35,8 @@ CLI. Nothing.
 
 ### ACT-2 Lite vs TAm
 
-The C8000 G2 routers use a TAm (Trust Anchor module) chip. The C9300 uses ACT-2 Lite.
+The Generation-2 Cisco 8000 Series Secure Routers use a TAm (Trust Anchor module)
+chip. The C9300 uses ACT-2 Lite.
 Both serve the same purpose (hardware root of trust, SUDI storage, boot chain
 anchoring), but they're different hardware with different capabilities. The biggest
 difference for PQC: the C8000's TAm signs the microloader and ROMMON with LDWM, a
@@ -135,7 +136,7 @@ meaningful difference in the trust model.
 
 ### Comparison with C8000
 
-Here's the same table for the C8000 G2 router, side by side:
+Here's the same table for the Generation-2 Cisco 8000 Series Secure Router, side by side:
 
 | Boot stage | C9350 (ACT-2 Lite) | C8235-G2 (TAm) |
 |------------|-------------------|-----------------|
@@ -242,10 +243,9 @@ The chain is: **Cisco Root CA 2099** → **High Assurance SUDI CA** → **Device
 (PID:C9350-48HX)**. You can verify the first two certificates match what Cisco
 publishes at [https://www.cisco.com/security/pki/](https://www.cisco.com/security/pki/).
 
-All three certificates use **RSA 2048 with SHA-256**. That's classical crypto.
-PQC-signed SUDI certificates (using ML-DSA-87) are on Cisco's roadmap but not deployed
-yet. When they arrive, the device will carry both a classical and a PQC SUDI, so
-verifiers that don't support PQC yet can still authenticate the device.
+All three certificates use **RSA 2048 with SHA-256**. Because the top two are published
+at the Cisco PKI index, you can validate any device's identity offline against a root
+you already trust.
 
 > **Security Review:** These are manufacturing-installed identity certificates. The
 > RSA 2048 key strength and SHA-256 signature algorithm meet current security
@@ -256,7 +256,7 @@ verifiers that don't support PQC yet can still authenticate the device.
 
 ## The PQC migration picture
 
-Here's where the C9350 stands today, compared with the C8000:
+Here's where the C9350 boot chain stands today, compared with the C8000:
 
 | Layer | C9350 algorithm | C8235-G2 algorithm | Quantum-resistant? |
 |-------|----------------|-------------------|--------------------|
@@ -264,7 +264,6 @@ Here's where the C9350 stands today, compared with the C8000:
 | Microloader → ROMMON | 2048-bit RSA | LDWM | C9350: no / C8000: yes |
 | ROMMON → IOS XE image | 2048-bit RSA | 2048-bit RSA | No |
 | IOS XE → packages | 2048-bit RSA | 2048-bit RSA | No |
-| SUDI certificates | RSA 2048 | RSA 2048 | No |
 
 \* HMAC-SHA256 is symmetric and immune to Shor's, but it's not a publicly verifiable
 signature. See [Exercise 1](#what-about-that-hmac-sha256) for why that distinction
@@ -285,8 +284,6 @@ What's coming:
 - **ML-DSA-87 image signing** will replace RSA at the IOS XE and package layers. This
   is a software update, so it can arrive in a future IOS XE release without hardware
   changes.
-- **PQC-signed SUDI certificates** (ML-DSA-87) will provide quantum-resistant device
-  identity alongside the existing classical SUDI.
 - **LMS/LDWM at the boot layers** depends on ACT-2 Lite hardware evolution. The C8000's
   TAm already has it; whether ACT-2 Lite gets the same capability is a hardware
   generation question.

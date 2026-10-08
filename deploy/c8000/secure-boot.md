@@ -1,4 +1,4 @@
-# Secure Boot on Cisco C8000 Secure Routers
+# Secure Boot on Cisco 8000 Series Secure Routers
 
 The other docs in this series are about protocols you *configure*: IKEv2 tunnels, SSH
 KEX algorithms, MACsec policies, TLS cipher suites. This one is different.
@@ -21,9 +21,9 @@ Everything below was captured on a **C8235-G2** running **IOS XE 26.2**.
 
 ## How the boot chain works
 
-Every C8000 G2 Secure Router ships with a TAm chip: a tamper-resistant hardware
-module that stores cryptographic keys, the device's unique identity (SUDI), and the
-root of trust for the entire boot sequence.
+Every Generation-2 Cisco 8000 Series Secure Router ships with a TAm chip: a
+tamper-resistant hardware module that stores cryptographic keys, the device's unique
+identity (SUDI), and the root of trust for the entire boot sequence.
 
 The chain has four stages, and each one validates the next before handing off:
 
@@ -202,11 +202,11 @@ subordinate CA certificates you'd need to verify the signature programmatically.
 
 ## Exercise 3: Inspect device identity (SUDI)
 
-Every C8000 G2 router has a Secure Unique Device Identifier (SUDI) burned into the TAm
-chip at manufacturing. It's an X.509 certificate chain that cryptographically binds the
-device's serial number and product ID to Cisco's PKI. This is how Zero Touch
-Provisioning (ZTP), Plug-and-Play (PnP), and other onboarding mechanisms know they're
-talking to a genuine Cisco device and not a counterfeit.
+Every Generation-2 Cisco 8000 Series Secure Router has a Secure Unique Device Identifier
+(SUDI) burned into the TAm chip at manufacturing. It's an X.509 certificate chain that
+cryptographically binds the device's serial number and product ID to Cisco's PKI. This
+is how Zero Touch Provisioning (ZTP), Plug-and-Play (PnP), and other onboarding
+mechanisms know they're talking to a genuine Cisco device and not a counterfeit.
 
 ```
 show platform sudi certificate sign nonce 12345
@@ -251,10 +251,9 @@ at [https://www.cisco.com/security/pki/](https://www.cisco.com/security/pki/).
 The device certificate encodes the Product ID and Serial Number in the Subject field,
 so each router on a network of thousands can be uniquely identified.
 
-All three certificates use **RSA 2048 with SHA-256**. That's classical crypto.
-PQC-signed SUDI certificates (using ML-DSA-87) are on Cisco's roadmap but not deployed
-yet. When they arrive, the device will carry both a classical and a PQC SUDI, so
-verifiers that don't support PQC yet can still authenticate the device.
+All three certificates use **RSA 2048 with SHA-256**. Because the top two are published
+at the Cisco PKI index, you can validate any device's identity offline against a root
+you already trust.
 
 > **Security Review:** These are manufacturing-installed identity certificates. The
 > RSA 2048 key strength and SHA-256 signature algorithm meet current security
@@ -265,7 +264,7 @@ verifiers that don't support PQC yet can still authenticate the device.
 
 ## The PQC migration picture
 
-Here's where things stand on the C8235-G2 today, and what's coming:
+Here's where the boot chain stands on the C8235-G2 today, and what's coming:
 
 | Layer | Current algorithm | Quantum-resistant? | Roadmap |
 |-------|------------------|--------------------|---------|
@@ -273,7 +272,6 @@ Here's where things stand on the C8235-G2 today, and what's coming:
 | Microloader → ROMMON | LDWM | Yes | Migrate to NIST LMS (RFC 8554) |
 | ROMMON → IOS XE image | 2048-bit RSA | No | ML-DSA-87 image signing |
 | IOS XE → packages | 2048-bit RSA | No | ML-DSA-87 image signing |
-| SUDI certificates | RSA 2048 | No | ML-DSA-87 signed SUDI |
 | CPU ↔ TAm bus | AES-GCM-256 | Yes (symmetric) | No change needed |
 
 The bottom of the stack got PQC first because it's the hardest to update. The TAm and
@@ -281,9 +279,9 @@ microloader are burned into hardware; if a quantum computer could forge their si
 you'd need to physically replace the chip. LDWM has been protecting that layer since
 2013.
 
-The top of the stack (image signing, SUDI certs) is easier to update through software
-releases, so it's further back in the queue. Cisco's roadmap calls for ML-DSA-87 image
-signing and PQC-signed SUDI certificates on the G2 line. Some smaller models
+The top of the stack (image signing) is easier to update through software releases, so
+it's further back in the queue. Cisco's roadmap calls for ML-DSA-87 image signing on
+the G2 line. Some smaller models
 (C8211-G2, C8221-G2, C8221L-G2, C8225-G2) already have NIST LMS at the bootloader
 level; the C8235-G2 uses the older LDWM, which is the same hash-based signature family.
 
