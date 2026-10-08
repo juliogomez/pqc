@@ -1,4 +1,4 @@
-# SSH on C9300 Smart Switches
+# SSH on Cisco 9300 Series Smart Switches
 
 > **Pre-req:** the container [SSH lab](../../learn/ssh/README.md) covers the concepts.
 > The [C8000 SSH doc](../c8000/ssh.md) is the same feature on routers. This is the

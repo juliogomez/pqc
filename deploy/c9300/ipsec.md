@@ -1,4 +1,4 @@
-# IPsec on C9300 Smart Switches
+# IPsec on Cisco 9300 Series Smart Switches
 
 > **Pre-req:** this doc assumes you're familiar with IKEv2 fundamentals. If you've worked
 > through the [C8000 IPsec labs](../c8000/ipsec.md), you already know the building
@@ -15,13 +15,13 @@ NETCONF. Do the CLI first, reach for the playbooks after.
 
 ## Feature status
 
-The IPsec and ML-KEM CLI is available across the Catalyst 9300 family starting in
-**IOS XE 26.2** (on 26.1 the commands don't exist). 
+The IPsec and ML-KEM CLI is available across the Cisco 9300 Series Smart Switches
+starting in **IOS XE 26.2** (on 26.1 the commands don't exist). 
 
 ## What you'll build
 
 Four exercises, same progression as the
-[C8000 IPsec doc](../c8000/ipsec.md) but on a Catalyst 9300 switch:
+[C8000 IPsec doc](../c8000/ipsec.md) but on a Cisco 9300 Series Smart Switch:
 
 | Exercise | What it does | Quantum-safe? |
 |----------|-------------|---------------|
@@ -200,9 +200,10 @@ show interface Tunnel0 | include packets
 ```
 
 > **Why not `show crypto ipsec sa | include pkts`?** On C9350 switches, the crypto is
-> offloaded to the Silicon One ASIC. The software counters (`#pkts encaps`) stay at
-> zero because the hardware handles encryption directly. The interface-level counters
-> reflect the actual traffic.
+> offloaded to the Silicon One ASIC. The software counters (`#pkts encaps`) freeze at
+> whatever value the previous SA left behind and never increment, even while the tunnel
+> is actively forwarding traffic. The interface-level counters reflect the actual
+> data plane.
 
 That's your classical baseline. Two things to note:
 

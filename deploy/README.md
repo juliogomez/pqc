@@ -22,7 +22,7 @@ Ansible playbooks for all four protocols live under
 [design notes](c8000/automation/DESIGN.md), and
 [captured hardware runs](c8000/automation/captured/)).
 
-### Cisco C9300 Smart Switches (IOS XE)
+### Cisco 9300 Series Smart Switches (IOS XE)
 
 The access layer: MACsec with EAP-TLS 1.3 using ML-KEM on host-to-switch,
 switch-to-switch, and switch-to-router links, plus SSH and TLS management PQC. Start with the

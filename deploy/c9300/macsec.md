@@ -1,4 +1,4 @@
-# MACsec on C9300 Smart Switches
+# MACsec on Cisco 9300 Series Smart Switches
 
 > **Pre-req:** the container [MACsec lab](../../learn/macsec/README.md) covers the
 > concepts: 802.1X, EAP-TLS, how ML-KEM fits inside a TLS 1.3 handshake, and why

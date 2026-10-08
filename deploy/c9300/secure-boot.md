@@ -1,4 +1,4 @@
-# Secure Boot on Cisco C9300 Smart Switches
+# Secure Boot on Cisco 9300 Series Smart Switches
 
 The other docs in this series are about protocols you *configure*: MACsec policies,
 IKEv2 proposals, SSH KEX algorithms, TLS cipher suites. This one is different.

@@ -1,4 +1,4 @@
-# TLS on C9300 Smart Switches
+# TLS on Cisco 9300 Series Smart Switches
 
 > **Learn it first:** the container labs
 > [TLS key exchange](../../learn/tls/key-exchange/README.md) and

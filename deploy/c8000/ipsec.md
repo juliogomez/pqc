@@ -907,7 +907,7 @@ R1# write memory
 ## Switch-to-router interop
 
 These exercises were run router-to-router, but the same CLI works when one end is a
-Catalyst 9300/9350 switch. We tested classical, ML-KEM, and ML-DSA between a C9350
+Cisco 9300 Series Smart Switch. We tested classical, ML-KEM, and ML-DSA between a C9350
 and a C8235-G2 on 26.2: all working end to end.
 
 See the [switch-to-router interop doc](../switch-router-interop.md#ipsec) for the
