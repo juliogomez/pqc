@@ -5,12 +5,13 @@ KEX algorithms, MACsec policies, TLS cipher suites. This one is different.
 
 Secure boot isn't something you turn on. It's on the moment the router gets power.
 The Trust Anchor module (TAm) starts validating code before a single packet ever
-forwards. 
+forwards.
 
 So why is there an exercise? Because you can *see* it. IOS XE exposes the full
 signature chain, the boot-stage hashes, and the device identity certificates. You can
 verify all of it from the CLI, extract the certs, and check them against Cisco's
-published PKI. More importantly, the output reveals that **the C8235-G2 boot chain is already partially post-quantum**.
+published PKI. More importantly, the output reveals that **the C8235-G2 boot chain is
+already partially post-quantum**.
 
 Everything below was captured on a **C8235-G2** running **IOS XE 26.2**.
 
@@ -113,9 +114,11 @@ The bottom two layers are already post-quantum. The top two are still classical.
 
 ### What is LDWM?
 
-LDWM stands for *Leighton-Diffie-Winternitz-Merkle*. It's a hash-based signature
-scheme, and it's the direct ancestor of **LMS** (Leighton-Micali Signature, RFC 8554),
-which NIST standardized in SP 800-208.
+LDWM stands for *Lamport-Diffie-Winternitz-Merkle*, the four researchers whose work it
+builds on. It's a hash-based signature scheme, and it's the direct ancestor of **LMS**
+(Leighton-Micali Signature, RFC 8554), which NIST standardized in SP 800-208. LMS is
+LDWM plus Leighton and Micali's 1995 adaptation, so the "L" in each acronym is a
+different person. Easy to mix up.
 
 The security of hash-based signatures comes from a completely different place than RSA
 or ECDSA. RSA relies on the hardness of factoring large integers. ECDSA relies on the
@@ -129,11 +132,12 @@ which means you need to double your hash output length to maintain the same secu
 margin. SHA-256 with a 256-bit output still gives you 128 bits of security against a
 quantum adversary, which is plenty.
 
-The tradeoff? Hash-based signatures are *stateful*: the signer has to track how many
-signatures it's generated, because reusing a one-time key breaks the scheme. That's
-fine for firmware signing at Cisco's build servers (they sign each image once). It would
-be terrible for a protocol that signs packets on the fly, which is why IKEv2 and TLS
-use ML-DSA instead.
+The tradeoff? LDWM and LMS are *stateful*: the signer has to track how many signatures
+it's generated, because reusing a one-time key breaks the scheme. That's fine for
+firmware signing at Cisco's build servers (they sign each image once). It would be
+terrible for a protocol that signs packets on the fly, which is why IKEv2 and TLS use
+ML-DSA instead. Not every hash-based scheme is stateful: SLH-DSA (FIPS 205) is
+stateless, and pays for it with much bigger signatures.
 
 Cisco's
 [Post-Quantum Trust Anchors white paper](https://www.cisco.com/c/dam/en_us/about/doing_business/trust-center/docs/post-quantum-trust-anchors-wp.pdf)
@@ -143,9 +147,11 @@ explains this design choice:
 > or inauthentic binary images. The post-quantum signature algorithm for general use is
 > ML-DSA.*
 
-LDWM has been in Cisco Trust Anchor modules since 2013. Newer G2 models
-(C8211-G2, C8221-G2, C8221L-G2, C8225-G2) use the NIST-standardized LMS; the C8235-G2
-uses the older LDWM. Same family, same quantum resistance, different vintage.
+Cisco's LDWM-based image signing work dates back to 2013, and the scheme shows up both
+as a firmware verification algorithm across many platforms and inside FPGA-based Trust
+Anchor modules. Newer G2 models (C8211-G2, C8221-G2, C8221L-G2, C8225-G2) use the
+NIST-standardized LMS; the C8235-G2 uses the older LDWM. Same family, same quantum
+resistance, different vintage.
 
 
 ## Exercise 2: Verify boot integrity measurements
@@ -155,14 +161,14 @@ the *hashes* of what actually booted, signed by the device so you can prove the
 measurements are genuine.
 
 ```
-show platform integrity sign nonce 12345
+show platform integrity sign nonce 99999
 ```
 
 Pick any nonce you like. The nonce is included in the signature, which prevents replay
 attacks: someone can't record the output from a known-good boot and play it back later
 after tampering with the image.
 
-Here's what we got (nonce `99999`):
+Here's what we got:
 
 ```
 Platform: C8235-G2
@@ -209,7 +215,7 @@ is how Zero Touch Provisioning (ZTP), Plug-and-Play (PnP), and other onboarding
 mechanisms know they're talking to a genuine Cisco device and not a counterfeit.
 
 ```
-show platform sudi certificate sign nonce 12345
+show platform sudi certificate sign nonce 99999
 ```
 
 The output is three PEM-encoded certificates plus a signature:
@@ -251,9 +257,8 @@ at [https://www.cisco.com/security/pki/](https://www.cisco.com/security/pki/).
 The device certificate encodes the Product ID and Serial Number in the Subject field,
 so each router on a network of thousands can be uniquely identified.
 
-All three certificates use **RSA 2048 with SHA-256**. Because the top two are published
-at the Cisco PKI index, you can validate any device's identity offline against a root
-you already trust.
+All three certificates use **RSA 2048 with SHA-256**, so once you've pinned the root you
+can validate any device's identity offline.
 
 > **Security Review:** These are manufacturing-installed identity certificates. The
 > RSA 2048 key strength and SHA-256 signature algorithm meet current security
@@ -276,14 +281,12 @@ Here's where the boot chain stands on the C8235-G2 today, and what's coming:
 
 The bottom of the stack got PQC first because it's the hardest to update. The TAm and
 microloader are burned into hardware; if a quantum computer could forge their signatures,
-you'd need to physically replace the chip. LDWM has been protecting that layer since
-2013.
+you'd need to physically replace the chip. LDWM has been Cisco's answer at that layer
+since the work started in 2013.
 
 The top of the stack (image signing) is easier to update through software releases, so
 it's further back in the queue. Cisco's roadmap calls for ML-DSA-87 image signing on
-the G2 line. Some smaller models
-(C8211-G2, C8221-G2, C8221L-G2, C8225-G2) already have NIST LMS at the bootloader
-level; the C8235-G2 uses the older LDWM, which is the same hash-based signature family.
+the G2 line.
 
 The practical takeaway: the part of the boot chain that's hardest to fix later is
 already quantum-safe. The part that's easiest to update through a software release is
