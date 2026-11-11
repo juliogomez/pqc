@@ -137,12 +137,14 @@ hand as you went.
 Images are kept in all cases, so re-running a lab later is instant rather than another
 from-source build.
 
-One bit of Docker housekeeping worth knowing about. The four labs with a one-shot `certgen`
-or `keygen` service leave an empty `<project>_default` network behind after `docker compose
-down`, because the network was created by `compose run` rather than by `compose up`. Harmless
-in itself, but each one grabs an auto-assigned `/16`, and these labs pin their own subnets
-(`172.20.0.0/24` through `172.25.0.0/24`) specifically to avoid collisions. If you run the
-labs a few times, sweep them up:
+One bit of Docker housekeeping worth knowing about. The labs pin their own subnets
+(`172.20.0.0/24` through `172.25.0.0/24`), and anything Docker numbers on its own grabs an
+auto-assigned `/16` from that same `172.x` range. That's why the one-shot `certgen` and
+`keygen` helpers (and the lattice lab) run with `network_mode: none`: they don't need a
+network, so they never leave a stray `/16` behind to collide with a lab you come back to
+later. If you ever do see `Pool overlaps with other one on this address space` on `docker
+compose up` (some other project on your machine can still hold a `172.x` `/16`), sweep up the
+unused networks and retry:
 
 ```bash
 docker network prune

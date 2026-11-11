@@ -646,7 +646,7 @@ What to look for:
 | Largest single packet | 357 B | 1252 B (ML-KEM-768 public key, fragmented) |
 | Fragmented packets | None | 2: ML-KEM public key (1184 B) split across fragments |
 | IKE_AUTH size | identical: 357 B / 213 B | identical: 357 B / 213 B |
-| Handshake time | ~20 ms | ~21 ms |
+| Handshake time | ~10-20 ms | ~15-25 ms |
 | Quantum-safe | No | Yes |
 
 > **Why might the classical capture show 5 lines instead of 4?** `-i any` on Linux *can* capture the outgoing `IKE_SA_INIT[I]` twice: once as `Out` (leaving the socket) and once as `P` (promiscuous pass-through on the Docker bridge). When it does, both lines show the same length (232 B) and nearly identical timestamps: a capture artifact, not an extra protocol message. Whether the duplicate appears depends on the host's bridge, so you may see 4 lines or 5; either is fine. The hybrid capture doesn't show the duplicate because the later messages switch to port 4500 before the same condition is triggered.
@@ -767,7 +767,7 @@ wait $TCPDUMP_PID 2>/dev/null
 tcpdump -r /tmp/ppk.pcap -n -vv
 ```
 
-Trimmed and annotated (byte counts are illustrative, yours will differ slightly):
+Trimmed and annotated (cookies and nonces will differ, the lengths won't):
 
 ```
 # IKE_SA_INIT request: cleartext on port 500.  USE_PPK is advertised right here, in the open.
@@ -779,15 +779,15 @@ Out 172.20.0.2.500 > 172.20.0.3.500   length 268
     (n: prot_id=#0 type=16435(status))              # → N(USE_PPK)  (RFC 8784): "I support mixing a PPK"
 
 # IKE_SA_INIT response: responder echoes USE_PPK back, both sides agree to fold in a PPK
-In  172.20.0.3.500 > 172.20.0.2.500   length 268
+In  172.20.0.3.500 > 172.20.0.2.500   length 276
   parent_sa ikev2_init[R]: (sa: ...X25519 only...) (v2ke: len=32) (n: ...type=16435(status))
   #  → both sides derive the X25519 secret AND know a PPK will be mixed in
 
 # IKE_AUTH: encrypted.  PPK_ID lives in here, but you CANNOT see it: it's inside the SK payload.
-Out 172.20.0.2.4500 > 172.20.0.3.4500  length 397
-  child_sa ikev2_auth[I]: (v2e: len=...)            # N(PPK_ID) is hidden inside, and the PPK secret is NEVER sent
-In  172.20.0.3.4500 > 172.20.0.2.4500  length 241
-  child_sa ikev2_auth[R]: (v2e: len=...)
+Out 172.20.0.2.4500 > 172.20.0.3.4500  length 405
+  child_sa ikev2_auth[I]: (v2e: len=341)            # N(PPK_ID) is hidden inside, and the PPK secret is NEVER sent
+In  172.20.0.3.4500 > 172.20.0.2.4500  length 249
+  child_sa ikev2_auth[R]: (v2e: len=185)
 #  → 2 round trips · NO child_sa #43 (no IKE_INTERMEDIATE) · NO #53 (no fragments) · classical KE + a hidden PPK
 ```
 
@@ -856,6 +856,8 @@ All done? Let's tidy up. Terminate any active IKE SA from inside the initiator c
 swanctl --terminate --ike pqc-tunnel
 exit
 ```
+
+If you just finished Exercise 3 Step 3, there's no SA left (the mismatched PPK killed it), so `swanctl` answers `terminate failed: no matching SAs to terminate found`. That's expected.
 
 Then, from your **host** in the `learn/ipsec/key-exchange/` directory, stop the containers
 and snap the config back:

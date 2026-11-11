@@ -452,7 +452,7 @@ From the **client**, ask for the composite type on both the host key and your us
 ```bash
 # client container
 ALG=ssh-mldsa44-ed25519@openssh.com
-ssh -F /cfg/ssh_config -o HostKeyAlgorithms=$ALG -o PubkeyAcceptedAlgorithms=$ALG -v ssh-server 'echo PQ_AUTH_OK' \
+ssh -F /cfg/ssh_config -o HostKeyAlgorithms=$ALG -o PubkeyAcceptedAlgorithms=$ALG -v ssh-server 'echo PQ_AUTH_OK' 2>&1 \
   | grep -iE 'kex: algorithm|host key algorithm|Server accepts key|Authenticated to|PQ_AUTH_OK'
 ```
 
@@ -461,6 +461,7 @@ debug1: kex: algorithm: mlkem768x25519-sha256
 debug1: kex: host key algorithm: ssh-mldsa44-ed25519@openssh.com
 debug1: Server accepts key: /cfg/id_key MLDSA44-ED25519 SHA256:... explicit
 Authenticated to ssh-server ([172.24.0.2]:22) using "publickey".
+debug1: Sending command: echo PQ_AUTH_OK
 PQ_AUTH_OK
 ```
 

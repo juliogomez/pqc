@@ -482,7 +482,7 @@ Notice `n` appears twice at different values, and it's worth pinning down why. T
 docker exec lattice-lab python3 attack_scaling.py
 
 # or pass your own dimensions, then rerun reaching higher to watch the time explode
-docker exec lattice-lab python3 attack_scaling.py 60 70 80
+docker exec lattice-lab python3 attack_scaling.py 60 65 68
 ```
 
 Now we *attack* LWE for real. The script builds genuine LWE instances, embeds each as a "unique shortest vector" problem (the standard **primal** attack), and unleashes `fpylll`'s LLL and BKZ on it, timing each as the dimension climbs:
@@ -505,7 +505,7 @@ The script then extrapolates to real parameters, where the attack lattice has di
 
 You just watched, in wall-clock seconds, the thing the theory promised: the cost of breaking a lattice explodes with dimension, and no known quantum trick changes that verdict. *That's* why ML-KEM and ML-DSA are safe.
 
-> **Push it further.** The dimensions are now a command-line argument, so you don't have to edit anything: run it once with the defaults, then run it again reaching higher, e.g. `docker exec lattice-lab python3 attack_scaling.py 60 70 80`, and compare the `time (s)` column across the two runs. The jump from `1.62s` to `3.54s` in the table above barely hints at what's coming; push past `n ≈ 60` and the seconds don't add up, they *multiply*, so each new row makes you wait dramatically longer than the last (add `--max-block 60` if a large instance refuses to solve). That growing impatience you feel, run over run, *is* the exponential wall, and it's the security.
+> **Push it further.** The dimensions are now a command-line argument, so you don't have to edit anything: run it once with the defaults, then run it again reaching higher, e.g. `docker exec lattice-lab python3 attack_scaling.py 60 65 68`, and compare the `time (s)` column across the two runs. The jump from `1.62s` to `3.54s` in the table above barely hints at what's coming; push past `n ≈ 60` and the seconds don't add up, they *multiply*. Each run draws a fresh random instance, so times swing: on an 8-core cloud VM we saw `n = 65` take 7-16 s, `n = 68` anywhere from 18 s (BKZ-20 was enough) to over 3 minutes (it needed BKZ-25), and `n = 70` over 20 minutes. `n = 80` runs for hours, so don't wait on it in a workshop (and add `--max-block 60` if a large instance refuses to solve). That growing impatience you feel, run over run, *is* the exponential wall, and it's the security.
 
 ---
 

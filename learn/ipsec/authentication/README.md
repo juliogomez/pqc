@@ -165,9 +165,9 @@ The IETF's LAMPS working group is standardising composite signatures for X.509, 
 Two tools carry this lab, and they do genuinely different jobs, so it's worth being clear on who does what up front:
 
 - **[OpenSSL 3.5+](https://openssl-library.org/)** is the **workbench for the standalone cert lab**. It has **native** support for all three NIST PQC algorithms (ML-KEM/FIPS 203, ML-DSA/FIPS 204, and SLH-DSA/FIPS 205) straight from the default provider: no external libraries, no patches, no `oqs-provider`. We lean on it to generate post-quantum keys, mint certificates, weigh them, and sign/verify/tamper (Exercises 1–3). It's the universal crypto CLI everyone already knows, it runs standalone in a throwaway `alpine` container with no compiling, and its PQC support is in a *stable* release, which together make it the most convenient, reproducible way to dissect a PQC certificate today.
-- **strongSwan** is the **protocol engine for the live tunnel**. It's the same IKEv2 daemon from the key-exchange lab, and we put it to work twice in the live exercises: the **stable** release for classical (ECDSA) certificate auth, and the **experimental `ml-dsa` branch** for post-quantum (ML-DSA) certificate auth. Where that branch stands is covered in Exercise 5 below.
+- **strongSwan** is the **protocol engine for the live tunnel**. It's the same IKEv2 daemon from the key-exchange lab, and we put it to work twice in the live exercises: the **stable** release for classical (ECDSA) certificate auth, and an **unreleased development build** (a pinned `master` commit with experimental ML-DSA support) for post-quantum (ML-DSA) certificate auth. Where that code stands is covered in Exercise 5 below.
 
-The division of labor is the thing to keep straight: **OpenSSL is a crypto toolkit, not a VPN; strongSwan is a VPN daemon, not a crypto toolkit.** So we use OpenSSL to *understand* certificates in isolation (measure the size hit, watch a signature reject a tampered byte), then switch to strongSwan to *use* certificates for real on an IKEv2 wire. One honest caveat carries over from the companion lab: OpenSSL isn't an IKEv2 implementation (its PQC support targets TLS), so anything happening *on the VPN wire*, key exchange there and authentication here, is strongSwan's job. And note the split isn't quite "OpenSSL makes the certs, strongSwan uses them": the *live-tunnel* certs are actually minted by strongSwan's own `pki` tool inside `gen-certs.sh`, so OpenSSL's role is purely the standalone cert lab. Finally, while ML-KEM key exchange ships in stable strongSwan, post-quantum *authentication* over IKEv2 only exists on an experimental branch today, which is exactly what makes the post-quantum authentication run a peek over the frontier.
+The division of labor is the thing to keep straight: **OpenSSL is a crypto toolkit, not a VPN; strongSwan is a VPN daemon, not a crypto toolkit.** So we use OpenSSL to *understand* certificates in isolation (measure the size hit, watch a signature reject a tampered byte), then switch to strongSwan to *use* certificates for real on an IKEv2 wire. One honest caveat carries over from the companion lab: OpenSSL isn't an IKEv2 implementation (its PQC support targets TLS), so anything happening *on the VPN wire*, key exchange there and authentication here, is strongSwan's job. And note the split isn't quite "OpenSSL makes the certs, strongSwan uses them": the *live-tunnel* certs are actually minted by strongSwan's own `pki` tool inside `gen-certs.sh`, so OpenSSL's role is purely the standalone cert lab. Finally, while ML-KEM key exchange ships in stable strongSwan, post-quantum *authentication* over IKEv2 only exists in unreleased development code today, which is exactly what makes the post-quantum authentication run a peek over the frontier.
 
 ---
 
@@ -354,7 +354,7 @@ Remember the key-exchange lab, where we stood up two containers and watched them
 We'll do it twice, and the progression is the whole point:
 
 - **First, classical auth with ECDSA (today's posture).** Each peer authenticates with an **ECDSA** certificate. Rock-solid, runs on stable strongSwan. And here's the neat part: we keep the **ML-KEM hybrid key exchange** switched on, so the tunnel is already *post-quantum for key exchange*, just classical for the signature. That's exactly the posture real deployments, like 5G fronthauls, ship right now.
-- **Then, post-quantum auth with ML-DSA (the new stuff).** We swap the ECDSA certs for **ML-DSA** ones and rebuild strongSwan from its experimental `ml-dsa` branch. Now *both* halves of the handshake are quantum-safe: ML-KEM for the key exchange, ML-DSA for the signature. Fair warning: this is the frontier, and it behaves like the frontier. We'll be honest about the rough edges.
+- **Then, post-quantum auth with ML-DSA (the new stuff).** We swap the ECDSA certs for **ML-DSA** ones and rebuild strongSwan from unreleased development code. Now *both* halves of the handshake are quantum-safe: ML-KEM for the key exchange, ML-DSA for the signature. Fair warning: this is the frontier, and it behaves like the frontier. We'll be honest about the rough edges.
 
 > **Heads up:** this part uses its own little stack (`learn/ipsec/authentication/docker-compose.yml`) on its own network, completely separate from the key-exchange lab. Nothing here touches that lab's PSK setup. You'll need Docker, and the first build compiles strongSwan from source, same as before.
 
@@ -386,7 +386,7 @@ That builds the (stable) strongSwan image and starts `ike-auth-initiator` (172.2
 docker compose run --rm --build certgen ecdsa
 ```
 
-The `certgen` helper builds a CA and issues an ECDSA leaf cert for each peer, installing the leaf cert, its private key, and the CA cert into the right folders for both sides. (The `--build` flag makes sure the helper is built from the same image as the peers; this matters once we move to ML-DSA, where the helper must come from the `ml-dsa` branch. Pass `ecdsa` now; we'll pass an ML-DSA variant when we go post-quantum.)
+The `certgen` helper builds a CA and issues an ECDSA leaf cert for each peer, installing the leaf cert, its private key, and the CA cert into the right folders for both sides. (The `--build` flag makes sure the helper is built from the same image as the peers; this matters once we move to ML-DSA, where the helper must come from the ML-DSA development build. Pass `ecdsa` now; we'll pass an ML-DSA variant when we go post-quantum.)
 
 **Step 3: Load the fresh credentials**
 
@@ -465,17 +465,17 @@ exit
 
 ### Exercise 5 (bleeding edge): post-quantum auth with ML-DSA
 
-Time to make the *signature* quantum-safe too. This means swapping in strongSwan's experimental `ml-dsa` branch and reissuing the certificates as ML-DSA.
+Time to make the *signature* quantum-safe too. This means swapping in a strongSwan development build with ML-DSA support and reissuing the certificates as ML-DSA.
 
-> **Expectation setting:** this is genuinely experimental. The branch changes often, the IKEv2-for-PQC-auth wire format is still an [IETF draft](https://datatracker.ietf.org/doc/draft-ietf-ipsecme-ikev2-pqc-auth/), and there are known sharp edges (ML-DSA private keys only parse in the 32-byte *seed* format, and large `IKE_AUTH` messages that split into *many* fragments have hit reassembly bugs; see strongSwan [issue #2889](https://github.com/strongswan/strongswan/issues/2889)). To stay on the happy path we use **ML-DSA-44** (the smallest variant) and keep the CA off the wire, which holds the handshake to 6 fragments, and in our testing the tunnel comes up cleanly. Push to larger variants or longer cert chains and you can absolutely tip it over; that's the frontier doing frontier things.
+> **Expectation setting:** this is genuinely experimental. ML-DSA support lives on strongSwan's `master`, but no release (6.1.0 included) ships it yet. So `Dockerfile.mldsa` pins a known-good `master` commit (`ML_DSA_REF`), that code keeps moving, the IKEv2-for-PQC-auth wire format is still an [IETF draft](https://datatracker.ietf.org/doc/draft-ietf-ipsecme-ikev2-pqc-auth/), and there are known sharp edges (ML-DSA private keys only parse in the 32-byte *seed* format, and large `IKE_AUTH` messages that split into *many* fragments have hit reassembly bugs; see strongSwan [issue #2889](https://github.com/strongswan/strongswan/issues/2889)). To stay on the happy path we use **ML-DSA-44** (the smallest variant) and keep the CA off the wire, which holds the handshake to 6 fragments, and in our testing the tunnel comes up cleanly. Push to larger variants or longer cert chains and you can absolutely tip it over; that's the frontier doing frontier things.
 
-**Step 1: Rebuild the peers from the `ml-dsa` branch**
+**Step 1: Rebuild the peers from the ML-DSA development build**
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.mldsa.yml up -d --build
 ```
 
-The override (`docker-compose.mldsa.yml`) points the build at `Dockerfile.mldsa`, which compiles strongSwan from the `ml-dsa` branch. The *first* build compiles from source; after that Docker caches the compiled layer, so re-running this command is near-instant unless you change the Dockerfile or bust the cache.
+The override (`docker-compose.mldsa.yml`) points the build at `Dockerfile.mldsa`, which compiles strongSwan from the pinned `master` commit. The *first* build compiles from source (about a minute on 8 cores); after that Docker caches the compiled layer, so re-running this command is near-instant unless you change the Dockerfile or bust the cache.
 
 **Step 2: Reissue the certificates as ML-DSA**
 
@@ -483,7 +483,7 @@ The override (`docker-compose.mldsa.yml`) points the build at `Dockerfile.mldsa`
 docker compose -f docker-compose.yml -f docker-compose.mldsa.yml run --rm --build certgen ml-dsa-44
 ```
 
-Same helper, different algorithm: the CA and both leaf certs are now ML-DSA-44. (The `--build` flag is doing real work here: it rebuilds the helper from the `ml-dsa` branch, whose `pki` tool knows the `mldsa44/65/87` key types. Without it you'd reuse the helper image from the ECDSA run (built from stable strongSwan, whose `pki` doesn't know those types) and get `error: invalid key type`.) Notice we didn't touch `swanctl.conf` at all: `auth = pubkey` is algorithm-agnostic, so strongSwan figures out it's ML-DSA straight from the certificate's key type. (That's a genuinely nice property of how this slots into the existing framework.)
+Same helper, different algorithm: the CA and both leaf certs are now ML-DSA-44. (The `--build` flag is doing real work here: it rebuilds the helper from the ML-DSA development build, whose `pki` tool knows the `mldsa44/65/87` key types. Without it you'd reuse the helper image from the ECDSA run (built from stable strongSwan, whose `pki` doesn't know those types) and get `error: invalid key type`.) Notice we didn't touch `swanctl.conf` at all: `auth = pubkey` is algorithm-agnostic, so strongSwan figures out it's ML-DSA straight from the certificate's key type. (That's a genuinely nice property of how this slots into the existing framework.)
 
 **Step 3: Reload and initiate**
 
@@ -558,7 +558,7 @@ You'll see *two* outbound messages getting chopped up:
 Each one is a different post-quantum payload straining the MTU:
 
 - The **~1.2 KB message → 2 fragments** is the **ML-KEM key exchange** (carried in `IKE_INTERMEDIATE`, RFC 9370). This one shows up in the ECDSA run too; the key exchange is post-quantum either way.
-- The **~6.9 KB message → 6 fragments** is the **`IKE_AUTH`** carrying the ML-DSA leaf cert plus the ML-DSA signature. *This* split is unique to the post-quantum-auth run: an ML-DSA-44 leaf cert (~4 KB DER) plus its signature dwarfs the ~400-byte ECDSA equivalent. For comparison, in the ECDSA run `IKE_AUTH` fit in a single ~900-byte packet and never split; only the key exchange fragmented there.
+- The **~6.9 KB message → 6 fragments** is the **`IKE_AUTH`** carrying the ML-DSA leaf cert plus the ML-DSA signature. *This* split is unique to the post-quantum-auth run: an ML-DSA-44 leaf cert (~4 KB DER) plus its signature dwarfs the ~400-byte ECDSA equivalent. For comparison, in the ECDSA run `IKE_AUTH` fit in a single ~970-byte packet and never split; only the key exchange fragmented there.
 
 This is *why* `fragmentation = yes` is non-negotiable for PQC auth, and why the fragment-reassembly path is exactly where the current bugs live.
 

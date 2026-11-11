@@ -95,7 +95,7 @@ One tool carries this whole lab: **[OpenSSL 3.5+](https://openssl-library.org/)*
 
 Both containers here run OpenSSL 3.5. A small script (`gen-certs.sh`) mints the CA and the server and client certificates for you, in either ECDSA or ML-DSA, so you can switch between them by changing one word on the command line.
 
-And here is a difference from the IKEv2 authentication lab: post-quantum certificate authentication in TLS works on **stable** OpenSSL 3.5, while ML-DSA authentication in IKEv2 still needs an experimental strongSwan branch. The TLS "plumbing" is more mature. (See [Where TLS authentication stands today](#where-tls-authentication-stands-today) for the honest caveats.)
+And here is a difference from the IKEv2 authentication lab: post-quantum certificate authentication in TLS works on **stable** OpenSSL 3.5, while ML-DSA authentication in IKEv2 still needs an unreleased strongSwan development build. The TLS "plumbing" is more mature. (See [Where TLS authentication stands today](#where-tls-authentication-stands-today) for the honest caveats.)
 
 ---
 
@@ -330,7 +330,7 @@ That's a wrap! You generated post-quantum certificates, measured the size jump, 
 
 "This is great," you might be thinking, "but can I get an ML-DSA certificate for my real website today?" Short answer: not yet, and here is the honest picture.
 
-- **The crypto is ready and stable.** OpenSSL 3.5 supports ML-DSA keys, certificates, and TLS authentication in its default provider. That is why this lab runs on a stable release, unlike the IKEv2 authentication lab, which needs an experimental strongSwan branch.
+- **The crypto is ready and stable.** OpenSSL 3.5 supports ML-DSA keys, certificates, and TLS authentication in its default provider. That is why this lab runs on a stable release, unlike the IKEv2 authentication lab, which needs an unreleased strongSwan development build.
 - **No public CA issues post-quantum certificates yet.** Browsers and operating systems do not trust ML-DSA roots, so for now post-quantum certificates only work with a **local CA** or self-signed certificates, exactly like the lab CA we built here.
 - **The TLS code points are still settling.** The signature scheme identifiers that let TLS negotiate ML-DSA are recent and still moving through the IETF TLS working group. OpenSSL implements them, but expect details to shift before everything is final. One practical quirk: if a server offers both a classical and an ML-DSA certificate, OpenSSL often prefers the classical one, so you may need `-sigalgs mldsa65` to force the post-quantum choice. (In this lab the server holds *only* an ML-DSA certificate, so it is always chosen.)
 

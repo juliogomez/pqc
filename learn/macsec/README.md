@@ -230,7 +230,7 @@ They are joined by a **veth pair** (a virtual Ethernet "cable"): `aut` on the au
 
 ### Prerequisites
 
-**Docker** with the Compose v2 plugin, and three terminals: two for the container shells (authenticator and supplicant) and one on your host for "docker compose" commands like reissuing certificates. Everything the handshake needs, wpa_supplicant, hostapd, OpenSSL 3.5, `tcpdump`, and `tshark`, is compiled into the image. One caveat to know going in: this lab exercises the EAP-TLS *handshake*, which runs on any Docker host, but actually encrypting frames with the kernel MACsec driver needs a kernel built with `CONFIG_MACSEC` (Docker Desktop's LinuxKit kernel doesn't have it), so the data plane itself is out of scope, see [A note on the data plane](#a-note-on-the-data-plane) at the end for how you'd drive it on a Linux host.
+**Docker** with the Compose v2 plugin, and three terminals: two for the container shells (authenticator and supplicant) and one on your host for "docker compose" commands like reissuing certificates. Everything the handshake needs, wpa_supplicant, hostapd, OpenSSL 3.5, `tcpdump`, and `tshark`, is compiled into the image. One caveat to know going in: this lab exercises the EAP-TLS *handshake*, which runs on any Docker host, but actually encrypting frames with the kernel MACsec driver needs a kernel built with `CONFIG_MACSEC` (Docker Desktop's LinuxKit kernel doesn't have it), so the data plane itself is out of scope, see [A note on the data plane](#a-note-on-the-data-plane) at the end for why there's nothing post-quantum to do there anyway.
 
 ### Build and start
 
@@ -411,6 +411,7 @@ Then, in the **authenticator** shell, start the capture and the EAP server:
 
 ```bash
 # start capture in the background (same filename as Exercise 1's baseline)
+rm -f /tmp/ecdsa.pcap
 tcpdump -i aut -w /tmp/ecdsa.pcap -U 'ether proto 0x888e' &
 TCPDUMP_PID=$!
 
@@ -658,6 +659,7 @@ In the **authenticator** shell, clear leftovers, then start the capture and EAP 
 
 ```bash
 pkill hostapd; pkill tcpdump; sleep 1
+rm -f /tmp/mldsa.pcap
 tcpdump -i aut -w /tmp/mldsa.pcap -U 'ether proto 0x888e' &
 TCPDUMP_PID=$!
 sleep 1
@@ -698,7 +700,7 @@ grep -ac "more fragments will follow" /tmp/w.log
 **8 client fragments, up from the 1 you measured in the [ECDSA baseline](#exercise-1-run-the-eap-tls-handshake-ecdsa-baseline).** This counts only the times the *client* split its outgoing TLS data (`SSL: sending 1398 bytes, more fragments will follow`). One of these 8 is the same ClientHello/ML-KEM split we saw with ECDSA; the **other 7 are new**: the now-large ML-DSA client certificate plus `CertificateVerify` that no longer fit in a single EAP message.
 
 > **Why does the frame count not grow in the same proportion?** 14 -> 42 is only ~3x, but 1 -> 8 client fragments is 8x, because the two numbers count *different things*. The **8** is only the *client's* non-final outbound fragments. The **42** is *every* EAPOL frame in the whole exchange, in both directions, and it is increased by two things the fragment count ignores:
-> - **ACKs.** EAP is a strict request/response exchange: each ~1.4 KB fragment must be acknowledged by an empty ~24-byte frame from the far end before the next is sent. So each fragment costs *two* frames (data + ACK), not one. In this capture, 16 of the 42 frames carry large fragments and the other 26 are small ACK/control frames.
+> - **ACKs.** EAP is a strict request/response exchange: each ~1.4 KB fragment must be acknowledged by an empty ~24-byte frame from the far end before the next is sent. So each fragment costs *two* frames (data + ACK), not one. In this capture, 16 of the 42 frames are full ~1.4 KB fragments, 2 more are the shorter final pieces of a fragmented message, and the other 24 are small ACK/control frames.
 > - **The server fragments too.** With ML-DSA the *server* also sends its ~4 KB certificate in ~9 pieces (each with its own ACK); none of that shows up in the client-side `more fragments will follow` count, but all of it adds frames.
 >
 > On top of that there is a fixed block of overhead frames (identity exchange, TLS-start, the closing Finished / `EAP-Success`) that does not change with certificate size. So the total frame count and the client-fragment count measure different parts of the handshake and grow at different rates.
@@ -710,7 +712,7 @@ grep -ac "more fragments will follow" /tmp/w.log
 docker compose run --rm certgen ml-dsa-65
 ```
 
-Then re-run the handshake and capture in terminals 1 and 2, exactly as in Step 2.
+Then re-run the handshake and capture in terminals 1 and 2, exactly as in Step 2. Keep the `rm -f /tmp/mldsa.pcap` line: on a Linux host, `tcpdump` can't overwrite a capture file it wrote earlier in `/tmp` (it writes as the unprivileged `tcpdump` user, and the kernel's `protected_regular` rule blocks the reopen), so without it the capture fails with `Permission denied` and you'd count the old ML-DSA-44 frames again.
 
 The pattern measured in this lab:
 
