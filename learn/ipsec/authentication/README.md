@@ -548,7 +548,7 @@ This is the lesson even if the tunnel is fussy to bring up. Look at the initiato
 docker logs ike-auth-initiator | grep -iE "splitting IKE message"
 ```
 
-You'll see *two* outbound messages getting chopped up:
+You'll see *two* outbound messages getting chopped up (the second one's byte count can wobble by a few dozen bytes between runs, the fragment counts won't):
 
 ```
 [ENC] splitting IKE message (1249 bytes) into 2 fragments
