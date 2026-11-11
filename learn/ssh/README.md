@@ -6,7 +6,7 @@ Almost everything we do to a server, we do over **SSH**: admin shells, `git push
 
 SSH has a surprisingly good answer, and a surprisingly honest one. Its **key exchange** is already post-quantum, and not as an opt-in curiosity: it is the **negotiated default** in current OpenSSH, on before you touch a single setting. Its **authentication** (the host keys and user keys that prove identity) is the piece still catching up, but as of **OpenSSH 10.4** you can now turn on a post-quantum signature and watch it work too.
 
-We find all of this the same way as the other labs in this repo: start two containers **on your own workstation**, run a real SSH handshake between them, and capture the packets to see the post-quantum crypto for ourselves. The only tool you need installed is **Docker**.
+We find all of this the same way as the other labs in this repo: start two containers, run a real SSH handshake between them, and capture the packets to see the post-quantum crypto for ourselves. The only tool you need installed is **Docker**.
 
 Ready? Let's start.
 
@@ -164,7 +164,7 @@ Both idle on startup; you drive `sshd` and `ssh` by hand via `docker exec` (like
 
 ### Build and start
 
-Everything runs **locally on your workstation**. Clone the repo and run all commands from the `learn/ssh/` directory:
+Clone the repo and run all commands from the `learn/ssh/` directory:
 
 ```bash
 cd learn/ssh

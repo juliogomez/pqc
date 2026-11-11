@@ -4,7 +4,7 @@
 
 So… you've heard that quantum computers are going to break all our encryption someday, and you're wondering what on earth we can actually do about it *today*. Great news: you're in the right place, and we're going to get our hands dirty.
 
-In this lab we'll spin up two tiny Docker containers **right on your own local workstation** (your laptop or desktop, no cloud, no special hardware), have them act as VPN peers, and watch them negotiate a **hybrid** key exchange that mixes good old **classical Diffie-Hellman** with the shiny new **post-quantum ML-KEM**, all inside a real IKEv2 handshake. Then we'll capture the traffic and see the difference with our own eyes. No magic, no zillion-line examples from some expert… just you, me, and a couple of containers running locally. The only thing you need installed is **Docker**.
+In this lab we'll spin up two tiny Docker containers, have them act as VPN peers, and watch them negotiate a **hybrid** key exchange that mixes good old **classical Diffie-Hellman** with the shiny new **post-quantum ML-KEM**, all inside a real IKEv2 handshake. Then we'll capture the traffic and see the difference with our own eyes. No magic, no zillion-line examples from some expert… just you, me, and a couple of containers. The only thing you need installed is **Docker**.
 
 Ready? Let's get started.
 
@@ -201,7 +201,7 @@ Enough theory, let's run it. Here's the plan:
 
 ### Build and start
 
-Everything in this lab runs **locally on your own workstation**. The two VPN peers are just Docker containers on your machine talking to each other over a private Docker bridge network; there's no cloud, no remote server, and no special hardware involved. If you have Docker installed, you have everything you need. Clone the repo, and run all commands in this lab from the `learn/ipsec/key-exchange/` directory, so hop in first:
+The two VPN peers are just Docker containers talking to each other over a private Docker bridge network, with no special hardware involved. If you have Docker installed, you have everything you need. Clone the repo, and run all commands in this lab from the `learn/ipsec/key-exchange/` directory, so hop in first:
 
 ```bash
 cd learn/ipsec/key-exchange
@@ -211,7 +211,7 @@ cd learn/ipsec/key-exchange
 # Build images locally (takes ~5 min on first run, compiles strongSwan from source)
 docker compose build
 
-# Start both containers on your workstation
+# Start both containers
 docker compose up -d
 
 # Verify both are running
@@ -421,10 +421,10 @@ Three things worth pausing on:
 - **`IKE_SA_INIT` only promises ML-KEM; it doesn't carry it.** The `(v2ke: len=32)` payload is just the tiny X25519 key. The chunky ML-KEM key doesn't appear until `IKE_INTERMEDIATE`: keep the base exchange small and standard, ride the big PQC payload in the extra round trip.
 - **The 1280-byte ceiling is right there in the capture.** strongSwan sized fragment 1 to exactly 1280 B and spilled the rest into a 98 B second fragment.
 
-**Optional: copy the capture to your workstation for Wireshark.** Run this **from your host, not from inside the container** (open a new terminal window; keep the container shell for Step 7):
+**Optional: copy the capture to your host for Wireshark.** Run this **from your host, not from inside the container** (open a new terminal window; keep the container shell for Step 7):
 
 ```bash
-# Run this on your workstation, NOT inside the container
+# Run this on your host, NOT inside the container
 docker cp ike-initiator:/tmp/capture.pcap ~/Desktop/ike_capture.pcap
 ```
 
@@ -476,7 +476,7 @@ Verify it's gone:
 swanctl --list-sas   # should return empty
 ```
 
-Then leave the initiator's shell and return to your workstation's prompt:
+Then leave the initiator's shell and return to your host's prompt:
 ```bash
 exit
 ```

@@ -4,7 +4,7 @@
 
 The [IKEv2 key-exchange lab](../../ipsec/key-exchange/README.md) made a VPN tunnel quantum-safe. But the secure channel most of the world actually uses every day is **TLS**: the "S" in HTTPS, the thing behind your browser's padlock, your APIs, your email, almost everything. So the obvious question is: **can a TLS connection go post-quantum, and what does it cost?**
 
-In this lab we answer it the same way as the other labs. We spin up two small containers **right on your own workstation**, point one `openssl s_client` at one `openssl s_server`, run a real **TLS 1.3** handshake, and watch them agree on a key with a **hybrid ML-KEM** group called `X25519MLKEM768`. Then we capture the bytes and prove it. The only thing you need installed is **Docker**.
+In this lab we answer it the same way as the other labs. We spin up two small containers, point one `openssl s_client` at one `openssl s_server`, run a real **TLS 1.3** handshake, and watch them agree on a key with a **hybrid ML-KEM** group called `X25519MLKEM768`. Then we capture the bytes and prove it. The only thing you need installed is **Docker**.
 
 Ready? Let's find out.
 
@@ -155,11 +155,11 @@ Two containers on a private Docker network:
 
 ### Pre-requisites
 
-**Docker** with the Compose v2 plugin (the `docker compose` subcommand), plus two terminal windows: one for the server container, one for the client. OpenSSL 3.5, `tcpdump`, and `tshark` all live inside the image, so there is nothing to install on your workstation. The first `docker compose build` pulls the required components; every run after that is quick. If you have already done the [IKEv2 key-exchange lab](../../ipsec/key-exchange/README.md) you'll fly through this one, it's the same story over a different protocol.
+**Docker** with the Compose v2 plugin (the `docker compose` subcommand), plus two terminal windows: one for the server container, one for the client. OpenSSL 3.5, `tcpdump`, and `tshark` all live inside the image, so there is nothing to install on your host. The first `docker compose build` pulls the required components; every run after that is quick. If you have already done the [IKEv2 key-exchange lab](../../ipsec/key-exchange/README.md) you'll fly through this one, it's the same story over a different protocol.
 
 ### Build and start
 
-Everything runs **locally on your workstation**. Run all commands from the `learn/tls/key-exchange/` directory:
+Run all commands from the `learn/tls/key-exchange/` directory:
 
 ```bash
 cd learn/tls/key-exchange

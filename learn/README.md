@@ -10,8 +10,8 @@ Every secure handshake rests on two pillars a quantum computer threatens: **key 
 axes. If that framing is new, read
 [the challenge](../README.md#the-challenge) first.
 
-Nothing here needs hardware. Everything runs in throwaway Docker containers on your laptop,
-so you can break a lab and rerun it as many times as you like.
+Nothing here needs hardware. Everything runs in throwaway Docker containers, so you can
+break a lab and rerun it as many times as you like.
 
 ## Recommended order
 
@@ -107,7 +107,7 @@ An optional deep-dive for when you want to understand the shared module-lattice 
 
 ## Prerequisites
 
-These labs run entirely on **your own local workstation** (laptop or desktop): no cloud, no remote servers, no dedicated hardware. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, OpenSSH, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile their star tool from source (strongSwan, wpa_supplicant/hostapd, or OpenSSH), so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section.
+These labs need no dedicated hardware: any machine with Docker will do, whether that's your own laptop or a shared lab VM. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, OpenSSH, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile their star tool from source (strongSwan, wpa_supplicant/hostapd, or OpenSSH), so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section.
 
 All the Dockerfiles and entrypoints live in [`docker/`](docker/); the compose files in each
 lab reference them, so run `docker compose` from the lab directory rather than from here.

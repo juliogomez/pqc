@@ -4,7 +4,7 @@
 
 The companion [TLS key-exchange lab](../key-exchange/README.md) made sure a future quantum computer can't decrypt your HTTPS traffic. Good. But a secure channel to the *wrong* server is no help at all. So the other half of every TLS handshake is **authentication**: the certificate that proves the server (and sometimes the client) is who it claims to be. And those certificates rely on **digital signatures**, which a quantum computer can also break.
 
-In this lab we generate real certificates with the post-quantum signature algorithm **ML-DSA**, line them up next to today's classical **ECDSA**, and then use both to authenticate a real **mutual TLS** handshake between two containers on your own workstation. We'll see how much bigger the post-quantum certificates are, prove the handshake really signed with ML-DSA, and measure what that does to the bytes on the wire. The only thing you need installed is **Docker**.
+In this lab we generate real certificates with the post-quantum signature algorithm **ML-DSA**, line them up next to today's classical **ECDSA**, and then use both to authenticate a real **mutual TLS** handshake between two containers. We'll see how much bigger the post-quantum certificates are, prove the handshake really signed with ML-DSA, and measure what that does to the bytes on the wire. The only thing you need installed is **Docker**.
 
 Ready? Let's find out who is on the other end.
 
@@ -124,7 +124,7 @@ Both trust one small **CA** we spin up just for the lab. The CA signs a server c
 
 ### Build and start
 
-Everything runs **locally on your workstation**. Run all commands from the `learn/tls/authentication/` directory:
+Run all commands from the `learn/tls/authentication/` directory:
 
 ```bash
 cd learn/tls/authentication

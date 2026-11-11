@@ -260,7 +260,7 @@ A smaller constant in the exponent, but **still exponential**. Shaving a sliver 
 
 ## Let's get our hands dirty: the lab
 
-Enough theory: let's run it. Everything here runs **locally on your own workstation** inside one tiny throwaway Docker container with Python, `numpy`, and `fpylll` (a real lattice-reduction library). Four exercises, each a script you run and can edit:
+Enough theory: let's run it. Everything here runs inside one tiny throwaway Docker container with Python, `numpy`, and `fpylll` (a real lattice-reduction library). Four exercises, each a script you run and can edit:
 
 - **[Exercise 1](#exercise-1-build-a-lattice-good-vs-bad-bases)**: build a lattice, feel the good-vs-bad-basis gap, and watch LLL reduce one.
 - **[Exercise 2](#exercise-2-the-magic-of-noise-lwe)**: break noise-free LWE with linear algebra, then watch noise defeat it.
@@ -290,7 +290,7 @@ docker compose up -d
 docker compose ps
 ```
 
-The `scripts/` directory is mounted into the container at `/lab`, so you can edit the scripts on your workstation and rerun instantly. Run each exercise with `docker exec`, like for example:
+The `scripts/` directory is mounted into the container at `/lab`, so you can edit the scripts on your host and rerun instantly. Run each exercise with `docker exec`, like for example:
 
 ```bash
 docker exec lattice-lab python3 lattice_basics.py

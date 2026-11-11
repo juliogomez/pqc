@@ -7,7 +7,7 @@ The answer is simpler than you might expect. MACsec's whole quantum story lives 
 - **Key exchange** (secrecy): the classical (EC)DHE inside EAP-TLS becomes hybrid **ML-KEM** (`X25519MLKEM768`).
 - **Authentication** (identity): the ECDSA/RSA certificates become post-quantum **ML-DSA**.
 
-We find both the same way as in the other labs. We start containers **on your own workstation**, run a real EAP-TLS handshake between a supplicant and an authenticator, and capture the packets to see the post-quantum crypto for ourselves. The only tool you need installed is **Docker**.
+We find both the same way as in the other labs. We start a few containers, run a real EAP-TLS handshake between a supplicant and an authenticator, and capture the packets to see the post-quantum crypto for ourselves. The only tool you need installed is **Docker**.
 
 Ready? Let's start.
 
@@ -234,7 +234,7 @@ They are joined by a **veth pair** (a virtual Ethernet "cable"): `aut` on the au
 
 ### Build and start
 
-Everything runs **locally on your workstation**. Clone the repo and run all commands from the `learn/macsec/` directory:
+Clone the repo and run all commands from the `learn/macsec/` directory:
 
 ```bash
 cd learn/macsec

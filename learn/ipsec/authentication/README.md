@@ -173,7 +173,7 @@ The division of labor is the thing to keep straight: **OpenSSL is a crypto toolk
 
 ## Let's get our hands dirty: the lab
 
-Alright, enough theory: let's make some quantum-safe certificates and weigh them! These labs are self-contained and run entirely on **your own local workstation** (your laptop or desktop, no cloud, no remote servers) inside tiny throwaway Docker containers, so the only thing you need installed is **Docker**.
+Alright, enough theory: let's make some quantum-safe certificates and weigh them! These labs are self-contained and run entirely inside tiny throwaway Docker containers, so the only thing you need installed is **Docker**.
 
 ### Setup: get an OpenSSL 3.5+ shell
 
