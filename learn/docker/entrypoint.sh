@@ -7,8 +7,12 @@ mkdir -p /run/strongswan
 # Pre-create the credential subdirectories swanctl scans on --load-all.
 # The config dir is bind-mounted, so these can't be baked into the image;
 # creating them here silences the noisy "opening directory ... failed" warnings.
+# They're handed to the owner of the mounted dir (your user on a Linux host), or
+# they'd land in your clone as root and a plain `rm -rf` of it would fail.
+SWANCTL_OWNER="$(stat -c %u:%g /usr/local/etc/swanctl)"
 for d in x509 x509ca x509ocsp x509aa x509ac x509crl pubkey private rsa ecdsa pkcs8 pkcs12; do
     mkdir -p "/usr/local/etc/swanctl/$d"
+    chown "$SWANCTL_OWNER" "/usr/local/etc/swanctl/$d"
 done
 
 # Start the charon IKE daemon in the background

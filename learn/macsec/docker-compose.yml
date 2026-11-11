@@ -69,6 +69,10 @@ services:
       dockerfile: Dockerfile.macsec
     container_name: macsec-certgen
     profiles: ["setup"]
+    # No network needed. Without this, `compose run` leaves behind a
+    # <project>_default network on an auto-assigned /16 that can overlap the
+    # other labs' pinned subnets and break their next `up`.
+    network_mode: none
     entrypoint: ["/bin/sh", "/gen-certs.sh"]
     volumes:
       - ./gen-certs.sh:/gen-certs.sh:ro

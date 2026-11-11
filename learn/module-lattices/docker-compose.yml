@@ -5,6 +5,13 @@ services:
       context: ../docker
       dockerfile: Dockerfile.lattice
     container_name: lattice-lab
-    # Pure-math lab: no networking, no elevated capabilities needed.
+    # Pure-math lab: no networking, no elevated capabilities needed. With no
+    # network, compose doesn't auto-assign a /16 that could overlap the other
+    # labs' pinned subnets (172.20.0.0/24 through 172.25.0.0/24).
+    network_mode: none
+    # `docker exec` without -t gives Python a pipe, not a TTY, so it would
+    # buffer the attack table and show nothing until a long run finishes.
+    environment:
+      PYTHONUNBUFFERED: "1"
     volumes:
       - ./scripts:/lab

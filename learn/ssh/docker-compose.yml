@@ -52,6 +52,10 @@ services:
       dockerfile: Dockerfile.ssh
     container_name: ssh-keygen
     profiles: ["setup"]
+    # No network needed. Without this, `compose run` leaves behind a
+    # <project>_default network on an auto-assigned /16 that can overlap the
+    # other labs' pinned subnets and break their next `up`.
+    network_mode: none
     entrypoint: ["/bin/sh", "/gen-keys.sh"]
     volumes:
       - ./gen-keys.sh:/gen-keys.sh:ro

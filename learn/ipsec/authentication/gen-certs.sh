@@ -64,6 +64,9 @@ for peer in initiator responder; do
   cp "$peer.key" "$dest/private/$peer.key"
   cp "$peer.crt" "$dest/x509/$peer.crt"
   cp ca.crt      "$dest/x509ca/ca.crt"
+  # This helper runs as root; hand the output to the owner of the mounted config
+  # dir (your user on a Linux host) so the Cleanup `rm` works without sudo.
+  chown -R "$(stat -c %u:%g "$dest")" "$dest"
 done
 
 echo ">> Done. Credentials installed into config/{initiator,responder}/{private,x509,x509ca}."
