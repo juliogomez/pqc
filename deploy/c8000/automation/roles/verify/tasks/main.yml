@@ -406,7 +406,7 @@
     - name: Verify | is MACsec actually enabled on this interface
       ansible.builtin.set_fact:
         verify_macsec_enabled: >-
-          {{ (verify_macsec_show.stdout[2] | default('')) is not search('MACsec is not enabled') }}
+          {{ (verify_macsec_show.stdout[2] | default('')) is not search("MACsec is not enabled|Can't access MACsec stats") }}
 
     # Fail fast when the wire is down. Skip when MACsec is not on the interface
     # (post-teardown) or when we are checking for a clean teardown.
@@ -425,7 +425,10 @@
       ansible.builtin.assert:
         that:
           - verify_macsec_link_probe.stdout[0] is search('line protocol is up')
-          - verify_macsec_link_probe.stdout[0] is search('\\(connected\\)')
+          # Only switchports print "(connected)"; a routed port stops at "is up".
+          - >-
+            verify_macsec_link_probe.stdout[0] is search('\\(connected\\)')
+            or my_macsec_command != 'macsec network-link'
         fail_msg: >-
           {{ inventory_hostname }} {{ my_macsec_interface }} is not L2-connected.
           Both ends of the MACsec link must show connected in "show interfaces
@@ -723,7 +726,7 @@
       Expected MACsec to be off on {{ my_macsec_interface }} after teardown, but
       the interface still reports MACsec enabled. Secured sessions
       {{ verify_mka_secured | default('0') }}. Re-run the teardown playbook or
-      remove macsec network-link by hand.
+      remove {{ my_macsec_command }} by hand.
     quiet: true
   when:
     - verify_effective_require_macsec_absent | bool

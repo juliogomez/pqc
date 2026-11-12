@@ -94,11 +94,25 @@ macsec_interface:
 
 my_macsec_interface: "{{ macsec_interface[inventory_hostname] | default('') }}"
 
+# The interface keyword that turns MACsec on. A switchport takes "macsec network-link"
+# (plain "macsec" there is access mode, the encrypts-nothing trap in macsec.md). A
+# routed port ("no switchport", e.g. a C8355-G2 FiveGigabitEthernet) rejects
+# network-link outright and takes plain "macsec", which on a routed port IS the
+# peer-to-peer mode. Override per router only for routed ports:
+#   macsec_command: { r1: macsec }
+macsec_command: {}
+my_macsec_command: "{{ macsec_command[inventory_hostname] | default('macsec network-link') }}"
+
 # R2 hosts the local IOS certificate server for the EAP-TLS path, reachable over
-# its Vlan12 address. SCEP rides the IOS HTTP server, so port 80 and
-# "ip http server" have to be up on the CA.
+# its underlay address toward the other MACsec end (local_address on R2's peer
+# entry for it in lab_topology), so it follows your addressing. SCEP rides the IOS
+# HTTP server, so port 80 and "ip http server" have to be up on the CA. Set
+# macsec_ca_url yourself only if the CA lives somewhere else.
 macsec_ca_host: r2
-macsec_ca_url: "http://10.0.12.2:80"
+macsec_ca_client: "{{ macsec_interface | list | reject('equalto', macsec_ca_host) | first }}"
+macsec_ca_url: >-
+  http://{{ (lab_topology[macsec_ca_host].peers
+             | selectattr('name', 'equalto', macsec_ca_client) | first).local_address }}:80
 
 # The identity each router presents. It has to match the certificate CN, because
 # that CN is what EAP sends as its identity and what "dot1x credentials" claims.
@@ -107,3 +121,8 @@ macsec_identity:
   r2: R2
 
 my_macsec_identity: "{{ macsec_identity[inventory_hostname] | default(inventory_hostname | upper) }}"
+
+# The identity the OTHER end presents. The authenticator authorizes the peer's
+# identity, so each router needs the peer's username in its local database too.
+my_macsec_peer: "{{ groups['macsec_pair'] | default([]) | reject('equalto', inventory_hostname) | first | default('') }}"
+my_macsec_peer_identity: "{{ macsec_identity[my_macsec_peer] | default(my_macsec_peer | upper) }}"

@@ -11,7 +11,10 @@ axes. If that framing is new, read
 [the challenge](../README.md#the-challenge) first.
 
 Nothing here needs hardware. Everything runs in throwaway Docker containers, so you can
-break a lab and rerun it as many times as you like.
+break a lab and rerun it as many times as you like. The recommended way to run them is the
+[dCloud lab](https://dcloud2.cisco.com/demo/hands-on-with-post-quantum-cryptography-pqc-using-containers),
+where everything is ready and tested end to end. Your own laptop works too
+(see [Prerequisites](#prerequisites)).
 
 ## Recommended order
 
@@ -22,9 +25,9 @@ progression:
 | Protocol | What you learn |
 |----------|----------------|
 | [**IPsec**](#ipsec--layer-3-vpns) | Hybrid key exchange, IKE fragmentation, ML-DSA authentication |
-| [**TLS**](#tls) | Same hybrid, no extra round trip; mutual auth with ML-DSA certs |
-| [**MACsec**](#macsec--layer-2-encryption) | EAP-TLS reuses the TLS handshake at Layer 2; silent downgrade risk |
-| [**SSH**](#ssh) | PQ key exchange on by default; **loud** downgrade; composite ML-DSA auth |
+| [**TLS**](#tls) | Same hybrid, no extra round trip, mutual auth with ML-DSA certs |
+| [**MACsec**](#macsec--layer-2-encryption) | EAP-TLS reuses the TLS handshake at Layer 2, silent downgrade risk |
+| [**SSH**](#ssh) | PQ key exchange on by default, **loud** downgrade, composite ML-DSA auth |
 
 Each lab *can* be run standalone if you already know the earlier material, but if you're
 going through the repo for the first time, the order above gives the smoothest ramp.
@@ -74,7 +77,7 @@ certificate is still classical.
 Take MACsec post-quantum. Its entire quantum exposure lives in an EAP-TLS handshake.
 
 - **[MACsec](macsec/README.md)** (50 min, intermediate):
-  Trace MACsec's key hierarchy, run a real EAP-TLS handshake and prove in the captured bytes that it negotiates hybrid **DH + ML-KEM**; watch how easily it silently downgrades to classical TLS 1.2; then swap the certificates from classical ECDSA to post-quantum **ML-DSA** and measure the size cost as EAP fragments the handshake across 3-4x more EAPOL frames.
+  Trace MACsec's key hierarchy, run a real EAP-TLS handshake and prove in the captured bytes that it negotiates hybrid **DH + ML-KEM**, watch how easily it silently downgrades to classical TLS 1.2, then swap the certificates from classical ECDSA to post-quantum **ML-DSA** and measure the size cost as EAP fragments the handshake across 3-4x more EAPOL frames.
 
 *Both pillars live in a **single** EAP-TLS handshake here, so this is one combined lab, at Layer 2 over a different control plane, a useful contrast for anyone running switching/access infrastructure.*
 
@@ -93,7 +96,7 @@ The secure remote access standard. Take SSH post-quantum, the protocol behind re
 *Both pillars live in one SSH handshake, so this is one combined lab where the key exchange is the easy, on-by-default half, and the authentication is the frontier.*
 
 **On Cisco hardware:** [SSH on IOS XE](../deploy/c8000/ssh.md). The hybrid KEX is one
-config line; the composite ML-DSA keys are still not there on 26.2, and the doc shows the
+config line. The composite ML-DSA keys are still not there on 26.2, and the doc shows the
 CLI proving it.
 
 ### Module Lattices (bonus lab)
@@ -107,12 +110,28 @@ An optional deep-dive for when you want to understand the shared module-lattice 
 
 ## Prerequisites
 
-These labs need no dedicated hardware: any machine with Docker will do, whether that's your own laptop or a shared lab VM. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, OpenSSH, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile their star tool from source (strongSwan, wpa_supplicant/hostapd, or OpenSSH), so their *first* build takes a few minutes; after that everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section.
+These labs need no dedicated hardware, just a machine with Docker. You have two ways to get one.
 
-All the Dockerfiles and entrypoints live in [`docker/`](docker/); the compose files in each
+### Recommended: use the dCloud lab
+
+We built a dedicated [Cisco dCloud environment](https://dcloud2.cisco.com/demo/hands-on-with-post-quantum-cryptography-pqc-using-containers) for these labs, open to Cisco customers and partners. It's a Linux host with Docker already installed, and we tested every lab on it end to end.
+
+Why is this the preferred way? Because Docker on your own laptop can be... *special*. Maybe you can't install it without an admin password. Maybe you're on Windows, and things don't behave the way they do on macOS or Linux. In dCloud you skip all of that, and it just works.
+
+Getting in takes three steps:
+
+1. Book a reservation for [Hands-on with Post-Quantum Cryptography (PQC) using Containers](https://dcloud2.cisco.com/demo/hands-on-with-post-quantum-cryptography-pqc-using-containers).
+2. Check your email for the VPN details.
+3. SSH into the Docker host, clone this repo, and start with the first lab.
+
+### Or... use your own machine
+
+Prefer to run it locally? Sure, any machine with Docker will do. All you need installed is **Docker** with the Compose v2 plugin (the `docker compose` subcommand, not the old standalone `docker-compose`). Everything else (strongSwan, OpenSSL 3.5, wpa_supplicant/hostapd, OpenSSH, tcpdump, Python) lives inside throwaway containers, so you can run, break, and rerun the labs as many times as you like. A few of the images compile their star tool from source (strongSwan, wpa_supplicant/hostapd, or OpenSSH), so their *first* build takes a few minutes. After that, everything is quick. Each lab's README has its own short Prerequisites and Build-and-start section.
+
+All the Dockerfiles and entrypoints live in the [`docker`](docker/) folder, and the compose files in each
 lab reference them, so run `docker compose` from the lab directory rather than from here.
 
-**Do I need a quantum computer to run these labs?** No. 🙂 Everything runs on classical hardware in Docker. The labs demonstrate the *defenses* being deployed today against a future CRQC.
+**Do I need a quantum computer to run these labs?** Luckily enought you don't. 🙂 Everything runs on classical hardware in Docker. The labs demonstrate the *defenses* being deployed today against a future CRQC.
 
 ---
 
@@ -123,7 +142,7 @@ reasons, and neither is obvious from inside a container:
 
 **The keys land in your clone, not in the container.** The four labs that mint credentials
 (both authentication labs, MACsec, SSH) write their CA, host keys and certificates into
-`config/`, which is bind-mounted from your working copy. `docker compose down` removes the
+`config`, which is bind-mounted from your working copy. `docker compose down` removes the
 containers and leaves those private keys sitting on your disk. `.gitignore` keeps them out
 of commits, but that's not the same as deleting them, so each of those four cleanup sections
 carries the `rm` line for its own material.
@@ -131,7 +150,7 @@ carries the `rm` line for its own material.
 **Config edits persist the same way.** The IPsec key-exchange and MACsec labs have you edit
 tracked config files (`swanctl.conf`, `hostapd.conf`) to toggle proposals and trigger a
 downgrade. Those edits go straight into your clone. Both cleanup sections end with `git
-restore config/`, which snaps everything back in one shot whether or not you reverted by
+restore config`, which snaps everything back in one shot whether or not you reverted by
 hand as you went.
 
 Images are kept in all cases, so re-running a lab later is instant rather than another
@@ -149,7 +168,3 @@ unused networks and retry:
 ```bash
 docker network prune
 ```
-
-Then head to [Stage 2](../deploy/README.md) and do it all again on real routers, where the
-cleanup story is [considerably less forgiving](../deploy/c8000/README.md#putting-the-routers-back).
-

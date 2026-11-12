@@ -58,7 +58,7 @@ Here is the part that makes SSH genuinely different from every other protocol in
 
 First, SSH adopted post-quantum key exchange **before NIST finished standardising one**. The OpenSSH developers picked a conservative lattice/code-based KEM they trusted and shipped the hybrid in 2022, rather than wait. When ML-KEM was standardised (FIPS 203, 2024) they added it and made it the default. So SSH is the one place a real protocol has carried **two generations** of post-quantum key exchange at once: the pre-standard `sntrup761x25519-sha512` and the NIST `mlkem768x25519-sha256` that has since replaced it as the default (both still show up in the `ssh -Q kex` list in Exercise 1).
 
-Second, because it is the *default*, the interesting failure mode for SSH is the opposite of MACsec's. In the MACsec lab you had to *fight* to keep post-quantum key exchange (a simple config flag silently dropped it). In SSH you get it for free, and modern OpenSSH will even **warn you** when a connection *ain't* post-quantum. The risk is not silently losing PQC; it is talking to old software that never had it.
+Second, because it is the *default*, the interesting failure mode for SSH is the opposite of MACsec's. In the MACsec lab you had to *fight* to keep post-quantum key exchange (a simple config flag silently dropped it). In SSH you get it for free, and modern OpenSSH will even **warn you** when a connection *ain't* post-quantum. The risk is not silently losing PQC. It is talking to old software that never had it.
 
 ---
 
@@ -118,7 +118,7 @@ ML-DSA ([FIPS 204](https://csrc.nist.gov/pubs/fips/204/final)) is a lattice-base
 
 That is the whole trade you will see in [Exercise 3](#exercise-3-post-quantum-authentication): a few dozen bytes become a few kilobytes.
 
-> **This one is genuinely on the frontier.** The composite type is **experimental** in OpenSSH 10.4, **off by default**, and tracks an *individual* Internet-Draft (`draft-miller-sshm-mldsa44-ed25519-composite-sigs`), not a ratified standard. Competing drafts propose *pure* ML-DSA (`ssh-mldsa44/65/87`, `draft-sfluhrer`/`draft-rpe`) and other composites (`draft-sun`, `draft-josefsson`); which wins is not settled. The older [OQS-OpenSSH](https://openquantumsafe.org/applications/ssh.html) fork (Dilithium/Falcon/SPHINCS+) is archived and research-only. So this is a *hands-on preview*, not a production recommendation, exactly the "the crypto is ready, the protocol plumbing is still settling" caveat you saw in the IKEv2 and MACsec labs.
+> **This one is genuinely on the frontier.** The composite type is **experimental** in OpenSSH 10.4, **off by default**, and tracks an *individual* Internet-Draft (`draft-miller-sshm-mldsa44-ed25519-composite-sigs`), not a ratified standard. Competing drafts propose *pure* ML-DSA (`ssh-mldsa44/65/87`, `draft-sfluhrer`/`draft-rpe`) and other composites (`draft-sun`, `draft-josefsson`), and which one wins is not settled. The older [OQS-OpenSSH](https://openquantumsafe.org/applications/ssh.html) fork (Dilithium/Falcon/SPHINCS+) is archived and research-only. So this is a *hands-on preview*, not a production recommendation, exactly the "the crypto is ready, the protocol plumbing is still settling" caveat you saw in the IKEv2 and MACsec labs.
 
 > **Why ML-KEM and ML-DSA are quantum-safe.** Both are built on module lattices. The companion [module-lattices lab](../module-lattices/README.md) builds that math from the ground up and runs a real attack against the lattice problem that protects them.
 
@@ -130,9 +130,9 @@ That is the whole trade you will see in [Exercise 3](#exercise-3-post-quantum-au
 
 We build **OpenSSH 10.4 from source** for one reason: the post-quantum bits are new. The composite `mldsa44-ed25519` signature only landed in **10.4** (just released on July '26), and distro packages lag behind. Building from source pins the exact version so both ends definitely have both features.
 
-> **OpenSSH ships its own post-quantum crypto.** This is a neat contrast with the other labs. The IKEv2 lab gets ML-KEM from strongSwan's `ml` plugin; the TLS and MACsec labs get it from OpenSSL 3.5. OpenSSH links OpenSSL only for *classical* primitives (Ed25519, X25519, the ciphers); its **ML-KEM is its own formally-verified implementation** and the composite ML-DSA-44 code ships with it too. No oqs-provider, no patches.
+> **OpenSSH ships its own post-quantum crypto.** This is a neat contrast with the other labs. The IKEv2 lab gets ML-KEM from strongSwan's `ml` plugin, and the TLS and MACsec labs get it from OpenSSL 3.5. OpenSSH links OpenSSL only for *classical* primitives (Ed25519, X25519, the ciphers). Its **ML-KEM is its own formally-verified implementation** and the composite ML-DSA-44 code ships with it too. No oqs-provider, no patches.
 
-> **Why no OpenSSL's `s_client` here?** Because SSH is its own protocol, not TLS. `openssl s_client` speaks TLS; it has no idea how to do an SSH `KEXINIT` or an SSH host-key check. OpenSSH is the tool that speaks the wire protocol, and it carries the PQC algorithms natively, so we watch them run in a real SSH handshake.
+> **Why no OpenSSL's `s_client` here?** Because SSH is its own protocol, not TLS. `openssl s_client` speaks TLS, but it has no idea how to do an SSH `KEXINIT` or an SSH host-key check. OpenSSH is the tool that speaks the wire protocol, and it carries the PQC algorithms natively, so we watch them run in a real SSH handshake.
 
 ---
 
@@ -140,7 +140,7 @@ We build **OpenSSH 10.4 from source** for one reason: the post-quantum bits are 
 
 Here is the plan: we run one SSH handshake and look at its two independent halves, key exchange and authentication, one at a time:
 
-- **The key exchange is post-quantum from the very first connection.** No configuration; OpenSSH negotiates `mlkem768x25519-sha256` by default. Exercises 1 and 2 prove it, measure it, and show how it can be lost to old software.
+- **The key exchange is post-quantum from the very first connection.** No configuration needed: OpenSSH negotiates `mlkem768x25519-sha256` by default. Exercises 1 and 2 prove it, measure it, and show how it can be lost to old software.
 - **The authentication starts classical.** We begin with **Ed25519** host and user keys, so the *identity* half is still quantum-vulnerable at the baseline. Exercise 3 is where we upgrade to composite ML-DSA-44.
 
 So:
@@ -156,11 +156,11 @@ Two containers on a plain Docker bridge network, like the TLS lab's server/clien
 - **`ssh-server`**: runs OpenSSH `sshd`.
 - **`ssh-client`**: runs OpenSSH `ssh`.
 
-Both idle on startup; you drive `sshd` and `ssh` by hand via `docker exec` (like `hostapd`/`wpa_supplicant` in the MACsec lab), so the exercises can capture, edit config, and reconnect freely. The client has network reachability to the server by its docker compose service name, `ssh-server`.
+Both idle on startup, and you drive `sshd` and `ssh` by hand via `docker exec` (like `hostapd`/`wpa_supplicant` in the MACsec lab), so the exercises can capture, edit config, and reconnect freely. The client has network reachability to the server by its docker compose service name, `ssh-server`.
 
 ### Prerequisites
 
-**Docker** with the Compose v2 plugin (`docker compose ...`), and three terminals: one shell on the server (to run `sshd` and capture packets), one on the client (to run `ssh`), and one on your host (for `docker compose` commands like reissuing keys). Everything the handshake needs, OpenSSH 10.4, `tcpdump`, `tshark`, `openssl`, is compiled/installed into the image.
+**Docker** with the Compose v2 plugin (`docker compose ...`), and three terminals: one shell on the server (to run `sshd` and capture packets), one on the client (to run `ssh`), and one on your host (for `docker compose` commands like reissuing keys). Everything the handshake needs, OpenSSH 10.4, `tcpdump`, `tshark`, `openssl`, is compiled/installed into the image. The recommended way to run this lab is the [dCloud lab](https://dcloud2.cisco.com/demo/hands-on-with-post-quantum-cryptography-pqc-using-containers), where Docker is ready and everything is tested end to end. Your own machine with Docker works too.
 
 ### Build and start
 
@@ -191,7 +191,7 @@ ssh-server   Up
 ssh-client   Up
 ```
 
-The `keygen` step mints two key pairs and installs them: an **Ed25519 host key** for the server plus a **user key** whose public half becomes the server's sole `authorized_keys` entry, and a `known_hosts` on the client that **pins** the server's host key (so host verification actually checks the key rather than trusting on first use). We start with classical **Ed25519** so the *authentication* half has a clean classical baseline; [Exercise 3](#exercise-3-post-quantum-authentication) reissues these as composite `mldsa44-ed25519` with a single command.
+The `keygen` step mints two key pairs and installs them: an **Ed25519 host key** for the server plus a **user key** whose public half becomes the server's sole `authorized_keys` entry, and a `known_hosts` on the client that **pins** the server's host key (so host verification actually checks the key rather than trusting on first use). We start with classical **Ed25519** so the *authentication* half has a clean classical baseline. [Exercise 3](#exercise-3-post-quantum-authentication) reissues these as composite `mldsa44-ed25519` with a single command.
 
 ---
 
@@ -231,7 +231,7 @@ AUTH_OK
 
 Three things just happened, and they map exactly onto the two pillars:
 
-- **`kex: algorithm: mlkem768x25519-sha256`**: the key exchange is **hybrid ML-KEM, chosen by default**. Nothing in the config asked for it; OpenSSH 10.4 prefers it automatically. This is the whole "SSH did it first, and for free" point, in one line.
+- **`kex: algorithm: mlkem768x25519-sha256`**: the key exchange is **hybrid ML-KEM, chosen by default**. Nothing in the config asked for it. OpenSSH 10.4 prefers it automatically. This is the whole "SSH did it first, and for free" point, in one line.
 - **`host key algorithm: ssh-ed25519`** and the `publickey` authentication: the *authentication* half is still **classical Ed25519** on both ends (the server's host key and your user key). That is the baseline we upgrade in Exercise 3.
 - **`chacha20-poly1305`**: the session cipher, symmetric and already quantum-safe.
 
@@ -296,7 +296,7 @@ sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.or
 ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,ext-info-s,kex-strict-s-v0
 ```
 
-(wrapped here to fit; tshark prints it as one long line, and the `[…]` is tshark's own
+(wrapped here to fit. tshark prints it as one long line, and the `[…]` is tshark's own
 marker for a field it had to shorten in the tree view, not a truncated value.)
 
 **`mlkem768x25519-sha256` is offered first**, so it is what both sides select (SSH picks the first algorithm the client lists that the server also supports). The hybrid ML-KEM key exchange is right there in the cleartext handshake.
@@ -346,14 +346,14 @@ done
 31,21 1716
 ```
 
-(The reply reads `31,21` because the server packs `SSH_MSG_KEX_ECDH_REPLY` (31) and `SSH_MSG_NEWKEYS` (21) into one frame; the `frame.len` is what we care about.)
+(The reply reads `31,21` because the server packs `SSH_MSG_KEX_ECDH_REPLY` (31) and `SSH_MSG_NEWKEYS` (21) into one frame. The `frame.len` is what we care about.)
 
 There is the entire cost of post-quantum key exchange, laid out in four numbers:
 
 - The **client's** message (30) grows from **120 B to 1304 B**: a **+1184 B** jump, which is exactly the ML-KEM-768 encapsulation key from the table earlier.
 - The **server's** reply (31) grows from **628 B to 1716 B**: a **+1088 B** jump, which is exactly the ML-KEM-768 ciphertext.
 
-And crucially, it is still **one init and one reply**. Post-quantum SSH adds **no extra round trip** (unlike IKEv2's `IKE_INTERMEDIATE`); ML-KEM just rides in the messages that were already there. The whole price is those extra ~2.3 KB.
+And crucially, it is still **one init and one reply**. Post-quantum SSH adds **no extra round trip** (unlike IKEv2's `IKE_INTERMEDIATE`). ML-KEM just rides in the messages that were already there. The whole price is those extra ~2.3 KB.
 
 **Step 4: Watch a downgrade**
 
@@ -365,7 +365,7 @@ pkill sshd; sleep 1
 /usr/local/sbin/sshd -D -e -f /cfg/sshd_config -o KexAlgorithms=curve25519-sha256 > /tmp/sshd.log 2>&1 &
 ```
 
-Now connect normally from the **client** (its config still offers the hybrid; we change nothing on the client):
+Now connect normally from the **client** (its config still offers the hybrid, and we change nothing on the client):
 
 ```bash
 # client container
@@ -434,7 +434,7 @@ ssh-mldsa44-ed25519@openssh.com
 ssh-mldsa44-ed25519-cert-v01@openssh.com
 ```
 
-Notice what is *not* there: no `ssh-mldsa44`, `ssh-mldsa65`, or `ssh-mldsa87`. Mainline OpenSSH ships **only the composite** type, no *pure* ML-DSA yet; that is still working its way through the IETF.
+Notice what is *not* there: no `ssh-mldsa44`, `ssh-mldsa65`, or `ssh-mldsa87`. Mainline OpenSSH ships **only the composite** type, no *pure* ML-DSA yet. That is still working its way through the IETF.
 
 Restart the server offering the composite host key and accepting the composite user key. In the **server** shell (backgrounded again so the capture in Step 4 can share this shell):
 

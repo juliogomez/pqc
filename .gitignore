@@ -1,10 +1,19 @@
 # Superseded original key-exchange writeup, kept locally but not published
 README.legacy.md
 
-# Presenter-only material (slide deck build tooling, speaker notes, runbook) and
-# the demo notebook — not part of the published two-stage journey
+# Presenter-only material (slide deck build tooling, speaker notes, runbook)
 presentation/
-notebook/
+
+# The containers demo is published (notebook, its helper module, README and
+# requirements). Its build tooling and local virtualenv stay private.
+demos/containers_demo/*
+!demos/containers_demo/PQC_DEMOS.ipynb
+!demos/containers_demo/pqc_demo.py
+!demos/containers_demo/README.md
+!demos/containers_demo/requirements.txt
+
+# The notebook venv every demo shares
+demos/.venv/
 
 # Packet captures generated during lab exercises
 *.pcap
@@ -69,6 +78,9 @@ deploy/c8000/automation/.lab-ca/
 # is tracked, the real file never is.
 deploy/c8000/automation/group_vars/all/lab.yml
 deploy/c9300/automation/group_vars/all/lab.yml
+# The demos' one-file version of the same (plus topology). Copy
+# demos/common/lab.example.yml to lab.yml; same rule.
+demos/common/lab.yml
 
 # Local Python virtualenvs for the Ansible control node (never commit).
 deploy/c8000/automation/venv/

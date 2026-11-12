@@ -1,0 +1,90 @@
+# Post-quantum IPsec, end to end
+
+How do you add post-quantum protection to an IPsec tunnel, and what does it cost on the
+wire? [`ipsec_demo.ipynb`](ipsec_demo.ipynb) answers that in three acts, each one closer
+to production:
+
+- **Act 1:** strongSwan in containers. A hybrid ML-KEM key exchange, then ML-DSA
+  authentication, measured on the wire.
+- **Act 2:** the same on three IOS XE 26.2 routers, typed at the CLI.
+- **Act 3:** the same on all three routers at once, with Ansible over NETCONF.
+
+Why a notebook and not a written guide? Because it also *checks* each step for you:
+read-only `show` commands against the routers, and the Ansible `PLAY RECAP` kept on
+screen.
+
+First time? Build your lab once with [`demos/README.md`](../README.md): prerequisites,
+underlay, credentials. It's shared by every demo. This page covers what IPsec adds on top.
+
+## What this demo adds
+
+| What | Where | How |
+|---|---|---|
+| Exercise 1 tunnel and its PSK (Act 2's starting point) | R1 and R3 | the notebook's `setup()` cell, or [Exercise 1](../../deploy/c8000/ipsec.md#exercise-1-classical-ikev2-baseline) by hand |
+| ML-DSA trustpoint `TP-MLDSA65` (Demo 7) | R1 and R3 | the notebook's `setup()` cell, or [by hand](#ml-dsa-trustpoints-by-hand) |
+
+`setup()` mints the ML-DSA certificates on your laptop, which needs OpenSSL 3.5 or newer.
+It reads R1's and R3's underlay addresses from your
+[`lab.yml`](../README.md#your-lab-file), because they end up in the
+keyring, the identity match, the tunnel destination and each certificate's SAN.
+
+<a id="ml-dsa-trustpoints-by-hand"></a>
+
+## ML-DSA trustpoints by hand
+
+The notebook's `setup()` cell does all of this for you. Here's what it does, if
+you'd rather follow along on the CLI. The source is `deploy/c8000/ipsec.md`, Exercise 5,
+"Build the PKI" and "Import the bundle", on **R1 and R3 only**:
+
+1. From the repo root: `cd deploy/c8000/mldsa-certs && R1_SAN=<R1 underlay address>
+   R3_SAN=<R3 underlay address> ./gen-mldsa-certs.sh` (needs OpenSSL 3.5+). The SAN has
+   to match the `identity local address` Demo 7 sets, and the script defaults to the
+   repo's addresses. Set `PASS=...` too, so the bundle password isn't the script's default.
+2. **Pin the SSH host key algorithm first**, or the import can lock you out of SSH:
+   `ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256`.
+3. On an early 26.2 build, `service internal` too. Without it the import fails with
+   `%PKI-3-PKCS12_IMPORT_FAILURE ... Reason: Unknown reason`, and only
+   `debug crypto pki transactions` says why: `ML-DSA certificate insertion blocked on
+   unsupported platform or without service internal`.
+4. `scp -O` the `mldsa65-r1.p12` / `mldsa65-r3.p12` bundle over and run
+   `crypto pki import TP-MLDSA65 pkcs12 ...`. You can ignore `%PKI-3-KEY_CMP_MISMATCH`.
+5. `crypto pki trustpoint TP-MLDSA65`, then `revocation-check none`. Without it the
+   handshake stalls on a CRL fetch.
+6. Check `show crypto pki certificates verbose TP-MLDSA65`: `Public Key Algorithm:
+   ML-DSA`, `Public Key Size: (1974 bytes)`, and `IP Address:` the router's underlay
+   address.
+7. `delete /force bootflash:/mldsa65-r1.p12` (and r3), then `write memory`.
+
+**Check `show clock` against your laptop first.** The script's certificates are valid from
+the second they're minted. If a router's clock runs behind (ours ran about 10 minutes
+behind), the certificate is *not yet valid* on that router, and Demo 7 fails with
+`%PKI-3-CERTIFICATE_INVALID_NOT_YET_VALID` until the clock catches up. `setup()`
+avoids this by backdating its certificates a day.
+
+**Don't pre-create `MLDSA-PROFILE`.** It matches the same remote address as
+`CLASSICAL-PROFILE`, and two profiles matching one peer is exactly the overlap the
+baseline role warns about. You paste it in Demo 7; it takes a few seconds.
+
+## Open it
+
+From the repo root:
+
+```bash
+source demos/.venv/bin/activate
+jupyter lab demos/ipsec_demo/ipsec_demo.ipynb
+```
+
+Start with its "Before each run" section. No Docker? Jump to the "Starting at Act 2?"
+cell; it loads its own helpers and puts the routers in Act 2's starting state.
+
+## Change it
+
+Don't edit the `.ipynb` by hand. It's generated:
+
+```bash
+python3 build_notebook.py
+```
+
+The helpers it calls live in `ipsec_lab.py` (the IPsec labs, `check()` and `setup()`),
+`router_setup.py` (what `setup()` does on R1 and R3) and
+[`../common/`](../common/) (routers, playbooks, the notebook builder).

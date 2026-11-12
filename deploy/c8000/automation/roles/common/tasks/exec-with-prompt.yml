@@ -19,8 +19,21 @@
 #   exec_post_commands optional commands to send after (e.g. "end")
 #
 # The pre/post commands exist because some prompting commands live in config mode,
-# and no module can both enter config mode and handle a prompt. They are sent with
-# sendonly, so they never consume the prompt we are waiting for.
+# and no module can both enter config mode and handle a prompt.
+#
+# So the pre-commands and the prompting command run as ONE looped task, each item
+# reading up to the router's prompt before the next goes out. Both halves of that
+# matter, and each was a real failure:
+#
+# * Sent with sendonly, the pre-commands' echo stays unread. The prompting command
+#   then matches that stale "(config)#" and returns before the router asks
+#   anything, and the next line sent ("end") lands on the Password: prompt. A CA
+#   that was already running never asks, so only a first-time "no shutdown" showed it.
+# * Read in their own task, they get undone: at the start of every task the ios
+#   cliconf sends "end" when the last prompt matches config.*\)#. Loop items share
+#   a task, so the router stays in config mode between them.
+#
+# Only the last item gets exec_prompt / exec_answer. A pre-command answers nothing.
 #
 # Every caller also carries a comment naming the literal prompt string it is
 # matching, so you can check the regex against real router output without running
@@ -37,24 +50,25 @@
       which is exactly the failure mode this wrapper exists to stop.
     quiet: true
 
-- name: "Exec | {{ exec_label }} | setup"
-  ansible.netcommon.cli_command:
-    command: "{{ item }}"
-    sendonly: true
-  loop: "{{ exec_pre_commands | default([]) }}"
-  changed_when: false
-
 - name: "Exec (strict prompt) | {{ exec_label }}"
   ansible.netcommon.cli_command:
-    command: "{{ exec_command }}"
-    prompt: "{{ exec_prompt }}"
-    answer: "{{ exec_answer }}"
-    check_all: "{{ exec_check_all | default(false) }}"
-  register: exec_with_prompt_result
+    command: "{{ item }}"
+    prompt: "{{ exec_prompt if exec_step == (exec_last | int) else omit }}"
+    answer: "{{ exec_answer if exec_step == (exec_last | int) else omit }}"
+    check_all: "{{ (exec_check_all | default(false)) if exec_step == (exec_last | int) else omit }}"
+  loop: "{{ (exec_pre_commands | default([])) + [exec_command] }}"
+  loop_control:
+    index_var: exec_step
+  vars:
+    exec_last: "{{ exec_pre_commands | default([]) | length }}"
+  register: exec_with_prompt_steps
+
+- name: "Exec | {{ exec_label }} | result"
+  ansible.builtin.set_fact:
+    exec_with_prompt_result: "{{ exec_with_prompt_steps.results | last }}"
 
 - name: "Exec | {{ exec_label }} | teardown"
   ansible.netcommon.cli_command:
     command: "{{ item }}"
-    sendonly: true
   loop: "{{ exec_post_commands | default([]) }}"
   changed_when: false

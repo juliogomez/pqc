@@ -155,7 +155,7 @@ Two containers on a private Docker network:
 
 ### Pre-requisites
 
-**Docker** with the Compose v2 plugin (the `docker compose` subcommand), plus two terminal windows: one for the server container, one for the client. OpenSSL 3.5, `tcpdump`, and `tshark` all live inside the image, so there is nothing to install on your host. The first `docker compose build` pulls the required components; every run after that is quick. If you have already done the [IKEv2 key-exchange lab](../../ipsec/key-exchange/README.md) you'll fly through this one, it's the same story over a different protocol.
+**Docker** with the Compose v2 plugin (the `docker compose` subcommand), plus two terminal windows: one for the server container, one for the client. OpenSSL 3.5, `tcpdump`, and `tshark` all live inside the image, so there is nothing to install on your host. The first `docker compose build` pulls the required components, and every run after that is quick. If you have already done the [IKEv2 key-exchange lab](../../ipsec/key-exchange/README.md) you'll fly through this one, it's the same story over a different protocol. The recommended way to run this lab is the [dCloud lab](https://dcloud2.cisco.com/demo/hands-on-with-post-quantum-cryptography-pqc-using-containers), where Docker is ready and everything is tested end to end. Your own machine with Docker works too.
 
 ### Build and start
 

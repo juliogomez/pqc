@@ -56,23 +56,29 @@
 # produces the trap documented in macsec.md: MKA reports Secured, access-session
 # reports Link Secured, and every MACsec counter stays at zero because nothing is
 # actually being encrypted. IOS XE also will not let you switch mode in place; you have
-# to remove one before setting the other.
+# to remove one before setting the other. Routed ports are the exception: they reject
+# network-link and plain "macsec" is their peer-to-peer mode (my_macsec_command).
 - name: Interface | EAP-TLS MACsec
   cisco.ios.ios_config:
     parents: "interface {{ my_macsec_interface }}"
-    lines:
-      - macsec network-link
-      - authentication periodic
-      - "authentication timer reauthenticate {{ macsec_reauth_seconds }}"
-      - access-session host-mode multi-host
-      - access-session closed
-      - access-session port-control auto
-      - dot1x pae both
-      - "dot1x authenticator eap profile {{ macsec_names.eap_profile }}"
-      - "dot1x supplicant eap profile {{ macsec_names.eap_profile }}"
-      - "mka policy {{ macsec_names.eaptls_mka_policy }}"
-      - "service-policy type control subscriber {{ macsec_names.control_policy }}"
-      - "dot1x credentials {{ macsec_names.dot1x_credentials }}"
+    lines: >-
+      {{ [my_macsec_command,
+          'authentication periodic',
+          'authentication timer reauthenticate ' ~ macsec_reauth_seconds,
+          'access-session host-mode multi-host']
+         + ((my_macsec_command == 'macsec network-link') | ternary(['access-session closed'], []))
+         + ['access-session port-control auto',
+            'dot1x pae both',
+            'dot1x authenticator eap profile ' ~ macsec_names.eap_profile,
+            'dot1x supplicant eap profile ' ~ macsec_names.eap_profile,
+            'mka policy ' ~ macsec_names.eaptls_mka_policy,
+            'service-policy type control subscriber ' ~ macsec_names.control_policy,
+            'dot1x credentials ' ~ macsec_names.dot1x_credentials] }}
+  # No "access-session closed" on a routed port. Measured on a C8355-G2
+  # FiveGigabitEthernet against a C8235-G2 switchport: with it, EAP-TLS succeeds both
+  # ways and then authorization fails with "Linksec Failure", every 7 s, forever.
+  # Without it on the routed end (the switchport end keeps it), secured in 6 s.
+  # must-secure still applies after authentication either way.
   # authentication periodic plus the reauthenticate timer is what makes this path
   # interesting for PQ: every re-auth is a fresh EAP-TLS handshake, so it is the thing
   # that actually rotates post-quantum keying material. A SAK rekey does not; it keeps

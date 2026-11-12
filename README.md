@@ -4,7 +4,7 @@
 
 The security protocols you already run (IPsec, TLS, MACsec, SSH) all need to go
 post-quantum, and that migration is happening now, one piece of the handshake at a time.
-This repo takes you through it twice: first in throwaway containers on your laptop, where
+This repo takes you through it twice: first in throwaway containers, where
 you can capture the packets and break things for free, then on real Cisco routers, where
 the same RFCs meet Cisco's CLI, licensing, and platform capabilities.
 
@@ -51,6 +51,9 @@ plus an optional deep-dive into the lattice math behind it all.
 
 See [the full lab guide](learn/README.md) for the recommended order, timing, and details.
 
+Rather click than type? The [demo notebook](demos/containers_demo/README.md) drives the same labs one
+cell at a time and draws what's happening on the wire as it goes.
+
 ## Stage 2 - Deploy on Cisco hardware
 
 Same protocols, same RFCs, on Cisco devices you use in your network. Every exercise also
@@ -59,6 +62,9 @@ real hardware runs if you want to read the automation path without running it.
 
 See [the deploy guide](deploy/README.md) for the platforms covered and how to navigate the
 docs without hardware.
+
+Want both stages in one sitting? The [demo notebooks](demos/README.md) take one protocol
+from containers to the router CLI to Ansible, checking every step against the real devices.
 
 ## What Stage 2 teaches you that Stage 1 can't
 
@@ -83,8 +89,11 @@ the newest open-source software there is. Stage 2 is where you meet reality:
 
 ## Prerequisites
 
-**Stage 1** runs entirely on **your own local workstation** (laptop or desktop): no cloud,
-no remote servers, no dedicated hardware. All you need installed is **Docker**. Everything else lives inside throwaway containers, so you can run, break, and
+**Stage 1** needs no dedicated hardware, just a machine with **Docker**. The recommended way
+to run it is the [dCloud lab](https://dcloud2.cisco.com/demo/hands-on-with-post-quantum-cryptography-pqc-using-containers):
+book a reservation, connect over VPN with Cisco Secure Client, and SSH into a host where
+Docker is ready and every lab is tested end to end. You can also use your own laptop, but
+Docker there can be tricky (no admin rights, Windows quirks). Everything else lives inside throwaway containers, so you can run, break, and
 rerun the labs as many times as you like. A few of the images compile their tooling from
 source. Each lab's README has its own short Prerequisites
 and Build-and-start section.
@@ -107,7 +116,7 @@ where it's not the subject (the IKEv2 key-exchange lab uses a hardcoded throwawa
 generate unencrypted keys for convenience. Every credential you see in Stage 2 (device
 PSKs, the MACsec key string) is an example value, and the
 captured device configs have their local credential hashes stripped. Never reuse any of it,
-and never commit secrets; the [.gitignore](.gitignore) already excludes the credentials the
+and never commit secrets. The [.gitignore](.gitignore) already excludes the credentials the
 cert generators produce at runtime.
 
 ## License

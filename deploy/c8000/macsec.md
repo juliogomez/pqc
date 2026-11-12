@@ -434,18 +434,32 @@ what didn't.
 
 Symmetric on both routers apart from the identity strings (`R1` / `R2`):
 
+**No AAA on the box yet?** Check with `show running-config | include ^aaa`. If that's
+empty, `aaa new-model` changes how *you* log in, not just dot1x: your local user's
+`privilege 15` stops counting, and the next SSH session lands at `Router>`. Add the two
+`login` / `exec` lines below along with it, and keep your current session open until a
+new one gets `#`. Already running AAA? Leave those two lines out and keep your own login
+policy.
+
 ```
+! --- only if this box had no AAA: keep local logins at privilege 15 ---
+aaa new-model
+aaa authentication login default local
+aaa authorization exec default local
+
 ! --- local AAA: dot1x authenticates and authorizes against the local box ---
 aaa new-model
 aaa authentication dot1x default local
 aaa authorization network default local
 aaa authorization credential-download default local
+aaa local authentication default authorization default
 dot1x system-auth-control
 
 ! --- the link must be MACsec-protected before the port authorizes ---
 aaa attribute list LINKSEC_POLICY
  attribute type linksec-policy must-secure
 username R1 aaa attribute list LINKSEC_POLICY
+username R2 aaa attribute list LINKSEC_POLICY   ! <<< the PEER's identity too
 
 ! --- which certificate EAP-TLS presents, in both roles ---
 eap profile EAP-PROFILE
@@ -473,6 +487,13 @@ policy-map type control subscriber PQ-MACSEC-POLICY
   10 class always do-until-failure
    10 activate service-template DEFAULT_LINKSEC_POLICY_MUST_SECURE
 ```
+
+Why both usernames? Each router is an authenticator too, and the authenticator authorizes
+the identity the *peer* sends. With only its own name, each end logged dot1x
+`Authc Success` and then `Authorization failed`, both ways. Same story for
+`aaa local authentication default authorization default`: without it, a box that never
+ran AAA authenticates the peer and can't authorize it. (Both measured between a
+C8355-G2 and a C8235-G2.)
 
 ### Step 3: the interface
 
@@ -502,6 +523,15 @@ interface TwoGigabitEthernet0/0/0
 
 `dot1x pae both` means each router is simultaneously supplicant and authenticator, so the
 config stays symmetric and you don't have to decide who initiates.
+
+**One end is a routed port (`no switchport`)?** Then that end takes plain `macsec` (its
+peer-to-peer mode; it rejects `network-link`) and **no `access-session closed`**. With
+`closed` on a C8355-G2 FiveGigabitEthernet, EAP-TLS succeeded both ways and authorization
+then failed with `Linksec Failure` every 7 seconds, forever. Without it on the routed end
+(the switchport end keeps it), the link secured in 6 seconds. must-secure still applies
+once the port authenticates. Also check that both ends carry the same `mka policy`: a
+leftover `key-server priority` or an extra cipher suite on one end got
+`%MKA-4-INVALID_MACSEC_CAPABILITY` and no session.
 
 **Give the first bring-up a couple of minutes before you believe it's broken.** Because both
 ends come up at once and each is trying to authenticate the other, the very first
@@ -1010,7 +1040,7 @@ certificate chain and finishes; ML-DSA never gets a chain at all.
 The other thing that corroborates it: the enrolment model this exercise uses can't produce an
 ML-DSA certificate in the first place. The router *can* generate an ML-DSA key on the box
 (`crypto key generate mldsa`, exec mode, see
-[ipsec.md](ipsec.md#the-router-can-make-the-keys-ask-it-in-the-right-mode)), but SCEP
+[ipsec.md](ipsec.md#the-router-can-make-the-keys)), but SCEP
 enrolment of the resulting request fails with `%PKI-2-CERT_ENROLL_FAIL`, and the local
 `crypto pki server` has no key-type option so it can only ever be RSA-keyed. Every trustpoint
 in this exercise is enrolled over SCEP against that CA. So even with the `smd` stall fixed

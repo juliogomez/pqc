@@ -82,7 +82,7 @@ One nice contrast with the [IKEv2 authentication lab](../../ipsec/authentication
 
 So why care about a handshake that is a few kilobytes heavier? Two reasons, and neither is fragmentation:
 
-- **Latency, via TCP slow start.** A fresh TCP connection doesn't send at full speed; it starts with a small *initial congestion window*, typically about 10 packets (~14 KB), and only ramps up once the other side acknowledges receipt. A ~2.5 KB ECDSA handshake fits inside that very first burst, so the server sends it and you're done. A ~16 KB ML-DSA handshake does **not** fit: the server sends the first ~14 KB, then has to stop and wait for the client's ACK before it can send the rest, adding a full extra round trip to connection setup. On a low-latency LAN you'll barely notice; on a high-latency or lossy link (mobile, satellite, far-away server) that added round trip is exactly what you feel as a slower connection.
+- **Latency, via TCP slow start.** A fresh TCP connection doesn't send at full speed. It starts with a small *initial congestion window*, typically about 10 packets (~14 KB), and only ramps up once the other side acknowledges receipt. A ~2.5 KB ECDSA handshake fits inside that very first burst, so the server sends it and you're done. A ~16 KB ML-DSA handshake does **not** fit: the server sends the first ~14 KB, then has to stop and wait for the client's ACK before it can send the rest, adding a full extra round trip to connection setup. On a low-latency LAN you'll barely notice, but on a high-latency or lossy link (mobile, satellite, far-away server) that added round trip is exactly what you feel as a slower connection.
 - **Bandwidth, at scale.** A few extra kilobytes per handshake is nothing for one connection, but a busy server terminates millions or billions of them, and the same bytes hurt on metered or constrained links (IoT, embedded, mobile data). The cost is per-connection and it adds up.
 
 That is the real implication of the size jump, and it's why Exercise 3 has you measure the handshake bytes directly rather than just admire the bigger certificates.
@@ -120,7 +120,7 @@ Both trust one small **CA** we spin up just for the lab. The CA signs a server c
 
 ### Prerequisites
 
-**Docker** with the Compose v2 plugin (`docker compose ...`), and three terminals this time: one on your host for the certificate helper and cleanup, one for the server container, one for the client. Everything else, OpenSSL 3.5 and the small cert-generation script, is baked into the image. Doing the [TLS key-exchange lab](../key-exchange/README.md) first isn't required, but the two pair naturally: key exchange there, identity here.
+**Docker** with the Compose v2 plugin (`docker compose ...`), and three terminals this time: one on your host for the certificate helper and cleanup, one for the server container, one for the client. Everything else, OpenSSL 3.5 and the small cert-generation script, is baked into the image. Doing the [TLS key-exchange lab](../key-exchange/README.md) first isn't required, but the two pair naturally: key exchange there, identity here. The recommended way to run this lab is the [dCloud lab](https://dcloud2.cisco.com/demo/hands-on-with-post-quantum-cryptography-pqc-using-containers), where Docker is ready and everything is tested end to end. Your own machine with Docker works too.
 
 ### Build and start
 

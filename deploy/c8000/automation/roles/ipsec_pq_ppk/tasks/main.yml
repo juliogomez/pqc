@@ -21,7 +21,8 @@
       - (lab_ppk_hex | length) is divisibleby(2)
     fail_msg: >-
       lab_ppk_hex must be an even-length hex string, and the same value has to be
-      set on both peers of a pair. Set it in group_vars/all/lab.yml.
+      set on both peers of a pair. Set it in group_vars/all/lab.yml (or
+      demos/common/lab.yml, passed with -e).
     quiet: true
 
 - name: PPK | build

@@ -88,7 +88,7 @@
           | regex_findall('^(?!.*Sessions).*\s([0-9A-Fa-f]{2,32})\s*$', multiline=True)))
          | last }}
     macsec_proof_enabled: >-
-      {{ (macsec_proof_show.stdout[2] | default('')) is not search('MACsec is not enabled') }}
+      {{ (macsec_proof_show.stdout[2] | default('')) is not search("MACsec is not enabled|Can't access MACsec stats") }}
 
 - name: "MACsec proof | {{ inventory_hostname }} | push frames across the secured link"
   cisco.ios.ios_command:

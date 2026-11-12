@@ -51,7 +51,7 @@ Well… don't relax *too* much. Authentication still has to go post-quantum, jus
 - **Credentials that outlive the threat horizon.** Code-signing keys, firmware-signing keys, device identity certificates baked into hardware, long-term document signatures: anything whose signature must still hold up a decade from now.
 - **PKI migrates very slowly.** Changing a signature algorithm means updating CAs, issuance pipelines, validation libraries, HSMs, and *every single endpoint* that verifies. That's years of coordinated work across the whole ecosystem. Start late and you get caught out.
 
-So the mental model is: **key exchange is the fire alarm; authentication is the slow structural retrofit.** Less acute, but you can't do it overnight, and your trust anchors outlive your traffic. That's why we should understand it now.
+So the mental model is: **key exchange is the fire alarm, authentication is the slow structural retrofit.** Less acute, but you can't do it overnight, and your trust anchors outlive your traffic. That's why we should understand it now.
 
 ---
 
@@ -69,7 +69,7 @@ All three share the same fatal flaw: their hard problem (factoring or discrete l
 
 ### The post-quantum newcomers
 
-- **ML-DSA** (Module-Lattice-Based Digital Signature Algorithm, [**FIPS 204**](https://csrc.nist.gov/pubs/fips/204/final)). The lattice-based all-rounder and NIST's recommended general-purpose default. Comes in three sizes: **ML-DSA-44** (NIST level 2), **ML-DSA-65** (level 3, the sensible default), and **ML-DSA-87** (level 5). Fast signing and verification; moderately large keys and signatures.
+- **ML-DSA** (Module-Lattice-Based Digital Signature Algorithm, [**FIPS 204**](https://csrc.nist.gov/pubs/fips/204/final)). The lattice-based all-rounder and NIST's recommended general-purpose default. Comes in three sizes: **ML-DSA-44** (NIST level 2), **ML-DSA-65** (level 3, the sensible default), and **ML-DSA-87** (level 5). Fast signing and verification, with moderately large keys and signatures.
 - **SLH-DSA** (Stateless Hash-Based Digital Signature Algorithm, [**FIPS 205**](https://csrc.nist.gov/pubs/fips/205/final)). Its security relies *only* on hash functions: no lattices, no number theory, the most conservative assumption you can make. The price? *Enormous* signatures and slow signing. Each variant is tagged `s` (small/slow) or `f` (fast/huge), e.g. `SLH-DSA-SHA2-128s`.
 - **FN-DSA** (FFT over NTRU lattices, [**FIPS 206**](https://csrc.nist.gov/projects/post-quantum-cryptography)): small signatures, but notoriously tricky to implement safely (it leans on floating-point arithmetic). Still in **draft** as of this writing, so we won't lab it, but keep it on your radar for bandwidth-constrained uses.
 
@@ -102,7 +102,7 @@ The sizes below are [DER-encoded](https://en.wikipedia.org/wiki/X.690#DER_encodi
 
 Look at that jump! An Ed25519 certificate is just 326 bytes. The equivalent ML-DSA-65 cert is **5516 bytes**, roughly **17× larger**. And SLH-DSA-128f? Its signature *alone* is **17 KB**, bigger than many entire web pages. Notice SLH-DSA's quirk: its public key is a tiny 32 bytes (great for storage), but the signature is gigantic.
 
-> **Wait, why isn't the cert just public key + signature?** Good catch. For ML-DSA-65, the key (1952 B) plus the signature (3309 B) add up to 5261 B, yet the certificate is 5516 B, about 255 B more. That's because a certificate isn't a simple concatenation; it's a structured [X.509](https://en.wikipedia.org/wiki/X.509) document that *embeds* the key and signature alongside metadata. That overhead is roughly *fixed* (~230–260 B here) no matter the algorithm, which is why it dominates a tiny Ed25519 cert (230 of its 326 bytes) but barely registers for a chunky ML-DSA one (255 of 5516).
+> **Wait, why isn't the cert just public key + signature?** Good catch. For ML-DSA-65, the key (1952 B) plus the signature (3309 B) add up to 5261 B, yet the certificate is 5516 B, about 255 B more. That's because a certificate isn't a simple concatenation. It's a structured [X.509](https://en.wikipedia.org/wiki/X.509) document that *embeds* the key and signature alongside metadata. That overhead is roughly *fixed* (~230–260 B here) no matter the algorithm, which is why it dominates a tiny Ed25519 cert (230 of its 326 bytes) but barely registers for a chunky ML-DSA one (255 of 5516).
 
 Why does this matter for authentication? Because handshakes carry **certificate chains *plus* a handshake signature**. A typical chain is leaf + intermediate (+ sometimes the root), and each cert carries its issuer's signature. Swap a 3-cert ECDSA chain (~1.2 KB total) for an ML-DSA-65 chain and you're suddenly shipping **15–20 KB** in the handshake. In IKEv2 that means the `IKE_AUTH` exchange balloons and leans hard on fragmentation ([RFC 7383](https://www.rfc-editor.org/rfc/rfc7383)): exactly the same pressure ML-KEM put on `IKE_INTERMEDIATE` in the key-exchange lab, but now on the authentication leg.
 
@@ -111,7 +111,7 @@ Why does this matter for authentication? Because handshakes carry **certificate 
 > - **Packet loss hurts much more.** A message split into N fragments only reassembles if *all N* arrive. Lose a single one and the whole message is retransmitted, not just the missing piece. The more fragments, the higher the odds at least one drops, so on lossy or congested links, big PQC handshakes retransmit more often, and latency spikes.
 > - **Middleboxes are hostile to fragments.** Firewalls, NATs, and load balancers routinely drop, rate-limit, or mishandle fragmented UDP. (IKE-layer fragmentation exists precisely because *IP*-layer fragmentation is so unreliable on the open internet.) More fragments means more chances to hit a box that quietly black-holes them, producing handshakes that fail in crazy hard-to-debug ways.
 > - **It enlarges the pre-authentication attack surface.** These bytes fly *before* the peer has proven who it is, so a responder must buffer and reassemble fragments from a not-yet-authenticated initiator. That's extra memory and state an attacker can try to exhaust (fragment floods), plus a juicier target for traffic-amplification abuse.
-> - **MTU guesswork bites.** Fragment sizing depends on the path MTU; guess wrong and fragments get silently dropped, again surfacing as intermittent, confusing failures.
+> - **MTU guesswork bites.** Fragment sizing depends on the path MTU. Guess wrong and fragments get silently dropped, again surfacing as intermittent, confusing failures.
 >
 > None of this *breaks* PQC authentication (strongSwan and friends handle it), but it's why "the certs got bigger" isn't a cosmetic detail. Size turns into round trips, retransmits, and middlebox trouble, which is exactly the kind of thing that bites at scale.
 
@@ -127,7 +127,7 @@ Why does this matter for authentication? Because handshakes carry **certificate 
 | SLH-DSA-128f | a few ms | noticeably heavier |
 | SLH-DSA-128s | ~100+ ms | dramatically slower to sign |
 
-> **Honest caveat:** invoking the `openssl` CLI costs a few milliseconds of process startup, which swamps the actual crypto for the fast algorithms, so treat the "instant" rows as an upper bound. The signal that *is* real and reproducible: **ML-DSA signs and verifies right alongside Ed25519 and ECDSA**, while **SLH-DSA's `s` ("small") variants are orders of magnitude slower to sign.** That slowness is precisely why SLH-DSA is reserved for things you sign rarely (a root CA signs a handful of certs a year; who cares if each takes 100 ms?) rather than things you sign constantly (a busy TLS terminator doing thousands of handshakes a second).
+> **Honest caveat:** invoking the `openssl` CLI costs a few milliseconds of process startup, which swamps the actual crypto for the fast algorithms, so treat the "instant" rows as an upper bound. The signal that *is* real and reproducible: **ML-DSA signs and verifies right alongside Ed25519 and ECDSA**, while **SLH-DSA's `s` ("small") variants are orders of magnitude slower to sign.** That slowness is precisely why SLH-DSA is reserved for things you sign rarely (a root CA signs a handful of certs a year, so who cares if each takes 100 ms?) rather than things you sign constantly (a busy TLS terminator doing thousands of handshakes a second).
 
 ### Security and maturity
 
@@ -167,13 +167,13 @@ Two tools carry this lab, and they do genuinely different jobs, so it's worth be
 - **[OpenSSL 3.5+](https://openssl-library.org/)** is the **workbench for the standalone cert lab**. It has **native** support for all three NIST PQC algorithms (ML-KEM/FIPS 203, ML-DSA/FIPS 204, and SLH-DSA/FIPS 205) straight from the default provider: no external libraries, no patches, no `oqs-provider`. We lean on it to generate post-quantum keys, mint certificates, weigh them, and sign/verify/tamper (Exercises 1–3). It's the universal crypto CLI everyone already knows, it runs standalone in a throwaway `alpine` container with no compiling, and its PQC support is in a *stable* release, which together make it the most convenient, reproducible way to dissect a PQC certificate today.
 - **strongSwan** is the **protocol engine for the live tunnel**. It's the same IKEv2 daemon from the key-exchange lab, and we put it to work twice in the live exercises: the **stable** release for classical (ECDSA) certificate auth, and an **unreleased development build** (a pinned `master` commit with experimental ML-DSA support) for post-quantum (ML-DSA) certificate auth. Where that code stands is covered in Exercise 5 below.
 
-The division of labor is the thing to keep straight: **OpenSSL is a crypto toolkit, not a VPN; strongSwan is a VPN daemon, not a crypto toolkit.** So we use OpenSSL to *understand* certificates in isolation (measure the size hit, watch a signature reject a tampered byte), then switch to strongSwan to *use* certificates for real on an IKEv2 wire. One honest caveat carries over from the companion lab: OpenSSL isn't an IKEv2 implementation (its PQC support targets TLS), so anything happening *on the VPN wire*, key exchange there and authentication here, is strongSwan's job. And note the split isn't quite "OpenSSL makes the certs, strongSwan uses them": the *live-tunnel* certs are actually minted by strongSwan's own `pki` tool inside `gen-certs.sh`, so OpenSSL's role is purely the standalone cert lab. Finally, while ML-KEM key exchange ships in stable strongSwan, post-quantum *authentication* over IKEv2 only exists in unreleased development code today, which is exactly what makes the post-quantum authentication run a peek over the frontier.
+The division of labor is the thing to keep straight: **OpenSSL is a crypto toolkit, not a VPN. strongSwan is a VPN daemon, not a crypto toolkit.** So we use OpenSSL to *understand* certificates in isolation (measure the size hit, watch a signature reject a tampered byte), then switch to strongSwan to *use* certificates for real on an IKEv2 wire. One honest caveat carries over from the companion lab: OpenSSL isn't an IKEv2 implementation (its PQC support targets TLS), so anything happening *on the VPN wire*, key exchange there and authentication here, is strongSwan's job. And note the split isn't quite "OpenSSL makes the certs, strongSwan uses them": the *live-tunnel* certs are actually minted by strongSwan's own `pki` tool inside `gen-certs.sh`, so OpenSSL's role is purely the standalone cert lab. Finally, while ML-KEM key exchange ships in stable strongSwan, post-quantum *authentication* over IKEv2 only exists in unreleased development code today, which is exactly what makes the post-quantum authentication run a peek over the frontier.
 
 ---
 
 ## Let's get our hands dirty: the lab
 
-Alright, enough theory: let's make some quantum-safe certificates and weigh them! These labs are self-contained and run entirely inside tiny throwaway Docker containers, so the only thing you need installed is **Docker**.
+Alright, enough theory: let's make some quantum-safe certificates and weigh them! These labs are self-contained and run entirely inside tiny throwaway Docker containers, so the only thing you need installed is **Docker**. The recommended way to run this lab is the [dCloud lab](https://dcloud2.cisco.com/demo/hands-on-with-post-quantum-cryptography-pqc-using-containers), where Docker is ready and everything is tested end to end. Your own machine with Docker works too.
 
 ### Setup: get an OpenSSL 3.5+ shell
 
@@ -314,8 +314,8 @@ openssl pkeyutl -verify -pubin -inkey mldsa65.pub -rawin -in msg.txt -sigfile ms
 
 Two distinct things happen here, and the key distinction is which key each command touches:
 
-- The **first** command takes our **private** key (`mldsa65.key`, the file we signed with; it holds both halves of the key pair) and extracts *just the public half* into a new file (`mldsa65.pub`) via `-pubout`. The public key is the part you can hand out freely; anyone with it can check our signatures but nobody can forge new ones.
-- The **second** command does the actual verification using *only* that **public** key (`-pubin` says "the input key file is a public key"). It confirms the signature in `msg.sig` was produced by the matching private key over exactly the bytes in `msg.txt`. Note it never needs the private key; that's the whole point of public-key signatures: signing is private, verifying is public.
+- The **first** command takes our **private** key (`mldsa65.key`, the file we signed with, which holds both halves of the key pair) and extracts *just the public half* into a new file (`mldsa65.pub`) via `-pubout`. The public key is the part you can hand out freely. Anyone with it can check our signatures but nobody can forge new ones.
+- The **second** command does the actual verification using *only* that **public** key (`-pubin` says "the input key file is a public key"). It confirms the signature in `msg.sig` was produced by the matching private key over exactly the bytes in `msg.txt`. Note it never needs the private key. That's the whole point of public-key signatures: signing is private, verifying is public.
 
 You should see `Signature Verified Successfully`. Nice!
 
@@ -360,7 +360,7 @@ We'll do it twice, and the progression is the whole point:
 
 ### How the trust works
 
-Both peers trust one tiny **certificate authority (CA)** we spin up just for the lab. The CA signs two leaf certificates (one for the initiator, one for the responder), and each peer gets the CA certificate pre-installed so it can verify the other side. During the handshake each peer sends *only its own leaf cert*; the CA is already known to both. (That keeps the on-the-wire bytes down, which matters a lot once the certs go post-quantum.)
+Both peers trust one tiny **certificate authority (CA)** we spin up just for the lab. The CA signs two leaf certificates (one for the initiator, one for the responder), and each peer gets the CA certificate pre-installed so it can verify the other side. During the handshake each peer sends *only its own leaf cert*, because the CA is already known to both. (That keeps the on-the-wire bytes down, which matters a lot once the certs go post-quantum.)
 
 A small script (`gen-certs.sh`) does all the minting and drops the files into each peer's credential directory. You just tell it which algorithm to use.
 
@@ -386,7 +386,7 @@ That builds the (stable) strongSwan image and starts `ike-auth-initiator` (172.2
 docker compose run --rm --build certgen ecdsa
 ```
 
-The `certgen` helper builds a CA and issues an ECDSA leaf cert for each peer, installing the leaf cert, its private key, and the CA cert into the right folders for both sides. (The `--build` flag makes sure the helper is built from the same image as the peers; this matters once we move to ML-DSA, where the helper must come from the ML-DSA development build. Pass `ecdsa` now; we'll pass an ML-DSA variant when we go post-quantum.)
+The `certgen` helper builds a CA and issues an ECDSA leaf cert for each peer, installing the leaf cert, its private key, and the CA cert into the right folders for both sides. (The `--build` flag makes sure the helper is built from the same image as the peers. This matters once we move to ML-DSA, where the helper must come from the ML-DSA development build. Pass `ecdsa` now, and we'll pass an ML-DSA variant when we go post-quantum.)
 
 **Step 3: Load the fresh credentials**
 
@@ -467,7 +467,7 @@ exit
 
 Time to make the *signature* quantum-safe too. This means swapping in a strongSwan development build with ML-DSA support and reissuing the certificates as ML-DSA.
 
-> **Expectation setting:** this is genuinely experimental. ML-DSA support lives on strongSwan's `master`, but no release (6.1.0 included) ships it yet. So `Dockerfile.mldsa` pins a known-good `master` commit (`ML_DSA_REF`), that code keeps moving, the IKEv2-for-PQC-auth wire format is still an [IETF draft](https://datatracker.ietf.org/doc/draft-ietf-ipsecme-ikev2-pqc-auth/), and there are known sharp edges (ML-DSA private keys only parse in the 32-byte *seed* format, and large `IKE_AUTH` messages that split into *many* fragments have hit reassembly bugs; see strongSwan [issue #2889](https://github.com/strongswan/strongswan/issues/2889)). To stay on the happy path we use **ML-DSA-44** (the smallest variant) and keep the CA off the wire, which holds the handshake to 6 fragments, and in our testing the tunnel comes up cleanly. Push to larger variants or longer cert chains and you can absolutely tip it over; that's the frontier doing frontier things.
+> **Expectation setting:** this is genuinely experimental. ML-DSA support lives on strongSwan's `master`, but no release (6.1.0 included) ships it yet. So `Dockerfile.mldsa` pins a known-good `master` commit (`ML_DSA_REF`), that code keeps moving, the IKEv2-for-PQC-auth wire format is still an [IETF draft](https://datatracker.ietf.org/doc/draft-ietf-ipsecme-ikev2-pqc-auth/), and there are known sharp edges (ML-DSA private keys only parse in the 32-byte *seed* format, and large `IKE_AUTH` messages that split into *many* fragments have hit reassembly bugs, see strongSwan [issue #2889](https://github.com/strongswan/strongswan/issues/2889)). To stay on the happy path we use **ML-DSA-44** (the smallest variant) and keep the CA off the wire, which holds the handshake to 6 fragments, and in our testing the tunnel comes up cleanly. Push to larger variants or longer cert chains and you can absolutely tip it over. That's the frontier doing frontier things.
 
 **Step 1: Rebuild the peers from the ML-DSA development build**
 
@@ -475,7 +475,7 @@ Time to make the *signature* quantum-safe too. This means swapping in a strongSw
 docker compose -f docker-compose.yml -f docker-compose.mldsa.yml up -d --build
 ```
 
-The override (`docker-compose.mldsa.yml`) points the build at `Dockerfile.mldsa`, which compiles strongSwan from the pinned `master` commit. The *first* build compiles from source (about a minute on 8 cores); after that Docker caches the compiled layer, so re-running this command is near-instant unless you change the Dockerfile or bust the cache.
+The override (`docker-compose.mldsa.yml`) points the build at `Dockerfile.mldsa`, which compiles strongSwan from the pinned `master` commit. The *first* build compiles from source (about a minute on 8 cores). After that, Docker caches the compiled layer, so re-running this command is near-instant unless you change the Dockerfile or bust the cache.
 
 **Step 2: Reissue the certificates as ML-DSA**
 
@@ -487,7 +487,7 @@ Same helper, different algorithm: the CA and both leaf certs are now ML-DSA-44. 
 
 **Step 3: Reload and initiate**
 
-The rebuild in Step 1 recreated the containers, so reload both peers from the host (the container names are unchanged from the ECDSA run; `docker exec` doesn't care which image is underneath):
+The rebuild in Step 1 recreated the containers, so reload both peers from the host (the container names are unchanged from the ECDSA run, and `docker exec` doesn't care which image is underneath):
 
 ```bash
 docker exec ike-auth-responder swanctl --load-all
@@ -557,8 +557,8 @@ You'll see *two* outbound messages getting chopped up (the second one's byte cou
 
 Each one is a different post-quantum payload straining the MTU:
 
-- The **~1.2 KB message → 2 fragments** is the **ML-KEM key exchange** (carried in `IKE_INTERMEDIATE`, RFC 9370). This one shows up in the ECDSA run too; the key exchange is post-quantum either way.
-- The **~6.9 KB message → 6 fragments** is the **`IKE_AUTH`** carrying the ML-DSA leaf cert plus the ML-DSA signature. *This* split is unique to the post-quantum-auth run: an ML-DSA-44 leaf cert (~4 KB DER) plus its signature dwarfs the ~400-byte ECDSA equivalent. For comparison, in the ECDSA run `IKE_AUTH` fit in a single ~970-byte packet and never split; only the key exchange fragmented there.
+- The **~1.2 KB message → 2 fragments** is the **ML-KEM key exchange** (carried in `IKE_INTERMEDIATE`, RFC 9370). This one shows up in the ECDSA run too, because the key exchange is post-quantum either way.
+- The **~6.9 KB message → 6 fragments** is the **`IKE_AUTH`** carrying the ML-DSA leaf cert plus the ML-DSA signature. *This* split is unique to the post-quantum-auth run: an ML-DSA-44 leaf cert (~4 KB DER) plus its signature dwarfs the ~400-byte ECDSA equivalent. For comparison, in the ECDSA run `IKE_AUTH` fit in a single ~970-byte packet and never split. Only the key exchange fragmented there.
 
 This is *why* `fragmentation = yes` is non-negotiable for PQC auth, and why the fragment-reassembly path is exactly where the current bugs live.
 

@@ -92,7 +92,7 @@
           lab_ca_passphrase is empty or too short. IOS XE requires more than 7
           characters at the CA passphrase prompt; shorter values loop forever on
           "Password:" and never reach "Re-enter password:". Set a longer value in
-          group_vars/all/lab.yml.
+          group_vars/all/lab.yml (or demos/common/lab.yml, passed with -e).
         quiet: true
 
     - name: CA | no shutdown (strict prompt handling)

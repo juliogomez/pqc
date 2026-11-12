@@ -1,0 +1,4 @@
+# pqc_demo.py itself only needs the Python standard library plus IPython for the
+# inline panels. JupyterLab pulls in IPython and the kernel. If you open the
+# notebook in VS Code or Cursor instead, ipykernel alone is enough.
+jupyterlab>=4

@@ -33,6 +33,32 @@
   when: state == 'present'
   block:
 
+    # A switchport left at its default ("dynamic auto") has no dot1x or
+    # authentication commands at all: "% Invalid input" on "authentication periodic".
+    # Checked first because the interface goes on last and both ends run in
+    # parallel, so by the time one end is rejected the other has already closed its
+    # port and the link is down.
+    - name: Read the MACsec interface
+      cisco.ios.ios_command:
+        commands:
+          - "show running-config interface {{ my_macsec_interface }}"
+      register: eaptls_intf_mode
+      changed_when: false
+
+    - name: A switchport must be a static access port
+      ansible.builtin.assert:
+        that:
+          - >-
+            (eaptls_intf_mode.stdout[0] | default('')) is not search('switchport access vlan')
+            or (eaptls_intf_mode.stdout[0] | default('')) is search('switchport mode access')
+        fail_msg: >-
+          {{ my_macsec_interface }} on {{ inventory_hostname }} is a switchport without
+          "switchport mode access", so IOS XE offers no dot1x on it. Add it (the
+          access VLAN stays the same), then re-run:
+            interface {{ my_macsec_interface }}
+             switchport mode access
+        quiet: true
+
     - name: Enrol the EAP-TLS identity certificate
       ansible.builtin.include_role:
         name: common
@@ -114,7 +140,7 @@
           - "no mka policy {{ macsec_names.eaptls_mka_policy }}"
           - no authentication periodic
           - "no authentication timer reauthenticate {{ macsec_reauth_seconds }}"
-          - no macsec network-link
+          - "no {{ my_macsec_command }}"
       # The removal list has to mirror interface.yml line for line. It did not:
       # "authentication timer reauthenticate" and "access-session host-mode
       # multi-host" were applied on build and never taken off, so a torn-down
@@ -185,6 +211,7 @@
       cisco.ios.ios_config:
         lines:
           - "no username {{ my_macsec_identity }} aaa attribute list {{ macsec_names.linksec_attribute_list }}"
+          - "no username {{ my_macsec_peer_identity }} aaa attribute list {{ macsec_names.linksec_attribute_list }}"
 
     - name: Remove the EAP-TLS trustpoint
       when: macsec_eaptls_remove_trustpoint | default(false) | bool

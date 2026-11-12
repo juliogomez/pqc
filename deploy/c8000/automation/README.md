@@ -88,6 +88,10 @@ vi group_vars/all/lab.yml
 `lab.yml` is **gitignored**. `lab.yml.example` is not, so never put anything real in the
 example template.
 
+**Running the notebooks in [`demos/`](../../../demos/)?** Use `demos/common/lab.yml` instead:
+one file with these values *and* your topology, next to the notebooks, passed to every
+playbook with `-e`. See [Your lab file](../../../demos/README.md#your-lab-file).
+
 What you need to put in there: the three management addresses, the device login and enable password, the
 IKEv2 pre-shared key, the RFC 8784 PPK as hex, the MACsec CAK as 64 hex characters, and the
 passphrase for the local IOS CA. Every value shipped in the example is a throwaway lab value,

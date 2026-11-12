@@ -23,7 +23,8 @@
       - lab_ikev2_psk | default('') | length > 0
     fail_msg: >-
       {{ inventory_hostname }} has no peers in lab_topology, or lab_ikev2_psk is
-      not set. Copy group_vars/all/lab.yml.example to lab.yml and fill it in.
+      not set. Copy group_vars/all/lab.yml.example to lab.yml and fill it in
+      (running the demos? demos/common/lab.yml, passed with -e).
     quiet: true
 
 - name: IPsec baseline | remove hand-built exercise objects

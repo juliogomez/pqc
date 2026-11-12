@@ -30,15 +30,36 @@
 # why.
 #
 # ios_config still diffs against the running config, so this is idempotent.
+#
+# LOCKOUT GUARD. On a box with no AAA yet, "aaa new-model" changes every login: the
+# local user's "privilege 15" only counts once "aaa authorization exec" says so.
+# Without it, the next SSH login lands at privilege 1 ("Router>"), Ansible can't
+# enable, and every later task fails with "Authentication failed". Measured on a
+# C8235-G2 that had no aaa lines before this role ran. So when this role is the one
+# turning AAA on, it also keeps local logins working the way they did. A box that
+# already runs AAA keeps its own login policy, untouched.
+
+- name: AAA | is AAA already on?
+  cisco.ios.ios_command:
+    commands:
+      - show running-config | include ^aaa new-model
+  register: aaa_new_model_probe
+  changed_when: false
 
 - name: AAA | local authentication and authorization for dot1x
   cisco.ios.ios_config:
-    lines:
-      - aaa new-model
-      - aaa authentication dot1x default local
-      - aaa authorization network default local
-      - aaa authorization credential-download default local
-      - dot1x system-auth-control
+    lines: >-
+      {{ ['aaa new-model']
+         + ((((aaa_new_model_probe.stdout[0] | default('')) is search('aaa new-model')))
+            | ternary([], ['aaa authentication login default local', 'aaa authorization exec default local']))
+         + ['aaa authentication dot1x default local',
+            'aaa authorization network default local',
+            'aaa authorization credential-download default local',
+            'aaa local authentication default authorization default',
+            'dot1x system-auth-control'] }}
+  # "aaa local authentication default authorization default" is what lets the local
+  # EAP server authorize the identity it just authenticated. Without it the box that
+  # never had AAA (R2 here) logs dot1x "Authc Success" and then fails authorization.
 
 # The link must be MACsec-protected before the port authorizes. must-secure is what
 # turns "authenticated" into "authenticated AND encrypted"; without it a successful
@@ -49,11 +70,16 @@
     lines:
       - attribute type linksec-policy must-secure
 
-- name: AAA | bind the attribute list to the peer identity
+- name: AAA | bind the attribute list to both identities
   cisco.ios.ios_config:
-    lines:
-      - "username {{ my_macsec_identity }} aaa attribute list {{ macsec_names.linksec_attribute_list }}"
+    lines: >-
+      {{ [my_macsec_identity, my_macsec_peer_identity] | select | unique
+         | map('regex_replace', '^(.*)$', 'username \1 aaa attribute list ' ~ macsec_names.linksec_attribute_list)
+         | list }}
   # The username has to match the certificate CN, because that CN is what EAP sends.
+  # Both, because each end is an authenticator too: R1 authorizes the identity R2
+  # sends, so R1 needs "username R2" as well. With only its own name each end
+  # authenticated the peer and then failed authorization, both ways.
 
 - name: EAP | which certificate EAP-TLS presents, in both roles
   cisco.ios.ios_config:
@@ -160,3 +186,15 @@
       - "10 activate service-template {{ macsec_names.linksec_template }}"
     # DEFAULT_LINKSEC_POLICY_MUST_SECURE is a shipped-in service template, not ours.
     # Nothing in this layer creates or removes it.
+
+# Without this event a failed handshake is final: the port sits unauthorized until
+# someone clears the session. A cold start loses its first handshake routinely (both
+# ends start one at once), so retry after 7 seconds.
+- name: Subscriber | control policy | on failure, retry
+  cisco.ios.ios_config:
+    parents:
+      - "policy-map type control subscriber {{ macsec_names.control_policy }}"
+      - event authentication-failure match-all
+      - 10 class always do-until-failure
+    lines:
+      - 10 authentication-restart 7

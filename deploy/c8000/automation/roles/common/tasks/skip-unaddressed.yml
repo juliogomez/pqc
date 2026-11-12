@@ -16,8 +16,9 @@
   ansible.builtin.debug:
     msg: >-
       {{ inventory_hostname }} has no entry under lab_mgmt in
-      group_vars/all/lab.yml, so it is being skipped. Add it there if you expect
-      this device to be configured or checked.
+      group_vars/all/lab.yml (or demos/common/lab.yml, passed with -e), so it is
+      being skipped. Add it there if you expect this device to be configured or
+      checked.
   when: inventory_hostname not in (lab_mgmt | default({}))
 
 - name: Skipping | end the play for this host
