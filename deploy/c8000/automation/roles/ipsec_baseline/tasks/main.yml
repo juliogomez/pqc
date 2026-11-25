@@ -80,6 +80,50 @@
   when: state == 'present'
   block:
 
+    # WHY THIS PROBE EXISTS. Same trap as the MACsec PSK role. With "password
+    # encryption aes" on the box, a keyring PSK is stored as "pre-shared-key 6
+    # <blob>". Re-merging our plaintext PSK onto that leaf renders as "pre-shared-key
+    # 6 <plaintext>", the parser refuses it, and the whole edit dies with
+    #
+    #   inconsistent value: Device refused one or more commands
+    #
+    # So a second baseline run on a built lab failed instead of reporting
+    # changed=false. The fix: push the PSK only for peers the keyring does not have
+    # yet. The cost is the same as for the CAK: a rotated lab_ikev2_psk is NOT
+    # applied to an existing peer. Tear down (state=absent) and rebuild to rotate it.
+    #
+    # The probe lists keyring and peer lines only, never the keys.
+    - name: Look for peers already in the keyring
+      cisco.ios.ios_command:
+        commands:
+          - "show running-config | include ^crypto ikev2 keyring | peer "
+      register: ipsec_keyring_probe
+      changed_when: false
+
+    - name: Record which peers already have a PSK
+      ansible.builtin.set_fact:
+        ipsec_keyring_peers: "{{ _peers_json | from_json }}"
+      vars:
+        _peers_json: >-
+          {%- set ns = namespace(inside=false, peers=[]) -%}
+          {%- for line in (ipsec_keyring_probe.stdout[0] | default('')).splitlines() -%}
+            {%- if line.startswith('crypto ikev2 keyring ') -%}
+              {%- set ns.inside = (line.split()[3] == crypto_names.ike_keyring) -%}
+            {%- elif ns.inside and line.strip().startswith('peer ') -%}
+              {%- set ns.peers = ns.peers + [line.split()[1] | upper] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.peers | to_json }}
+
+    - name: Say plainly that stored PSKs are being left alone
+      ansible.builtin.debug:
+        msg: >-
+          Keyring {{ crypto_names.ike_keyring }} on {{ inventory_hostname }} already has
+          {{ ipsec_keyring_peers | join(', ') }}, so their PSK was NOT pushed and the
+          stored value is untouched. To rotate lab_ikev2_psk: "ansible-playbook
+          ipsec-baseline.yml -e state=absent", then "ansible-playbook ipsec-baseline.yml".
+      when: ipsec_keyring_peers | length > 0
+
     - name: Render IKEv2 global
       ansible.builtin.set_fact:
         nc_label: IKEv2 proposal, policy, keyring, fragmentation

@@ -367,7 +367,8 @@ def _show_run(run: PlayRun, tail: int, expect_changed: int | None, expect_refusa
     if len(lines) > tail:
         body = f"… ({len(lines) - tail} earlier lines hidden; full log: run.text)\n" + body
     res = Result(run.command.split(), run.rc, body, "")
-    _emit_cmd("Ansible", SLATE, "(deploy/c8000/automation)", f"{run.command}    # {run.elapsed:.0f} s", res)
+    note = ", a refusal is the expected result" if expect_refusal else ""
+    _emit_cmd("Ansible", SLATE, "(deploy/c8000/automation)", f"{run.command}    # {run.elapsed:.0f} s{note}", res)
     rows = []
     report = _report_changes(run.text)
     for host in ROUTERS:
@@ -382,8 +383,12 @@ def _show_run(run: PlayRun, tail: int, expect_changed: int | None, expect_refusa
             rows.append((f"{host}  config changes", str(expect_changed), shown,
                          config == expect_changed and st["failed"] == 0 and st["unreachable"] == 0))
         else:
-            rows.append((f"{host}  failed / unreachable", "0 / 0", f"{st['failed']} / {st['unreachable']}",
-                         st["failed"] == 0 and st["unreachable"] == 0))
+            clean = st["failed"] == 0 and st["unreachable"] == 0
+            problems = ", ".join(p for p in (
+                f"{st['failed']} task(s) failed" if st["failed"] else "",
+                "unreachable" if st["unreachable"] else "") if p)
+            rows.append((f"{host}  playbook ran", "without errors",
+                         "without errors" if clean else problems, clean))
     if expect_refusal:
         refused = run.rc != 0 and "Nothing has been changed" in run.text
         rows.append(("refused, nothing changed", "yes", "yes" if refused else "no", refused))
@@ -437,7 +442,8 @@ def playbook_wait(run: PlayRun, *, expect_changed: int | None = None, tail: int 
         run.rc = run._proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         run.rc = 124
-    run.elapsed = time.time() - run._start
+    # The wait cell may run long after the playbook ended, so stop the clock at its last log write.
+    run.elapsed = min(time.time(), run._log.stat().st_mtime) - run._start
     run.text = run._log.read_text()
     run.recap = _parse_recap(run.text)
     return _show_run(run, tail, expect_changed, False)

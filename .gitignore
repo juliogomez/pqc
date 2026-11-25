@@ -77,6 +77,7 @@ deploy/c8000/automation/.lab-ca/
 # local CA passphrase. Copy lab.yml.example to lab.yml and fill it in; the example
 # is tracked, the real file never is.
 deploy/c8000/automation/group_vars/all/lab.yml
+deploy/c8000/automation/group_vars/all/zz-lab.yml
 deploy/c9300/automation/group_vars/all/lab.yml
 # The demos' one-file version of the same (plus topology). Copy
 # demos/common/lab.example.yml to lab.yml; same rule.

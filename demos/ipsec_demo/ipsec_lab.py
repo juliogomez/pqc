@@ -4,9 +4,9 @@ Everything generic (router handles, checks, playbooks, container labs) lives in
 ../common/lab.py. This file adds the IPsec parts: the two container labs Act 1
 uses, the Tunnel0 addressing, and check() / setup() for Act 2's starting state.
 
-Router handles never send configuration. Every change in Act 2 is typed by you,
-or made by a playbook you run on purpose. setup() is the one exception, and it
-says so.
+Router handles (r1, r2, r3) and checks never send configuration. Changes go through
+configure() and cli(), which run the demo's CLI over SSH and show the session the way
+a terminal would, or through a playbook. Every cell that changes a router says so.
 """
 from __future__ import annotations
 
@@ -20,12 +20,58 @@ import lab
 from lab import *  # noqa: F401,F403  (r1/r2/r3, playbook, router_check, ... for the notebook)
 from lab import (
     ANSIBLE_BIN, PING_OK, REPO_ROOT, ROUTERS, TOPOLOGY_FILE, UNDERLAY_IF, UNDERLAY_IP,
-    Check, ContainerLabs, _adhoc, _emit_text, _r2_legs, _topology_ok, compose, container_status,
-    dexec, pkill_in, playbook, router_check,
+    GREEN, RED, Check, ContainerLabs, _adhoc, _emit_text, _r2_legs, _topology_ok, compose,
+    container_status, dexec, pkill_in, playbook, result, router_check,
 )
-from pqc_demo import IPsecAuthDemo
+from pqc_demo import IPsecAuthDemo, Result, _emit_cmd
 
 TUNNEL0_IP = {"r1": "192.168.100.1", "r3": "192.168.100.2"}
+_HANDLES = {"r1": lab.r1, "r2": lab.r2, "r3": lab.r3}
+
+
+def _cli_lines(parts: tuple) -> list[str]:
+    """Blocks or single lines in, CLI lines out. Blank lines and "! comments" are dropped."""
+    lines = []
+    for part in parts:
+        for ln in (part if isinstance(part, (list, tuple)) else str(part).splitlines()):
+            ln = re.sub(r"\s+!.*$", "", ln.rstrip())
+            if ln.strip() and not ln.lstrip().startswith("!"):
+                lines.append(ln)
+    return lines
+
+
+def _session(host: str, mode: str, parts: tuple, confirm: bool, show: bool) -> Result:
+    lines = _cli_lines(parts)
+    script = Path(__file__).resolve().parent / "router_cli.py"
+    req = json.dumps({"host": host, "mode": mode, "lines": lines, "confirm": confirm})
+    try:
+        proc = subprocess.run([str(ANSIBLE_BIN / "python"), str(script), req],
+                              capture_output=True, text=True, timeout=600)
+        res = Result([host, mode, *lines], proc.returncode, proc.stdout, proc.stderr.strip()[-800:])
+    except subprocess.TimeoutExpired:
+        res = Result([host, mode, *lines], 1, "", "timed out after 600 s")
+    if show:
+        h = _HANDLES[host]
+        if mode == "config":
+            where, summary = "(over SSH, CONFIGURES the router)", f"configure terminal ({len(lines)} lines)"
+        else:
+            where, summary = "(over SSH)", " ; ".join(lines)
+        _emit_cmd(h.label, h.accent, where, summary, res)
+    return res
+
+
+def configure(host: str, *lines, show: bool = True) -> Result:
+    """Paste config on one router: configure terminal, your lines, end. Shows the session."""
+    return _session(host, "config", lines, False, show)
+
+
+def cli(host: str, *lines, confirm: bool = False, show: bool = True) -> Result:
+    """Exec-mode commands on one router (show, ping, clear, ...). Shows the session.
+
+    A line ending in " ?" shows the router's help for it. confirm=True answers "yes"
+    when a command asks [yes/no].
+    """
+    return _session(host, "exec", lines, confirm, show)
 
 
 def underlay() -> None:
@@ -36,27 +82,113 @@ def underlay() -> None:
               f"inside {TUNNEL0_IP['r1']} / {TUNNEL0_IP['r3']}.")
 
 
+def rekey(rounds: int = 4, show: bool = True) -> bool:
+    """R1: clear the IKEv2 SA, then ping Tunnel0 until the new SA answers.
+
+    After the clear, IOS took 2 to 34 s to re-initiate in our runs, so one 20-ping run
+    (40 s of 2 s timeouts) can end with no reply at all. Each extra round adds 20 pings.
+    """
+    cli("r1", "clear crypto ikev2 sa", show=show)
+    return ping_tunnel(rounds, show)
+
+
+def ping_tunnel(rounds: int = 4, show: bool = True) -> bool:
+    """R1: ping R3's Tunnel0 address, 20 at a time, until it answers."""
+    for _ in range(rounds):
+        res = cli("r1", f"ping {TUNNEL0_IP['r3']} repeat 20", show=show)
+        if re.search(_PING_OK, res.out):
+            return True
+    _emit_text(f"Tunnel0 didn't answer after {rounds * 20} pings. Check the SA with "
+               "cli('r1', 'show crypto ikev2 sa detailed').")
+    return False
+
+
+# Demo 5: one EPC frame line, then its hex rows. Byte 0x3C (row 0030, 13th byte) is the
+# IKE exchange type, byte 0x3D the flags (0x20 = response).
+_EPC_FRAME = re.compile(r"^\s*\d+\s+(\d+)\s+[\d.]+\s+(\S+)\s+->\s+(\S+)", re.M)
+_EPC_ROW30 = re.compile(r"^\s*0030:\s+((?:[0-9A-F]{8}\s){3}[0-9A-F]{8})", re.M)
+IKE_EXCHANGES = {34: "IKE_SA_INIT", 43: "IKE_INTERMEDIATE", 35: "IKE_AUTH", 37: "INFORMATIONAL"}
+DEMO5_BYTES = {34: (488, 555), 43: (1322, 1226), 35: (682, 346)}
+
+
+def _epc_frames(text: str) -> list[tuple[int, int, bool]]:
+    """(size, exchange type, is_response) per captured frame."""
+    frames, starts = [], [m for m in _EPC_FRAME.finditer(text)]
+    for i, m in enumerate(starts):
+        body = text[m.end(): starts[i + 1].start() if i + 1 < len(starts) else len(text)]
+        row = _EPC_ROW30.search(body)
+        if row:
+            raw = bytes.fromhex(row.group(1).replace(" ", ""))
+            frames.append((int(m.group(1)), raw[12], bool(raw[13] & 0x20)))
+    return frames
+
+
+def capture_handshake(show_buffer: bool = False) -> bool:
+    """Demo 5: capture R1's rekey on R2 with EPC and weigh every IKE exchange.
+
+    CONFIGURES R2 for the duration (a capture point named CAP) and removes it at the end.
+    """
+    ifc = next((i for i, _, peer in _r2_legs() if peer == "r1"), None)
+    if ifc is None:
+        _emit_text("No R2 interface toward R1 in your lab file; see underlay().")
+        return False
+    cli("r2", f"monitor capture CAP interface {ifc} both", "monitor capture CAP match ipv4 protocol udp any any",
+        "monitor capture CAP buffer size 20", "monitor capture CAP start")
+    try:
+        up = rekey()
+    finally:
+        buf = cli("r2", "monitor capture CAP stop", "show monitor capture CAP buffer detailed",
+                  "no monitor capture CAP", show=show_buffer)
+    frames = _epc_frames(buf.out)
+    sizes: dict[int, list[int | None]] = {}
+    for size, xtype, response in frames:
+        slot = sizes.setdefault(xtype, [None, None])
+        if slot[int(response)] is None:
+            slot[int(response)] = size
+    rows = []
+    for xtype, (req, resp) in DEMO5_BYTES.items():
+        got = sizes.get(xtype, [None, None])
+        measured = (f"{got[0]} + {got[1]} = {got[0] + got[1]:,} B" if None not in got else
+                    "not captured")
+        rows.append((f"R2  {IKE_EXCHANGES[xtype]} ({xtype})", f"{req} + {resp} = {req + resp:,} B", measured,
+                     got == [req, resp]))
+    seen = ", ".join(f"{IKE_EXCHANGES.get(x, x)} x{sum(1 for f in frames if f[1] == x)}"
+                     for x in dict.fromkeys(f[1] for f in frames))
+    ok = up and all(r[3] for r in rows)
+    result("Demo 5: the handshake, weighed on R2", f"EPC on {ifc}, {len(frames)} frames: {seen or 'none'}",
+           rows=rows, banner="Same bytes as our runs. ML-KEM is the IKE_INTERMEDIATE row." if ok else
+           "Different from our runs. Rerun with capture_handshake(show_buffer=True) to see every frame.",
+           banner_color=GREEN if ok else RED, accent=BLUE)
+    return ok
+
+
+def mldsa_config(h: str) -> list[str]:
+    """Demo 7's config for one router (ipsec.md, Exercise 5), with this lab's underlay addresses."""
+    peer = "r3" if h == "r1" else "r1"
+    return [
+        "crypto ikev2 profile MLDSA-PROFILE",
+        f" match identity remote address {UNDERLAY_IP[peer]} 255.255.255.255",
+        f" identity local address {UNDERLAY_IP[h]}",
+        " authentication local mldsa-sig",
+        " authentication remote mldsa-sig",
+        " pki trustpoint TP-MLDSA65",
+        " dpd 30 5 periodic",
+        "crypto ipsec profile MLDSA-IPSEC",
+        " set transform-set CLASSICAL-TS",
+        " set ikev2-profile MLDSA-PROFILE",
+        "interface Tunnel0",
+        " tunnel protection ipsec profile MLDSA-IPSEC",
+        " no shutdown",
+    ]
+
+
 def mldsa_snippets() -> None:
-    """Demo 7's paste for R1 and R3 (ipsec.md, Exercise 5), with this lab's underlay addresses."""
+    """Demo 7's config for R1 and R3, printed, with this lab's underlay addresses."""
     if not _topology_ok():
         return
-    for h, peer in (("r1", "r3"), ("r3", "r1")):
+    for h in ("r1", "r3"):
         print(f"! ---- {h.upper()} ----")
-        print("\n".join([
-            "crypto ikev2 profile MLDSA-PROFILE",
-            f" match identity remote address {UNDERLAY_IP[peer]} 255.255.255.255",
-            f" identity local address {UNDERLAY_IP[h]}",
-            " authentication local mldsa-sig",
-            " authentication remote mldsa-sig",
-            " pki trustpoint TP-MLDSA65",
-            " dpd 30 5 periodic",
-            "crypto ipsec profile MLDSA-IPSEC",
-            " set transform-set CLASSICAL-TS",
-            " set ikev2-profile MLDSA-PROFILE",
-            "interface Tunnel0",
-            " tunnel protection ipsec profile MLDSA-IPSEC",
-            " no shutdown",
-        ]) + "\n")
+        print("\n".join(mldsa_config(h)) + "\n")
 
 
 # --------------------------------------------------------------------------- #
@@ -197,6 +329,34 @@ def act2_setup() -> bool:
             break
     _emit_text(f"Setup finished in {time.time() - start:.0f} s. Checking:")
     return act2_check()
+
+
+def hub_spoke_check() -> bool:
+    """Read-only: Act 3's hub and spoke is up, and still classical (Demo 8 adds ML-KEM).
+
+    Tunnel numbers and addresses come from lab_topology, so this follows your lab file.
+    """
+    if not _topology_ok():
+        return False
+    topo, checks = lab.TOPOLOGY, []
+    for h in ROUTERS:
+        for p in topo[h].get("peers", []):
+            if "tunnel_id" not in p:
+                continue
+            tun = f"Tunnel{p['tunnel_id']}"
+            far = next(q for q in topo[p["name"]]["peers"] if q["name"] == h)
+            checks += [
+                Check(h, f"show interfaces {tun} | include line protocol", f"{tun} to {p['name'].upper()}",
+                      "up, line protocol up", r"is up, line protocol is up"),
+                Check(h, f"ping {far['tunnel_address']} source {tun}", f"ping {p['name'].upper()} over {tun}",
+                      "pings succeed", _PING_OK),
+            ]
+    for p in topo["r2"].get("peers", []):
+        checks.append(Check("r2", "show crypto ikev2 sa", f"IKEv2 SA with {p['name'].upper()}", "READY",
+                            rf"{re.escape(p['local_address'])}/500\s+{re.escape(p['remote_address'])}/500\s+\S+\s+READY"))
+    checks.append(Check("r2", "show crypto ikev2 sa detailed", "still classical (Demo 8 adds ML-KEM)", "absent",
+                        r"PQC Key Exchange", present=False))
+    return router_check("Act 3: hub and spoke", "R2 the hub, R1 and R3 the spokes, read-only", checks)
 
 
 check = act2_check

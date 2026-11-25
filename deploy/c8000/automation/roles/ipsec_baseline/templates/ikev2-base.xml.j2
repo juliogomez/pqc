@@ -59,9 +59,11 @@
                 <ipv4-address>{{ peer.remote_address }}</ipv4-address>
               </ipv4>
             </address>
+{% if (peer.name | upper) not in (ipsec_keyring_peers | default([])) %}
             <pre-shared-key>
               <key>{{ lab_ikev2_psk }}</key>
             </pre-shared-key>
+{% endif %}
           </peer>
 {% endfor %}
 {% endif %}

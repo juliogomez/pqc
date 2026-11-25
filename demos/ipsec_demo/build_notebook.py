@@ -3,6 +3,10 @@
 
     python3 build_notebook.py
 
+ipsec_demo.ipynb has been edited by hand since its last build, so the notebook
+is now the file to change and this script refuses to overwrite it (--force
+discards those edits). It stays as the record of how the notebook started.
+
 A declarative cell list written as raw nbformat v4 JSON (see ../common/nbbuild.py).
 The runtime lives in ipsec_lab.py (IPsec specifics), ../common/lab.py (routers,
 playbooks) and ../containers_demo/pqc_demo.py (containers and panels).

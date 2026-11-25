@@ -5,12 +5,18 @@ copies its Act 1 cells verbatim from ../containers_demo/PQC_DEMOS.ipynb with
 act1_section(), and writes raw nbformat v4 JSON with write(). No third-party
 packages.
 
+write() won't overwrite a notebook someone edited by hand since its last build
+(it compares a fingerprint of the cells), unless you pass --force. Once a
+notebook is hand-edited, the notebook is the file to change, not its builder.
+
 The preflight blocks (containers, underlay, automation, laptop clean up) are
 the same in every demo, so they live here too: one wording, one place to fix it.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import sys
 from pathlib import Path
 
 DEMOS = Path(__file__).resolve().parent.parent
@@ -176,12 +182,37 @@ def laptop_cleanup_cell(what: str) -> dict:
     )
 
 
+def _fingerprint(cells: list[dict]) -> str:
+    """Hash of cell types and sources only: running cells (outputs, counts, ids) doesn't change it."""
+    body = [(c.get("cell_type"), "".join(c.get("source", []))) for c in cells]
+    return hashlib.sha256(json.dumps(body, ensure_ascii=False).encode()).hexdigest()
+
+
+def _hand_edited(out: Path, new_print: str) -> bool:
+    """True if ``out`` has cell changes the last build didn't make."""
+    if not out.exists():
+        return False
+    try:
+        old = json.loads(out.read_text())
+    except ValueError:
+        return True
+    have = _fingerprint(old.get("cells", []))
+    built = old.get("metadata", {}).get("nbbuild", {}).get("fingerprint")
+    return have not in (built, new_print)
+
+
 def write(out: Path, cells: list[dict], note: str = "") -> None:
+    fingerprint = _fingerprint(cells)
+    if _hand_edited(out, fingerprint) and "--force" not in sys.argv:
+        raise SystemExit(
+            f"{out.name} has edits the builder didn't make, so it won't overwrite them.\n"
+            f"Edit the notebook itself instead, or rerun with --force to throw those edits away.")
     nb = {
         "cells": cells,
         "metadata": {
             "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
             "language_info": {"name": "python"},
+            "nbbuild": {"fingerprint": fingerprint},
         },
         "nbformat": 4,
         "nbformat_minor": 4,
