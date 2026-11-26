@@ -1,0 +1,13 @@
+show logging | begin Log Buffer
+Log Buffer (102400 bytes):
+
+Nov 26 19:11:21.636: %SYS-4-LOG_CLEARED: Logging buffer was cleared by user <lab-user>
+Nov 26 19:11:28.007: %LINEPROTO-5-UPDOWN: Line protocol on Interface Tunnel101, changed state to down
+Nov 26 19:11:28.613: %LINEPROTO-5-UPDOWN: Line protocol on Interface Tunnel101, changed state to up
+Nov 26 19:11:31.273: %LINEPROTO-5-UPDOWN: Line protocol on Interface Tunnel102, changed state to down
+Nov 26 19:11:31.276: %LINEPROTO-5-UPDOWN: Line protocol on Interface Tunnel101, changed state to down
+Nov 26 19:11:32.169: %LINEPROTO-5-UPDOWN: Line protocol on Interface Tunnel102, changed state to up
+Nov 26 19:11:32.178: %LINEPROTO-5-UPDOWN: Line protocol on Interface Tunnel101, changed state to up
+Nov 26 19:11:34.358: %LINEPROTO-5-UPDOWN: Line protocol on Interface Tunnel102, changed state to down
+Nov 26 19:11:35.019: %LINEPROTO-5-UPDOWN: Line protocol on Interface Tunnel102, changed state to up
+C8235-G2#

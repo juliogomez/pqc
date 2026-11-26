@@ -1,0 +1,38 @@
+===== T0 =====
+show debugging
+IOSXE Conditional Debug Configs:
+
+Conditional Debug Global State: Stop
+
+
+IOSXE Packet Tracing Configs: 
+
+
+
+
+
+Packet Infra debugs:
+
+Ip Address                                               Port
+------------------------------------------------------|----------
+
+
+
+
+
+
+
+
+C8455-G2#show crypto ikev2 stats exchange | include NO_PROPOSAL|EXCHANGE/
+EXCHANGE/NOTIFY                   TX(REQ)    TX(RES)    RX(REQ)    RX(RES)   RTX(REQ)   RTX(RES)   RRX(REQ)   RRX(RES)
+NO_PROPOSAL_CHOSEN                      0         12          0         20          0          0          0          0
+C8455-G2#
+===== T0 + 65 s, no debugs =====
+show crypto ikev2 stats exchange | include NO_PROPOSAL|EXCHANGE/
+EXCHANGE/NOTIFY                   TX(REQ)    TX(RES)    RX(REQ)    RX(RES)   RTX(REQ)   RTX(RES)   RRX(REQ)   RRX(RES)
+NO_PROPOSAL_CHOSEN                      0         14          0         22          0          0          0          0
+C8455-G2#show logging | begin Log Buffer
+Log Buffer (102400 bytes):
+
+Nov 26 19:21:21.629: %SYS-4-LOG_CLEARED: Logging buffer was cleared by user <lab-user>
+C8455-G2#

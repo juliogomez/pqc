@@ -1,0 +1,114 @@
+===== BEFORE =====
+show crypto ipsec sa peer 10.0.12.2
+
+interface: Tunnel101
+    Crypto map tag: Tunnel101-head-0, local addr 10.0.12.1
+
+   protected vrf: (none)
+   local  ident (addr/mask/prot/port): (0.0.0.0/0.0.0.0/0/0)
+   remote ident (addr/mask/prot/port): (0.0.0.0/0.0.0.0/0/0)
+   current_peer 10.0.12.2 port 500
+     PERMIT, flags={origin_is_acl,}
+    #pkts encaps: 6, #pkts encrypt: 6, #pkts digest: 6
+    #pkts decaps: 6, #pkts decrypt: 6, #pkts verify: 6
+    #pkts compressed: 0, #pkts decompressed: 0
+    #pkts not compressed: 0, #pkts compr. failed: 0
+    #pkts not decompressed: 0, #pkts decompress failed: 0
+    #send errors 0, #recv errors 0
+
+     local crypto endpt.: 10.0.12.1, remote crypto endpt.: 10.0.12.2
+     plaintext mtu 1446, path mtu 1500, ip mtu 1500, ip mtu idb FiveGigabitEthernet0/0/0
+     current outbound spi: 0x5BEB586(96384390)
+     PFS (Y/N): N, DH group: none
+
+     inbound esp sas:
+      spi: 0x33319F7(53680631)
+        transform: esp-gcm 256 ,
+        in use settings ={Tunnel, }
+        conn id: 6753, flow_id: ESG:4753, sibling_flags FFFFFFFF80000048, crypto map: Tunnel101-head-0, initiator : False
+        sa timing: remaining key lifetime (sec): 3549
+        Kilobyte Volume Rekey has been disabled
+        IV size: 8 bytes
+        replay detection support: Y
+        Status: ACTIVE(ACTIVE)
+
+     inbound ah sas:
+
+     inbound pcp sas:
+
+     outbound esp sas:
+      spi: 0x5BEB586(96384390)
+        transform: esp-gcm 256 ,
+        in use settings ={Tunnel, }
+        conn id: 6754, flow_id: ESG:4754, sibling_flags FFFFFFFF80000048, crypto map: Tunnel101-head-0, initiator : False
+        sa timing: remaining key lifetime (sec): 3549
+        Kilobyte Volume Rekey has been disabled
+        IV size: 8 bytes
+        replay detection support: Y
+        Status: ACTIVE(ACTIVE)
+
+     outbound ah sas:
+
+     outbound pcp sas:
+C8355-G2#
+===== 100 PINGS PER TUNNEL =====
+ping 192.168.101.2 repeat 100 timeout 1
+Type escape sequence to abort.
+Sending 100, 100-byte ICMP Echos to 192.168.101.2, timeout is 1 seconds:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Success rate is 100 percent (100/100), round-trip min/avg/max = 1/1/4 ms
+C8355-G2#
+===== AFTER =====
+show crypto ipsec sa peer 10.0.12.2
+
+interface: Tunnel101
+    Crypto map tag: Tunnel101-head-0, local addr 10.0.12.1
+
+   protected vrf: (none)
+   local  ident (addr/mask/prot/port): (0.0.0.0/0.0.0.0/0/0)
+   remote ident (addr/mask/prot/port): (0.0.0.0/0.0.0.0/0/0)
+   current_peer 10.0.12.2 port 500
+     PERMIT, flags={origin_is_acl,}
+    #pkts encaps: 106, #pkts encrypt: 106, #pkts digest: 106
+    #pkts decaps: 106, #pkts decrypt: 106, #pkts verify: 106
+    #pkts compressed: 0, #pkts decompressed: 0
+    #pkts not compressed: 0, #pkts compr. failed: 0
+    #pkts not decompressed: 0, #pkts decompress failed: 0
+    #send errors 0, #recv errors 0
+
+     local crypto endpt.: 10.0.12.1, remote crypto endpt.: 10.0.12.2
+     plaintext mtu 1446, path mtu 1500, ip mtu 1500, ip mtu idb FiveGigabitEthernet0/0/0
+     current outbound spi: 0x5BEB586(96384390)
+     PFS (Y/N): N, DH group: none
+
+     inbound esp sas:
+      spi: 0x33319F7(53680631)
+        transform: esp-gcm 256 ,
+        in use settings ={Tunnel, }
+        conn id: 6753, flow_id: ESG:4753, sibling_flags FFFFFFFF80000048, crypto map: Tunnel101-head-0, initiator : False
+        sa timing: remaining key lifetime (sec): 3542
+        Kilobyte Volume Rekey has been disabled
+        IV size: 8 bytes
+        replay detection support: Y
+        Status: ACTIVE(ACTIVE)
+
+     inbound ah sas:
+
+     inbound pcp sas:
+
+     outbound esp sas:
+      spi: 0x5BEB586(96384390)
+        transform: esp-gcm 256 ,
+        in use settings ={Tunnel, }
+        conn id: 6754, flow_id: ESG:4754, sibling_flags FFFFFFFF80000048, crypto map: Tunnel101-head-0, initiator : False
+        sa timing: remaining key lifetime (sec): 3542
+        Kilobyte Volume Rekey has been disabled
+        IV size: 8 bytes
+        replay detection support: Y
+        Status: ACTIVE(ACTIVE)
+
+     outbound ah sas:
+
+     outbound pcp sas:
+C8355-G2#

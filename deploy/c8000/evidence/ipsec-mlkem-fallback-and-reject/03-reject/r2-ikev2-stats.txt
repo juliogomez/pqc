@@ -1,0 +1,64 @@
+show crypto ikev2 stats
+--------------------------------------------------------------------------------
+                          Crypto IKEv2 SA Statistics
+--------------------------------------------------------------------------------
+System Resource Limit:   0        Max IKEv2 SAs: 0        Max in nego(in/out): 40/60
+Total incoming IKEv2 SA Count:    0        active:        0        negotiating: 0     
+Total outgoing IKEv2 SA Count:    1        active:        1        negotiating: 0     
+Incoming IKEv2 Requests: 5        accepted:      5        rejected:    0       
+Outgoing IKEv2 Requests: 5        accepted:      5        rejected:    0       
+Rejected IKEv2 Requests: 0        rsrc low:      0        SA limit:    0       
+IKEv2 packets dropped at dispatch: 0       
+Incoming Requests dropped as LOW Q limit reached : 0       
+Incoming IKEV2 Cookie Challenged Requests: 0       
+    accepted: 0        rejected: 0        rejected no cookie: 0       
+Total Deleted sessions of Cert Revoked Peers: 0       
+Total init sa request rejected due to queue limit : 0       
+SA Strength Enforcement Rejects - incoming:        0 outgoing:        0
+Sessions with Quantum Resistance: 0        Manual: 0        Dynamic: 0       
+PPK Identity Mismatch: 0        
+PPK Retrieve Failure    -    ALL:      0        With PPK Required:    0       
+PPK Authentication Failure - ALL:      0        With PPK Required:    0       
+
+C8235-G2#show crypto ikev2 stats exchange
+----------------------------------------------------------------------------------------------------------------------
+EXCHANGE/NOTIFY                   TX(REQ)    TX(RES)    RX(REQ)    RX(RES)   RTX(REQ)   RTX(RES)   RRX(REQ)   RRX(RES)
+
+EXCHANGES
+
+IKE_SA_INIT                            43         43         44         36         16          0          0          0
+IKE_AUTH                               31         39         39         31          0          0          0          0
+CREATE_CHILD_SA                         7          2          2          7          0          0          0          0
+CREATE_CHILD_SA_IPSEC_REKEY             7          2          2          7          0          0          0          0
+IKE_INTR_EXCH                           9         11         11          9          0          0          0          0
+INFORMATIONAL                        1012       1027       1027        995         73          1         59          0
+
+ERROR NOTIFY
+
+NO_PROPOSAL_CHOSEN                      0         10          0          6          0          0          0          0
+
+OTHER NOTIFY
+
+INITIAL_CONTACT                        31          0         38          0          0          0          0          0
+SET_WINDOW_SIZE                        31         33         39         30          0          0          0          0
+NAT_DETECTION_SOURCE_IP                43         39         44         31          0          0          0          0
+NAT_DETECTION_DESTINATION_IP           43         39         44         31          0          0          0          0
+HTTP_CERT_LOOKUP_SUPPORTED              0         39          0         31          0          0          0          0
+REKEY_SA                                7          0          2          0          0          0          0          0
+DELETE_REASON                          25          0         36          0          0          0          0          0
+DPD                                   957        956        956        956         16          1          1          0
+INTERMEDIATE_EXCHANGE_SUPPORT          43         39         44         31          0          0          0          0
+SIGNATURE_HASH_ALGORITHMS_NOTI          0         39          0         31          0          0          0          0
+
+
+CONFIG PAYLOAD TYPE                    TX         RX        RTX        RRX
+
+CFG_REQUEST                            31         39          0          0
+
+
+OTHER COUNTERS                         TX        RTX
+
+NO_NAT                                 70          0
+----------------------------------------------------------------------------------------------------------------------
+
+C8235-G2#

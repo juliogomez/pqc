@@ -1,0 +1,6 @@
+show running-config | section crypto ikev2 proposal
+crypto ikev2 proposal SPOKE-PROPOSAL 
+ encryption aes-cbc-256
+ integrity sha512
+ group 20
+C8455-G2#

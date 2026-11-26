@@ -1,0 +1,171 @@
+show crypto ikev2 sa detailed
+ IPv4 Crypto IKEv2  SA 
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+2         10.0.12.2/500         10.0.12.1/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      PQC Key Exchange: ML-KEM-768
+      Life/Active Time: 86400/75 sec
+      CE id: 0, Session-id: 57
+      Local spi: 8468A9DBA927B034       Remote spi: C71FD85A5EA4D48F
+      Status Description: Negotiation done
+      Local id: 10.0.12.2
+      Remote id: 10.0.12.1
+      Local req msg id:  3              Remote req msg id:  0         
+      Local next msg id: 3              Remote next msg id: 0         
+      Local req queued:  3              Remote req queued:  0         
+      Local window:      20             Remote window:      20        
+      DPD configured for 0 seconds, retry 0
+      IETF Std Fragmentation  enabled.
+      Quantum-safe Encryption using PQC: ML-KEM-768
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : Yes
+      PEER TYPE: IOS-XE
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+1         10.0.23.1/500         10.0.23.2/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      PQC Key Exchange: ML-KEM-768
+      Life/Active Time: 86400/71 sec
+      CE id: 0, Session-id: 58
+      Local spi: F491C5C5AD5796C6       Remote spi: CAA9D54D9FE734FD
+      Status Description: Negotiation done
+      Local id: 10.0.23.1
+      Remote id: 10.0.23.2
+      Local req msg id:  0              Remote req msg id:  3         
+      Local next msg id: 0              Remote next msg id: 3         
+      Local req queued:  0              Remote req queued:  3         
+      Local window:      20             Remote window:      20        
+      DPD configured for 0 seconds, retry 0
+      IETF Std Fragmentation  enabled.
+      Quantum-safe Encryption using PQC: ML-KEM-768
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : No
+      PEER TYPE: IOS-XE
+
+ IPv6 Crypto IKEv2  SA 
+
+C8235-G2#show crypto ikev2 session detailed
+ IPv4 Crypto IKEv2 Session 
+
+Session-id:57, Status:UP-ACTIVE, IKE count:1, CHILD count:1
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+2         10.0.12.2/500         10.0.12.1/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      PQC Key Exchange: ML-KEM-768
+      Life/Active Time: 86400/75 sec
+      CE id: 0, Session-id: 57
+      Local spi: 8468A9DBA927B034       Remote spi: C71FD85A5EA4D48F
+      Status Description: Negotiation done
+      Local id: 10.0.12.2
+      Remote id: 10.0.12.1
+      Local req msg id:  3              Remote req msg id:  0         
+      Local next msg id: 3              Remote next msg id: 0         
+      Local req queued:  3              Remote req queued:  0         
+      Local window:      20             Remote window:      20        
+      DPD configured for 0 seconds, retry 0
+      IETF Std Fragmentation  enabled.
+      Quantum-safe Encryption using PQC: ML-KEM-768
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : Yes
+      PEER TYPE: IOS-XE
+Child sa:
+          local selector       ->      remote_selector
+          0.0.0.0/0 - 255.255.255.255/65535    ->    0.0.0.0/0 - 255.255.255.255/65535
+          ESP spi in/out: 0x5BEB586/0x33319F7  
+          AH spi in/out: 0x0/0x0  
+          CPI in/out: 0x0/0x0  
+          Encr: AES-GCM, keysize: 256, esp_hmac: None
+          ah_hmac: None, comp: IPCOMP_NONE, mode tunnel
+
+Session-id:58, Status:UP-ACTIVE, IKE count:1, CHILD count:1
+
+Tunnel-id Local                 Remote                fvrf/ivrf            Status 
+1         10.0.23.1/500         10.0.23.2/500         none/none            READY  
+      Encr: AES-CBC, keysize: 256, PRF: SHA512, Hash: SHA512, DH Grp:20, Auth sign: PSK, Auth verify: PSK
+      PQC Key Exchange: ML-KEM-768
+      Life/Active Time: 86400/71 sec
+      CE id: 0, Session-id: 58
+      Local spi: F491C5C5AD5796C6       Remote spi: CAA9D54D9FE734FD
+      Status Description: Negotiation done
+      Local id: 10.0.23.1
+      Remote id: 10.0.23.2
+      Local req msg id:  0              Remote req msg id:  3         
+      Local next msg id: 0              Remote next msg id: 3         
+      Local req queued:  0              Remote req queued:  3         
+      Local window:      20             Remote window:      20        
+      DPD configured for 0 seconds, retry 0
+      IETF Std Fragmentation  enabled.
+      Quantum-safe Encryption using PQC: ML-KEM-768
+      Dynamic Route Update: enabled
+      IETF Std Fragmentation MTU in use: 1372 bytes.
+      Extended Authentication not configured.
+      NAT-T is not detected  
+      Cisco Trust Security SGT is disabled
+      Initiator of SA : No
+      PEER TYPE: IOS-XE
+Child sa:
+          local selector       ->      remote_selector
+          0.0.0.0/0 - 255.255.255.255/65535    ->    0.0.0.0/0 - 255.255.255.255/65535
+          ESP spi in/out: 0x4B78275/0xA24F4C0  
+          AH spi in/out: 0x0/0x0  
+          CPI in/out: 0x0/0x0  
+          Encr: AES-GCM, keysize: 256, esp_hmac: None
+          ah_hmac: None, comp: IPCOMP_NONE, mode tunnel
+
+ IPv6 Crypto IKEv2 Session 
+
+C8235-G2#show crypto session detail
+Crypto session current status
+
+Code: C - IKE Configuration mode, D - Dead Peer Detection     
+K - Keepalives, N - NAT-traversal, T - cTCP encapsulation     
+X - IKE Extended Authentication, F - IKE Fragmentation
+R - IKE Auto Reconnect, U - IKE Dynamic Route Update
+S - SIP VPN, E - Stronger IKE Encryption Enforced
+Q - Quantum-safe Encryption
+
+Interface: Tunnel102
+Profile: PROFILE-R3
+Uptime: 00:01:12
+Session status: UP-ACTIVE     
+Peer: 10.0.23.2 port 500 fvrf: (none) ivrf: (none)
+      Phase1_id: 10.0.23.2
+      Desc: (none)
+  Session ID: 56  
+  IKEv2 SA: local 10.0.23.1/500 remote 10.0.23.2/500 Active 
+          Capabilities:FUQ connid:1 lifetime:23:58:48
+  IPSEC FLOW: permit ip   0.0.0.0/0.0.0.0 0.0.0.0/0.0.0.0 
+        Active SAs: 2, origin: crypto map
+        Inbound:  #pkts dec'ed 6 drop 0 life (KB/Sec) KB Vol Rekey Disabled/3528
+        Outbound: #pkts enc'ed 6 drop 0 life (KB/Sec) KB Vol Rekey Disabled/3528
+
+Interface: Tunnel101
+Profile: PROFILE-R1
+Uptime: 00:01:16
+Session status: UP-ACTIVE     
+Peer: 10.0.12.1 port 500 fvrf: (none) ivrf: (none)
+      Phase1_id: 10.0.12.1
+      Desc: (none)
+  Session ID: 55  
+  IKEv2 SA: local 10.0.12.2/500 remote 10.0.12.1/500 Active 
+          Capabilities:FUQ connid:2 lifetime:23:58:44
+  IPSEC FLOW: permit ip   0.0.0.0/0.0.0.0 0.0.0.0/0.0.0.0 
+        Active SAs: 2, origin: crypto map
+        Inbound:  #pkts dec'ed 106 drop 0 life (KB/Sec) KB Vol Rekey Disabled/3524
+        Outbound: #pkts enc'ed 106 drop 0 life (KB/Sec) KB Vol Rekey Disabled/3524
+
+C8235-G2#

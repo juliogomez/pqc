@@ -1,0 +1,13 @@
+show crypto ikev2 sa
+C8355-G2#show crypto session
+C8355-G2#show crypto ipsec sa | include peer
+C8355-G2#show running-config | section crypto ikev2|crypto ipsec
+C8355-G2#show running-config | section interface Tunnel
+interface Tunnel0
+ ip address 192.168.100.1 255.255.255.0
+ shutdown
+ tunnel source FiveGigabitEthernet0/0/0
+ tunnel mode ipsec ipv4
+ tunnel destination 10.0.23.2
+C8355-G2#show debugging | include IKEv2|Crypto
+C8355-G2#

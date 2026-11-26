@@ -329,8 +329,15 @@ Tunnel-id Local                 Remote                fvrf/ivrf            Statu
 ```
 
 That's the migration strategy: upgrade the hub first with `optional`, then roll out to
-spokes at your own pace. Once everything is upgraded, you can change `optional` to
-`required` to enforce PQC everywhere and reject classical-only peers.
+spokes at your own pace. Once everything is upgraded, drop the `optional` keyword
+(`pqc mlkem768` on its own, there's no `required` keyword) to enforce PQC everywhere and
+reject classical-only peers.
+
+Both ways are silent, so watch out. A fallback leaves no syslog, just a missing `PQC Key
+Exchange` line. A rejected peer leaves no syslog either, only a growing `NO_PROPOSAL_CHOSEN`
+count in `show crypto ikev2 stats exchange`. The full captures, including how to match an
+ML-KEM IKE SA to its child SAs and ESP counters, are in
+[evidence/ipsec-mlkem-fallback-and-reject](evidence/ipsec-mlkem-fallback-and-reject/README.md).
 
 ---
 

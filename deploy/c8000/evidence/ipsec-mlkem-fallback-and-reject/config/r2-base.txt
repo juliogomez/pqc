@@ -1,0 +1,49 @@
+! R2: classical hub-and-spoke base, before any pqc line
+crypto ikev2 fragmentation mtu 1400
+crypto ikev2 proposal HUB-PROPOSAL
+ encryption aes-cbc-256
+ integrity sha512
+ group 20
+crypto ikev2 policy HUB-POLICY
+ proposal HUB-PROPOSAL
+crypto ikev2 keyring LAB-KEYRING
+ peer R1
+  address 10.0.12.1
+  pre-shared-key <REDACTED-IKEV2-PSK>
+ peer R3
+  address 10.0.23.2
+  pre-shared-key <REDACTED-IKEV2-PSK>
+crypto ipsec transform-set LAB-TS esp-gcm 256
+ mode tunnel
+crypto ikev2 profile PROFILE-R1
+ match identity remote address 10.0.12.1 255.255.255.255
+ identity local address 10.0.12.2
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local LAB-KEYRING
+crypto ipsec profile IPSEC-R1
+ set transform-set LAB-TS
+ set ikev2-profile PROFILE-R1
+interface Tunnel101
+ ip address 192.168.101.2 255.255.255.0
+ tunnel source Vlan12
+ tunnel destination 10.0.12.1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-R1
+ no shutdown
+crypto ikev2 profile PROFILE-R3
+ match identity remote address 10.0.23.2 255.255.255.255
+ identity local address 10.0.23.1
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local LAB-KEYRING
+crypto ipsec profile IPSEC-R3
+ set transform-set LAB-TS
+ set ikev2-profile PROFILE-R3
+interface Tunnel102
+ ip address 192.168.102.1 255.255.255.0
+ tunnel source Vlan23
+ tunnel destination 10.0.23.2
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-R3
+ no shutdown

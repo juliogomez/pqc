@@ -1,0 +1,13 @@
+show crypto ikev2 sa
+C8455-G2#show crypto session
+C8455-G2#show crypto ipsec sa | include peer
+C8455-G2#show running-config | section crypto ikev2|crypto ipsec
+C8455-G2#show running-config | section interface Tunnel
+interface Tunnel0
+ ip address 192.168.100.2 255.255.255.0
+ shutdown
+ tunnel source GigabitEthernet0/0/3.23
+ tunnel mode ipsec ipv4
+ tunnel destination 10.0.12.1
+C8455-G2#show debugging | include IKEv2|Crypto
+C8455-G2#

@@ -1,0 +1,7 @@
+show running-config | section crypto ikev2 proposal
+crypto ikev2 proposal HUB-PROPOSAL 
+ pqc mlkem768 optional
+ encryption aes-cbc-256
+ integrity sha512
+ group 20
+C8235-G2#

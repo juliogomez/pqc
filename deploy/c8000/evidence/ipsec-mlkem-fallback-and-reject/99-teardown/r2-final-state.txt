@@ -1,0 +1,7 @@
+show crypto ikev2 sa
+C8235-G2#show crypto session
+C8235-G2#show crypto ipsec sa | include peer
+C8235-G2#show running-config | section crypto ikev2|crypto ipsec
+C8235-G2#show running-config | section interface Tunnel
+C8235-G2#show debugging | include IKEv2|Crypto
+C8235-G2#

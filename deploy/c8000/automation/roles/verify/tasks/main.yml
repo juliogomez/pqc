@@ -13,6 +13,11 @@
 # IPsec identity in 26.2. typedef crypto-pqc-group-type, four values:
 # pqc-gt-none / pqc-gt-mlkem512 / pqc-gt-mlkem768 / pqc-gt-mlkem1024.
 #
+# Read the IKE SA one. The IPsec identity leaf is the child SA's own PFS
+# exchange, so it reads pqc-gt-none on a hybrid tunnel unless the IPsec profile
+# has "set pfs <group> pqc <mlkem>" and the child has rekeyed. Measured in
+# deploy/c8000/evidence/ipsec-mlkem-fallback-and-reject/.
+#
 # So the single most important claim in this project, "this SA actually used
 # ML-KEM-768", is a leaf value. No show parsing.
 - name: Verify | skip devices with no management address

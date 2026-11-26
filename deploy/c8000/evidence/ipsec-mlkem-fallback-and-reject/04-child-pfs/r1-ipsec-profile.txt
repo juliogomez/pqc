@@ -1,0 +1,6 @@
+show running-config | section crypto ipsec profile
+crypto ipsec profile IPSEC-R2
+ set transform-set LAB-TS 
+ set pfs group20 pqc mlkem768
+ set ikev2-profile PROFILE-R2
+C8355-G2#

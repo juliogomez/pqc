@@ -1,0 +1,22 @@
+! R2 debug crypto ikev2, healthy R1-R2 leg (both ends pqc mlkem768 optional).
+! Taken during the 03-reject debug window, where only the R3 leg was failing.
+19:15:08.247: IKEv2:(SESSION ID = 61,SA ID = 2):Completed SA init exchange
+19:15:08.254: IKEv2:(SESSION ID = 61,SA ID = 2):Computation of MLKEM Ciphertext for group: ML-KEM-768
+19:15:08.254: IKEv2:(SESSION ID = 61,SA ID = 2):Calling ikev2_ke_info_create. group: ML-KEM-768
+19:15:08.254: IKEv2:(SESSION ID = 61,SA ID = 2):Request queued for computation of MLKEM Ciphertext
+19:15:08.255: IKEv2:(SESSION ID = 61,SA ID = 2):Calling crypto_engine_MLKEM_rekey_ikev2_sa. Old IKE SA: 385876055
+19:15:08.255: IKEv2:(SESSION ID = 61,SA ID = 2):Returning from crypto_engine_MLKEM_rekey_ikev2_sa. New IKE SA: 385876056
+19:15:08.258: IKEv2:(SESSION ID = 61,SA ID = 2):IPSec policy validate request sent for profile PROFILE-R1 with psh index 2.
+19:15:08.259: IKEv2:(SESSION ID = 61,SA ID = 2):ESP Proposal: 1, SPI size: 4 (IPSec negotiation), 
+19:15:08.259: IKEv2:(SESSION ID = 61,SA ID = 2):IPSec SA PQ classification pqc=YES sa_pq_encr=2(PQ-T-Hybrid)
+19:15:11.820: IKEv2:(SESSION ID = 63,SA ID = 2):Completed SA init exchange
+19:15:11.820: IKEv2:(SESSION ID = 63,SA ID = 2):Computation of MLKEM Public Key for group: ML-KEM-768
+19:15:11.820: IKEv2:(SESSION ID = 63,SA ID = 2):Calling ikev2_ke_info_create. group: ML-KEM-768
+19:15:11.821: IKEv2:(SESSION ID = 63,SA ID = 2):Request queued for computation of MLKEM Public key
+19:15:11.823: IKEv2:(SESSION ID = 63,SA ID = 2):[IKEv2 -> Crypto Engine] Computing ML-KEM secret key, ML-KEM Group for the transform 
+19:15:11.824: IKEv2:(SESSION ID = 63,SA ID = 2):Request queued for computation of MLKEM secret key
+19:15:11.824: IKEv2:(SESSION ID = 63,SA ID = 2):Calling crypto_engine_MLKEM_rekey_ikev2_sa. Old IKE SA: 385876057
+19:15:11.824: IKEv2:(SESSION ID = 63,SA ID = 2):Returning from crypto_engine_MLKEM_rekey_ikev2_sa. New IKE SA: 385876058
+19:15:11.825: IKEv2:(SESSION ID = 63,SA ID = 2):ESP Proposal: 1, SPI size: 4 (IPSec negotiation), 
+19:15:11.829: IKEv2:(SESSION ID = 63,SA ID = 2):IPSec policy validate request sent for profile PROFILE-R1 with psh index 2.
+19:15:11.829: IKEv2:(SESSION ID = 63,SA ID = 2):IPSec SA PQ classification pqc=YES sa_pq_encr=2(PQ-T-Hybrid)

@@ -1,0 +1,14 @@
+! R3 -> hub
+ping 192.168.102.1 repeat 5 timeout 2
+Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to 192.168.102.1, timeout is 2 seconds:
+.....
+Success rate is 0 percent (0/5)
+C8455-G2#
+! hub -> R3
+ping 192.168.102.2 repeat 5 timeout 2
+Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to 192.168.102.2, timeout is 2 seconds:
+.....
+Success rate is 0 percent (0/5)
+C8235-G2#

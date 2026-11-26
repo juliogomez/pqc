@@ -1,0 +1,27 @@
+<?xml version="1.0" ?>
+<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <crypto-oper-data xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-crypto-oper">
+    <crypto-ikev2-sa>
+      <sa-id>2</sa-id>
+      <sa-data>
+        <sa-id>2</sa-id>
+        <sa-status>crypto-sa-status-active</sa-status>
+        <local-ip-addr>10.0.12.2</local-ip-addr>
+        <local-port>500</local-port>
+        <remote-ip-addr>10.0.12.1</remote-ip-addr>
+        <remote-port>500</remote-port>
+        <dh-group>crypto-dh-grouptype-group20</dh-group>
+        <init-spi>NUI2MzVERUEyNjIyQkE1RA==</init-spi>
+        <resp-spi>M0I1RTA0RjFDNTcwQkVFOA==</resp-spi>
+        <ivrf>none</ivrf>
+        <fvrf>none</fvrf>
+        <lifetime>86400</lifetime>
+        <hash-algo>crypto-hash-alg-auth-hmac-sha512</hash-algo>
+        <encr-alg>crypto-encr-alg-aes-cbc</encr-alg>
+        <my-auth-method>crypto-ikev2-auth-psk</my-auth-method>
+        <peer-auth-method>crypto-ikev2-auth-psk</peer-auth-method>
+        <pqc-group>pqc-gt-mlkem768</pqc-group>
+      </sa-data>
+    </crypto-ikev2-sa>
+  </crypto-oper-data>
+</data>
